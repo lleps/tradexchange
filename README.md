@@ -6,6 +6,15 @@ y se puede tener clara y precisa. Cada voter tendria desiciones y peso de las mi
 principal, puede determinar el riesgo de las desiciones, basado en el nivel de coincidencia de los voters.
 Los voters decidirian monto? O seria segun el nivel de seguridad que dan, decidido por modulo principal?
 
+```kotlin
+interface Voter {
+    enum class SuggestionType { BUY, SELL }
+    data class Suggestion(val type: SuggestionType, val risk: Float)
+    
+    fun askSuggestion(): Suggestion?
+}
+```
+
 Otro modulo encargado de dibujar la información, el JavaFx con graficos y puntos.
 
 Se puede abstraer el acceso a los datos, para que los Voters puedan acceder a información historica más sencillamente.
