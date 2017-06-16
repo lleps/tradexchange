@@ -23,13 +23,16 @@ import javafx.scene.paint.Paint
 import javafx.scene.shape.Circle
 
 class App : Application() {
-    enum class SeriesType { PRICE, BIG_BUY, SMALL_BUY, BIG_SELL, SMALL_SELL, MA_A, MA_B, MA_DIFF }
+    enum class SeriesType { PRICE, BIG_BUY, SMALL_BUY, BIG_SELL, SMALL_SELL, MA_A, MA_B, MA_DIFF, MACD, SIGNAL, MACD_REF }
 
     private lateinit var chart: LineChart<Number,Number>
     private lateinit var priceSeries: XYChart.Series<Double, Double>
     private lateinit var sma50Series: XYChart.Series<Double, Double>
     private lateinit var ema30Series: XYChart.Series<Double, Double>
     private lateinit var ema20Series: XYChart.Series<Double, Double>
+    private lateinit var macdSeries: XYChart.Series<Double, Double>
+    private lateinit var signalSeries: XYChart.Series<Double, Double>
+    private lateinit var macdRef: XYChart.Series<Double, Double>
 
     private var balance = Balance(0.0, 0.0)
 
@@ -38,12 +41,18 @@ class App : Application() {
         val data = FXCollections.observableArrayList(
                 XYChart.Series<Double, Double>("price", FXCollections.observableArrayList())
                         .also { priceSeries = it },
-                XYChart.Series<Double, Double>("sma 50", FXCollections.observableArrayList())
+                XYChart.Series<Double, Double>("SMA50", FXCollections.observableArrayList())
                         .also { sma50Series = it },
-                XYChart.Series<Double, Double>("ema 30", FXCollections.observableArrayList())
+                XYChart.Series<Double, Double>("EMA30", FXCollections.observableArrayList())
                         .also { ema30Series = it},
-                XYChart.Series<Double, Double>("ema 20", FXCollections.observableArrayList())
-                        .also { ema20Series = it})
+                XYChart.Series<Double, Double>("EMA20", FXCollections.observableArrayList())
+                        .also { ema20Series = it},
+                XYChart.Series<Double, Double>("EMA20 - EMA30", FXCollections.observableArrayList())
+                        .also { macdSeries = it},
+                XYChart.Series<Double, Double>("SIGNAL", FXCollections.observableArrayList())
+                        .also { signalSeries = it},
+                XYChart.Series<Double, Double>("MACD-REF", FXCollections.observableArrayList())
+                        .also { macdRef = it})
         val xAxis = NumberAxis("date", 0.0, 8.0, 1.0).apply {
             upperBound = ZonedDateTime.now(ZoneOffset.UTC).toEpochSecond().toDouble()
             lowerBound = upperBound - (3600*24*2)
@@ -120,6 +129,9 @@ class App : Application() {
                 SeriesType.MA_A -> sma50Series
                 SeriesType.MA_B -> ema30Series
                 SeriesType.MA_DIFF -> ema20Series
+                SeriesType.MACD -> macdSeries
+                SeriesType.SIGNAL -> signalSeries
+                SeriesType.MACD_REF -> macdRef
             }
             val data = XYChart.Data<Number, Number>(timeEpoch, price)
             when (seriesType) {
@@ -143,9 +155,9 @@ class App : Application() {
             val apiSecret = "7fe0d64f187fd333a9754085fa7a1e57c6a98345908f7c84dcbeed1465aa55a7adb7b36a276e95557a4598887673cbdbfbc8bacc0f9968f970bbe96fccb0745b"
             val poloniex = PoloniexExchangeService(apiKey, apiSecret)
             val pair = "USDT_ETH"
-            val backtestDays = 4L
+            val backtestDays = 8L
             val startEpoch = ZonedDateTime.now(ZoneOffset.UTC).minusDays(backtestDays + 1).toEpochSecond()
-            val period = 900L
+            val period = 1800L
             val fullData = poloniex.returnChartData(pair, period, startEpoch)
             val warmUpPeriods = (3600*24) / period.toInt()
             val testableData = fullData.subList(warmUpPeriods, fullData.size)
@@ -156,6 +168,8 @@ class App : Application() {
             println("balance: $balance")
         }
     }
+
+    private var oldHistogram = 0.0
 
     private fun handle(period: Long,
                        actualData: PoloniexChartData,
@@ -176,20 +190,29 @@ class App : Application() {
         val bigAmount = 4.0
         val smallAmount = 1.0
 
-        if (    offFromB > low20 && offFromA > low5*3 &&
-                b > c &&
-                b > a) {
+        addPoint(epoch, history.sma(50), SeriesType.MA_A)
+        addPoint(epoch, history.ema(30), SeriesType.MA_B)
+        addPoint(epoch, history.ema(20), SeriesType.MA_DIFF)
+
+        val macd = history.ema(20) - history.ema(30)
+        val signalPeriod = 10
+        val macdLine = mutableListOf<Double>()
+        (signalPeriod-1 downTo 0).forEach {
+            val historyAtTheTime = history.dropLast(it)
+            macdLine += historyAtTheTime.ema(20) - historyAtTheTime.ema(30)
+        }
+        val signal = macdLine.emaDouble(signalPeriod)
+        val newHistogram = macd - signal
+
+        if (oldHistogram < 0.0 && newHistogram > 0.0) {
             addPoint(epoch, price, SeriesType.BIG_SELL)
             balance = balance.sell(bigAmount, price)
-        } else if (
-                offFromB < -low20 && offFromA < -low5*3 &&
-                b < c &&
-                b < a) {
+        } else if (oldHistogram > 0.0 && newHistogram < 0.0) {
             addPoint(epoch, price, SeriesType.BIG_BUY)
             balance = balance.buy(bigAmount, price)
         }
 
-        else if (    offFromA > low5 &&
+        /*else if (    offFromA > low5 &&
                 historyReversed[1] > historyReversed[0] &&
                 historyReversed[1] > historyReversed[2]) {
             addPoint(epoch, price, SeriesType.SMALL_SELL)
@@ -200,12 +223,14 @@ class App : Application() {
                 historyReversed[1] < historyReversed[2]) {
             addPoint(epoch, price, SeriesType.SMALL_BUY)
             balance = balance.buy(smallAmount, price)
-        } else {
+        }*/ else {
             addPoint(epoch, price, SeriesType.PRICE)
         }
 
-        addPoint(epoch, maA, SeriesType.MA_A)
-        addPoint(epoch, maB, SeriesType.MA_B)
+        oldHistogram = newHistogram
+
+        //addPoint(epoch, 250.0, SeriesType.MACD)
+        //addPoint(epoch, 250.0 + histogram, SeriesType.SIGNAL)
     }
 
     private data class Balance(val usd: Double, val coins: Double) {

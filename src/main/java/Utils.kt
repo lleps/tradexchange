@@ -56,5 +56,13 @@ fun List<PoloniexChartData>.ema(periods: Int): Double {
     return c * datas.last().price + (1-c) * dropLast(1).ema(periods)
 }
 
+fun List<Double>.emaDouble(periods: Int): Double {
+    if (size == 1) return last()
+
+    val datas = takeLast(periods)
+    val c = 2.0 / (datas.size + 1).toDouble()
+    return c * datas.last() + (1-c) * dropLast(1).emaDouble(periods)
+}
+
 val PoloniexChartData.price: Double
     get() = weightedAverage.toDouble()
