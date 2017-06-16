@@ -1,22 +1,8 @@
-Para decidir que accion realizar, se puede crear una lista de Voters que según diferentes
-criterios, deciden que acción es conveniente realizar. Pueden haber voters basados en datos
-del grafico de 24 horas, otros basados en datos de semanas (que van a sugerir mas $), otros
-en porcentajes, y en los montos. Se desacopla las decisiones, que es la lógica más importante, 
-y se puede tener clara y precisa. Cada voter tendria desiciones y peso de las mismas. El modulo
-principal, puede determinar el riesgo de las desiciones, basado en el nivel de coincidencia de los voters.
-Los voters decidirian monto? O seria segun el nivel de seguridad que dan, decidido por modulo principal?
-
-```kotlin
-interface Voter {
-    enum class SuggestionType { BUY, SELL }
-    data class Suggestion(val type: SuggestionType, val risk: Float)
-    
-    fun askSuggestion(): Suggestion?
-}
-```
-
-Otro modulo encargado de dibujar la información, el JavaFx con graficos y puntos.
-
-Se puede abstraer el acceso a los datos, para que los Voters puedan acceder a información historica más sencillamente.
-
-Se debe generar una arquitectura clara, capaz de ejecutar backtests y analizar las desiciones del algoritmo.
+* Tomar decisiones basado en 2 moving averages: 3 y 30 horas. Detectar convergencia y divergencia del de 3
+horas, y también del de 30, con más puntos. Eso establece un criterio fuerte para decidir el tamaño del trade.
+* Montos?
+- Cuanto comprar y cuanto vender? Por porcentaje, all-in, con memoria (ej ventas y compras consecutivas)? Estudiar
+estrategias de cuanto comprar y cuanto vender, una vez se tienen criterios para compras potencialmente grandes y chicas.
+Se puede basar la distancia al MA2 de la ultima compra y venta, pero teoricamente se debería apostar un gran porcenta-
+je, cuando estamos seguros. Y no tanta decisión sobre la cantidad.
+- Backtest siempre de ultimos 8 dias, con botones para mover lowerBonds y upperBounds +-24h. Setear lowerBound y upperBound entonces.

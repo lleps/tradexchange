@@ -1,97 +1,136 @@
 import com.cf.client.poloniex.PoloniexExchangeService
+import com.cf.data.model.poloniex.PoloniexChartData
 import javafx.application.Application
 import javafx.application.Platform
 import javafx.collections.FXCollections
 import javafx.collections.ObservableList
+import javafx.geometry.Orientation
 import javafx.scene.Parent
 import javafx.scene.Scene
+import javafx.scene.chart.*
 import javafx.stage.Stage
-import javafx.scene.chart.NumberAxis
-import javafx.scene.chart.ScatterChart
-import javafx.scene.chart.XYChart
-import javafx.scene.control.Tooltip
 import javafx.util.StringConverter
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import kotlin.concurrent.thread
-import java.text.SimpleDateFormat
 import java.time.format.DateTimeFormatter
-
-
-
-
+import javafx.scene.chart.XYChart
+import javafx.scene.control.Button
+import javafx.scene.layout.BorderPane
+import javafx.scene.layout.FlowPane
+import javafx.scene.paint.Paint
+import javafx.scene.shape.Circle
 
 class App : Application() {
-    private lateinit var chart: ScatterChart<Number,Number>
+    enum class SeriesType { PRICE, BIG_BUY, SMALL_BUY, BIG_SELL, SMALL_SELL, MA_A, MA_B, MA_DIFF }
 
-    private val backtestDays = 14L
+    private lateinit var chart: LineChart<Number,Number>
+    private lateinit var priceSeries: XYChart.Series<Double, Double>
+    private lateinit var sma50Series: XYChart.Series<Double, Double>
+    private lateinit var ema30Series: XYChart.Series<Double, Double>
+    private lateinit var ema20Series: XYChart.Series<Double, Double>
+
+    private var balance = Balance(0.0, 0.0)
 
     @Suppress("UNCHECKED_CAST")
     private fun createContent(): Parent {
         val data = FXCollections.observableArrayList(
-                XYChart.Series<Double, Double>("price", FXCollections.observableArrayList()),
-                XYChart.Series<Double, Double>("moving average", FXCollections.observableArrayList()),
-                XYChart.Series<Double, Double>("buy", FXCollections.observableArrayList()),
-                XYChart.Series<Double, Double>("sell", FXCollections.observableArrayList()),
-                XYChart.Series<Double, Double>("max", FXCollections.observableArrayList()))
-        val xAxis = NumberAxis("time (sec)", 0.0, 8.0, 1.0).apply {
-            lowerBound = ZonedDateTime.now(ZoneOffset.UTC).minusDays(backtestDays).toEpochSecond().toDouble()
+                XYChart.Series<Double, Double>("price", FXCollections.observableArrayList())
+                        .also { priceSeries = it },
+                XYChart.Series<Double, Double>("sma 50", FXCollections.observableArrayList())
+                        .also { sma50Series = it },
+                XYChart.Series<Double, Double>("ema 30", FXCollections.observableArrayList())
+                        .also { ema30Series = it},
+                XYChart.Series<Double, Double>("ema 20", FXCollections.observableArrayList())
+                        .also { ema20Series = it})
+        val xAxis = NumberAxis("date", 0.0, 8.0, 1.0).apply {
             upperBound = ZonedDateTime.now(ZoneOffset.UTC).toEpochSecond().toDouble()
+            lowerBound = upperBound - (3600*24*2)
             tickUnit = (upperBound - lowerBound) / 20
-        }
-        val yAxis = NumberAxis("price (usd)", 0.0, 8.0, 1.0).apply {
-            lowerBound = 150.0
-            upperBound = 380.0
-        }
-        chart = ScatterChart<Number,Number>(xAxis, yAxis, data as ObservableList<XYChart.Series<Number, Number>>)
-        xAxis.tickLabelFormatter = object : StringConverter<Number>() {
-            val formatter = DateTimeFormatter.ofPattern("MM-dd HH:mm")
+            tickLabelFormatter = object : StringConverter<Number>() {
+                override fun toString(t: Number) = Instant
+                        .ofEpochSecond(t.toLong())
+                        .atZone(ZoneOffset.UTC)
+                        .format(DateTimeFormatter.ofPattern("MM-dd HH:mm"))
 
-            override fun toString(t: Number): String {
-                val dateReadable = Instant.ofEpochSecond(t.toLong()).atZone(ZoneOffset.UTC).format(formatter)
-                return dateReadable
-            }
-
-            override fun fromString(string: String): Number = TODO()
-        }
-
-        chart.setOnScroll {
-            println("${it.isAltDown} ${it.isControlDown} ${it.isShiftDown}")
-            if (it.isAltDown) {
-                if (it.deltaY < -0.0) {
-                    xAxis.upperBound -= 3600*3
-                } else if (it.deltaY > 0) {
-                    xAxis.upperBound += 3600*3
-                }
-            } else {
-                if (it.deltaY < -0.0) {
-                    xAxis.lowerBound -= 3600*3
-                } else if (it.deltaY > 0) {
-                    xAxis.lowerBound += 3600*3
-                }
+                override fun fromString(string: String): Number = TODO()
             }
         }
-        return chart
+        val yAxis = NumberAxis("price", 0.0, 8.0, 1.0).apply {
+            isForceZeroInRange = false
+            isAutoRanging = true
+        }
+        chart = LineChart<Number,Number>(xAxis, yAxis, data as ObservableList<XYChart.Series<Number, Number>>)
+        val buttonsPane = FlowPane(Orientation.HORIZONTAL)
+        buttonsPane.children.add(Button("-24h").apply {
+            setOnAction {
+                xAxis.lowerBound -= (3600*24)
+                xAxis.upperBound -= (3600*24)
+                adjustPriceRange()
+            }
+        })
+        buttonsPane.children.add(Button("+24h").apply {
+            setOnAction {
+                xAxis.lowerBound += (3600*24)
+                xAxis.upperBound += (3600*24)
+                adjustPriceRange()
+            }
+        })
+        buttonsPane.children.add(Button("-1h").apply {
+            setOnAction {
+                xAxis.lowerBound -= (3600*1)
+                xAxis.upperBound -= (3600*1)
+                adjustPriceRange()
+            }
+        })
+        buttonsPane.children.add(Button("+1h").apply {
+            setOnAction {
+                xAxis.lowerBound += (3600*1)
+                xAxis.upperBound += (3600*1)
+                adjustPriceRange()
+            }
+        })
+        val rootPane = BorderPane()
+        rootPane.center = chart
+        rootPane.bottom = buttonsPane
+        return rootPane
     }
 
-    enum class PointType { PRICE, MA, SELL, BUY, MAX }
+    // TODO push a version using simple averages, then try to implement a MACD strategy using all MA indicators to see whats going on.
+    private fun adjustPriceRange() {
+        // based on items between x-low, x-high, set y-low and y-high
+        val xAxis = chart.xAxis as NumberAxis
+        //val yAxis = chart.yAxis as NumberAxis
+        val dataBetweenBounds = priceSeries.data
+                .filter { it.xValue.toInt() > xAxis.lowerBound && it.xValue.toInt() < xAxis.upperBound }
+        if (dataBetweenBounds.isEmpty()) return
+        //yAxis.upperBound = dataBetweenBounds.map { it.yValue.toDouble() }.max()!!
+        //yAxis.lowerBound = dataBetweenBounds.map { it.yValue.toDouble() }.min()!!
+    }
 
-    private fun addPointToChart(timeEpoch: Number,
-                                price: Double,
-                                pointType: PointType,
-                                extra: String = "none",
-                                balance: Double = 0.0,
-                                coins: Double = 0.0) {
+    @Suppress("UNCHECKED_CAST")
+    private fun addPoint(timeEpoch: Number,
+                         price: Double,
+                         seriesType: SeriesType) {
         Platform.runLater {
-            val d = XYChart.Data<Number, Number>(timeEpoch, price)
-            val dateReadable = Instant.ofEpochSecond(timeEpoch.toLong()).atZone(ZoneOffset.UTC).toString()
-            val tooltip = Tooltip("$dateReadable\nprice: $price USDT\nextra: $extra\n" +
-                    "balance: $balance\n" +
-                    "coins: $coins")
-            chart.data[pointType.ordinal].data.add(d)
-            hackTooltipStartTiming(tooltip)
-            Tooltip.install(d.node, tooltip)
+            val series = when (seriesType) {
+                SeriesType.PRICE, SeriesType.BIG_BUY, SeriesType.SMALL_BUY,
+                SeriesType.BIG_SELL, SeriesType.SMALL_SELL -> priceSeries
+                SeriesType.MA_A -> sma50Series
+                SeriesType.MA_B -> ema30Series
+                SeriesType.MA_DIFF -> ema20Series
+            }
+            val data = XYChart.Data<Number, Number>(timeEpoch, price)
+            when (seriesType) {
+                SeriesType.BIG_BUY -> data.node = Circle(5.0, Paint.valueOf("#673AB7"))
+                SeriesType.SMALL_BUY -> data.node = Circle(5.0, Paint.valueOf("#B39DDB"))
+                SeriesType.BIG_SELL -> data.node = Circle(5.0, Paint.valueOf("#4CAF50"))
+                SeriesType.SMALL_SELL -> data.node = Circle(5.0, Paint.valueOf("#A5D6A7"))
+                else -> data.node = Circle(0.0)
+            }
+            series.data.add(data as XYChart.Data<Double, Double>)
+            adjustPriceRange()
         }
     }
 
@@ -103,78 +142,75 @@ class App : Application() {
             val apiKey = "GW202H58-HQULS9AJ-SZDSHJZ1-FXRYESKK"
             val apiSecret = "7fe0d64f187fd333a9754085fa7a1e57c6a98345908f7c84dcbeed1465aa55a7adb7b36a276e95557a4598887673cbdbfbc8bacc0f9968f970bbe96fccb0745b"
             val poloniex = PoloniexExchangeService(apiKey, apiSecret)
-            val pair =  "USDT_ETH"
+            val pair = "USDT_ETH"
+            val backtestDays = 4L
             val startEpoch = ZonedDateTime.now(ZoneOffset.UTC).minusDays(backtestDays + 1).toEpochSecond()
             val period = 900L
             val fullData = poloniex.returnChartData(pair, period, startEpoch)
-            val movingAveragePeriod = 10*2
-            val usingCoins = 50.0
-            var coinBalance = usingCoins
-            var usdBalance = 0.0
-            var soldCoins = 0
             val warmUpPeriods = (3600*24) / period.toInt()
+            val testableData = fullData.subList(warmUpPeriods, fullData.size)
 
-            fullData.subList(warmUpPeriods, fullData.size).forEachIndexed { index, candle ->
-                val absoluteIndex = index + warmUpPeriods
-                val movingAverageCandles = fullData.filterIndexed { i, _ -> i >= (absoluteIndex - movingAveragePeriod) && i <= absoluteIndex }
-                val movingAverage = movingAverageCandles
-                        .sumByDouble { it.weightedAverage.toDouble() } / movingAverageCandles.size
-
-                val candleTimeEpoch = candle.date.toLong()
-                val candleAverage = candle.weightedAverage.toDouble()
-
-                if (index % 10 == 0) addPointToChart(candleTimeEpoch, candleAverage, PointType.PRICE)
-                //if (index % 8 == 0) addPointToChart(candleTimeEpoch, candleAverage, PointType.MAX)
-
-                //addPointToChart(candleTimeEpoch, movingAverage, PointType.MA)
-
-                val priceOffFromMA = candleAverage - movingAverage
-                if (Math.abs(priceOffFromMA) > 2.5) {
-                    val buy = priceOffFromMA < 0
-                    val dataReversed = movingAverageCandles.reversed().map { it.weightedAverage.toDouble() }
-                    if (!buy &&
-                            dataReversed[1] > dataReversed[0] &&
-                            dataReversed[1] > dataReversed[2]) { // Local maximum - SELL
-                        if (soldCoins < 5) {
-                            soldCoins++
-                            coinBalance -= 2
-                            usdBalance += candleAverage*2
-                            addPointToChart(candleTimeEpoch, candleAverage, PointType.SELL, priceOffFromMA.toString(),
-                                    usdBalance, coinBalance)
-                            println("selling a coin at $candleAverage")
-                        }
-                    } else if (buy &&
-                            dataReversed[1] < dataReversed[0] &&
-                            dataReversed[1] < dataReversed[2]) { // Local minimum - BUY
-                        if (soldCoins > 0) {
-                            val totalPrice = (soldCoins*2) * candleAverage
-                            println("buying $soldCoins coins at a total of $totalPrice")
-                            usdBalance -= totalPrice
-                            coinBalance += (soldCoins*2)
-                            soldCoins = 0
-                            addPointToChart(candleTimeEpoch, candleAverage, PointType.BUY, priceOffFromMA.toString(),
-                                    usdBalance, coinBalance)
-                        }
-                        /*addPointToChart(candleTimeEpoch, candleAverage,
-                            if (priceOffFromMA > 0) PointType.SELL else PointType.BUY,
-                            priceOffFromMA.toString(),
-                            usdBalance, coinBalance)*/
-                    }
-                }
-                if (fullData.last() == candle) {
-                    if (soldCoins > 0) {
-                        val totalPrice = soldCoins * candleAverage
-                        println("buying $soldCoins coins at a total of $totalPrice")
-                        usdBalance -= totalPrice
-                        coinBalance += soldCoins
-                        soldCoins = 0
-                        addPointToChart(candleTimeEpoch, candleAverage, PointType.BUY, priceOffFromMA.toString(),
-                                usdBalance, coinBalance)
-                    }
-                }
+            testableData.forEachIndexed { index, data ->
+                handle(period, data, fullData.subList(0, warmUpPeriods+index), data.date.toLong())
             }
-            println("usdBalance: $usdBalance | coinBalance: $coinBalance")
+            println("balance: $balance")
         }
+    }
+
+    private fun handle(period: Long,
+                       actualData: PoloniexChartData,
+                       history: List<PoloniexChartData>, epoch: Long) {
+        val price = actualData.price
+        val maA = history.ema(period.periodsForHours(3).toInt())
+        val maB = history.ema(period.periodsForHours(15).toInt())
+        val historyReversed = history.reversed().map { it.price }
+        val offFromA = actualData.price - maA
+        val offFromB = actualData.price - maB
+        val low5 = 5.0 * (history.maxPriceHours(period, 24) - history.minPriceHours(period, 24)) / 100.0
+        val low20 = 20.0 * (history.maxPriceHours(period, 24) - history.minPriceHours(period, 24)) / 100.0
+
+        val a = (historyReversed[14] + historyReversed[13] + historyReversed[12] + historyReversed[11] + historyReversed[10]) / 5.0 // [2] // 5,4 8,7,6
+        val b = (historyReversed[9] + historyReversed[8] + historyReversed[7] + historyReversed[6] + historyReversed[5]) / 5.0 // [1] // 3,2 5,4,3
+        val c = (historyReversed[4] + historyReversed[3] + historyReversed[2] + historyReversed[1] + historyReversed[0]) / 5.0 // [0] // 1,0 2,1,0
+
+        val bigAmount = 4.0
+        val smallAmount = 1.0
+
+        if (    offFromB > low20 && offFromA > low5*3 &&
+                b > c &&
+                b > a) {
+            addPoint(epoch, price, SeriesType.BIG_SELL)
+            balance = balance.sell(bigAmount, price)
+        } else if (
+                offFromB < -low20 && offFromA < -low5*3 &&
+                b < c &&
+                b < a) {
+            addPoint(epoch, price, SeriesType.BIG_BUY)
+            balance = balance.buy(bigAmount, price)
+        }
+
+        else if (    offFromA > low5 &&
+                historyReversed[1] > historyReversed[0] &&
+                historyReversed[1] > historyReversed[2]) {
+            addPoint(epoch, price, SeriesType.SMALL_SELL)
+            balance = balance.sell(smallAmount, price)
+        } else if (
+                offFromA < -low5 &&
+                historyReversed[1] < historyReversed[0] &&
+                historyReversed[1] < historyReversed[2]) {
+            addPoint(epoch, price, SeriesType.SMALL_BUY)
+            balance = balance.buy(smallAmount, price)
+        } else {
+            addPoint(epoch, price, SeriesType.PRICE)
+        }
+
+        addPoint(epoch, maA, SeriesType.MA_A)
+        addPoint(epoch, maB, SeriesType.MA_B)
+    }
+
+    private data class Balance(val usd: Double, val coins: Double) {
+        fun sell(coins: Double, price: Double) = Balance(this.usd + (price*coins), this.coins - coins)
+        fun buy(coins: Double, price: Double) = Balance(this.usd - (price * coins), this.coins + coins)
     }
 
     companion object {
