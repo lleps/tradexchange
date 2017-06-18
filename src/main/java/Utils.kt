@@ -21,48 +21,77 @@ fun hackTooltipStartTiming(tooltip: Tooltip) {
     }
 }
 
-fun List<PoloniexChartData>.dataLatestHours(period: Long, hours: Long): List<PoloniexChartData> {
-    return takeLast(((hours*3600) / period).toInt())
+fun Long.forHours(hours: Long) = ((hours*3600) / this).toInt()
+
+fun List<Double>.sma(periods: Long): Double {
+    val lastElements = takeLast(periods.toInt())
+    return lastElements.sum() / lastElements.size
 }
 
-fun List<PoloniexChartData>.smaHours(period: Long, hours: Long): Double {
-    val datas = dataLatestHours(period, hours)
-    return datas.sumByDouble { it.weightedAverage.toDouble() } / datas.size
-}
+typealias EmaEntry = Pair<List<Double>, Int>
+private val emaCache = mutableMapOf<EmaEntry, Double>()
 
-fun List<PoloniexChartData>.maxPriceHours(period: Long, hours: Long): Double {
-    val datas = dataLatestHours(period, hours)
-    return datas.map { it.price }.max()!!
-}
+fun List<Double>.ema(periods: Int): Double {
+    var cached = emaCache[EmaEntry(this, periods)]
+    if (cached != null) return cached
 
-fun List<PoloniexChartData>.minPriceHours(period: Long, hours: Long): Double {
-    val datas = dataLatestHours(period, hours)
-    return datas.map { it.price }.min()!!
-}
-
-fun Long.periodsForHours(hours: Long) = (hours*3600) / this
-
-// TODO test this class
-fun List<PoloniexChartData>.sma(periods: Long): Double {
-    val datas = takeLast(periods.toInt())
-    return datas.sumByDouble { it.price } / datas.size
-}
-
-fun List<PoloniexChartData>.ema(periods: Int): Double {
-    if (size == 1) return last().price
-
-    val datas = takeLast(periods)
-    val c = 2.0 / (datas.size + 1).toDouble()
-    return c * datas.last().price + (1-c) * dropLast(1).ema(periods)
-}
-
-fun List<Double>.emaDouble(periods: Int): Double {
     if (size == 1) return last()
 
-    val datas = takeLast(periods)
-    val c = 2.0 / (datas.size + 1).toDouble()
-    return c * datas.last() + (1-c) * dropLast(1).emaDouble(periods)
+    val lastElements = takeLast(periods)
+    val c = 2.0 / (lastElements.size + 1).toDouble()
+    cached = c*lastElements.last() + (1-c)*dropLast(1).ema(periods)
+    emaCache[EmaEntry(this, periods)] = cached
+    return cached
+}
+
+data class MACD(val macd: Double, val signal: Double, val histogram: Double)
+
+fun List<Double>.macd(emaShortPeriod: Int = 12, emaLongPeriod: Int = 26, signalPeriod: Int = 9): MACD {
+    val emaShortResult = ema(emaShortPeriod)
+    val emaLongResult = ema(emaLongPeriod)
+    val macd = emaShortResult - emaLongResult
+    val macdForLatestPoints = mutableListOf<Double>()
+    (signalPeriod - 1 downTo 0).forEach { macdForLatestPoints += dropLast(it).ema(emaShortPeriod) - dropLast(it).ema(emaLongPeriod) }
+    val signal = macdForLatestPoints.ema(signalPeriod)
+    val histogram = macd - signal
+    return MACD(macd, signal, histogram)
+}
+
+fun List<Double>.rsi(periods: Int): Double {
+    val prices = takeLast(periods)
+    var sumGain = 0.0
+    var sumLoss = 0.0
+    for (i in 1..prices.size-1) {
+        val diff = prices[i] - prices[i-1]
+        if (diff > 0) {
+            sumGain += diff
+        } else {
+            sumLoss -= diff
+        }
+    }
+    if (sumGain == 0.0) return 0.0
+    if (Math.abs(sumLoss) < 0.1) return 100.0
+    val relativeStrength = sumGain / sumLoss
+    return 100.0 - (100.0 / (1 + relativeStrength))
+}
+
+fun List<Double>.isLocalMaximum(periods: Int = 3): Boolean {
+    check(periods % 3 == 0) { "periods for local maximum must be divisible by 3" }
+    val reversed = asReversed()
+    val a = if (periods == 3) reversed[2] else if (periods == 6) ((reversed[4] + reversed[5]) / 2.0) else error("unsupported period")
+    val b = if (periods == 3) reversed[1] else if (periods == 6) ((reversed[3] + reversed[2]) / 2.0) else error("unsupported period")
+    val c = if (periods == 3) reversed[0] else if (periods == 6) ((reversed[1] + reversed[0]) / 2.0) else error("unsupported period")
+    return b > a && b > c
+}
+
+fun List<Double>.isLocalMinimum(periods: Int = 3): Boolean {
+    check(periods % 3 == 0) { "periods for local maximum must be divisible by 3" }
+    val reversed = asReversed()
+    val a = if (periods == 3) reversed[2] else if (periods == 6) ((reversed[4] + reversed[5]) / 2.0) else error("unsupported period")
+    val b = if (periods == 3) reversed[1] else if (periods == 6) ((reversed[3] + reversed[2]) / 2.0) else error("unsupported period")
+    val c = if (periods == 3) reversed[0] else if (periods == 6) ((reversed[1] + reversed[0]) / 2.0) else error("unsupported period")
+    return b < a && b < c
 }
 
 val PoloniexChartData.price: Double
-    get() = weightedAverage.toDouble()
+    get() = close.toDouble()
