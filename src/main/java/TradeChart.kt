@@ -18,17 +18,16 @@ import java.time.format.DateTimeFormatter
 
 class TradeChart {
     val node = BorderPane()
-    private val hbox = VBox(35.0)
+    private val hbox = VBox(10.0)
     private val mainChart: LineChart<Number, Number>
     private val mainChartSeries = mutableMapOf<String, XYChart.Series<Number, Number>>()
     private val extraCharts = mutableMapOf<String, LineChart<Number, Number>>()
     private val extraChartsSeries = mutableMapOf<String, MutableMap<String, XYChart.Series<Number, Number>>>()
 
     init {
-        val xAxis = NumberAxis("date", 0.0, 8.0, 1.0).apply {
+        val xAxis = NumberAxis("Date", 0.0, 8.0, 1.0).apply {
             upperBound = ZonedDateTime.now(ZoneOffset.UTC).toEpochSecond().toDouble()
             lowerBound = upperBound - (3600*24*2)
-            tickUnit = (3600*24*7).toDouble()
             tickLabelFormatter = object : StringConverter<Number>() {
                 override fun toString(t: Number) = Instant
                         .ofEpochSecond(t.toLong())
@@ -37,13 +36,16 @@ class TradeChart {
 
                 override fun fromString(string: String): Number = TODO()
             }
+            tickUnitProperty().bind(Bindings.divide(Bindings.subtract(upperBoundProperty(), lowerBoundProperty()), 20.0))
         }
 
-        val yAxis = NumberAxis("price", 0.0, 8.0, 1.0)
-        yAxis.tickUnit = 50.0
+        val yAxis = NumberAxis("Price", 0.0, 8.0, 1.0).apply {
+            tickUnitProperty().bind(Bindings.divide(Bindings.subtract(upperBoundProperty(), lowerBoundProperty()), 10.0))
+        }
+
         mainChart = LineChart<Number, Number>(xAxis, yAxis, FXCollections.observableArrayList<XYChart.Series<Number, Number>>()).apply {
             setOnScroll {
-                xAxis.lowerBound -= 3600*2 * if (it.deltaY < 0.0) 1.0 else -1.0
+                xAxis.lowerBound -= 3600*4 * if (it.deltaY < 0.0) 1.0 else -1.0
                 adjustYRangeByXBounds(this)
             }
             var lastX = 0.0
@@ -56,7 +58,6 @@ class TradeChart {
                 adjustYRangeByXBounds(this)
             }
             animated = false
-            isLegendVisible = false
         }
         hbox.children.add(mainChart)
         hbox.alignment = Pos.TOP_CENTER
@@ -78,7 +79,7 @@ class TradeChart {
 
     fun addPoint(type: String, epoch: Long, value: Double, description: String? = null) {
         Platform.runLater {
-            val seriesName = if (type == "BUY" || type == "SELL" || type == "BIGBUY" || type == "BIGSELL") "PRICE" else type
+            val seriesName = if (type == "Buy" || type == "Sell" || type == "BigBuy" || type == "BigSell") "Price" else type
             val series = mainChartSeries.getOrPut(seriesName) {
                 val result = XYChart.Series<Number, Number>(seriesName, FXCollections.observableArrayList())
                 mainChart.data.add(result)
@@ -87,10 +88,10 @@ class TradeChart {
 
             val data = XYChart.Data<Number, Number>(epoch, value)
             when (type) {
-                "BUY" -> data.node = Circle(4.0, Paint.valueOf("#673AB7"))
-                "SELL" -> data.node = Circle(4.0, Paint.valueOf("#4CAF50"))
-                "BIGBUY" -> data.node = Circle(6.0, Paint.valueOf("#673AB7"))
-                "BIGSELL" -> data.node = Circle(6.0, Paint.valueOf("#4CAF50"))
+                "Buy" -> data.node = Circle(4.0, Paint.valueOf("#673AB7"))
+                "Sell" -> data.node = Circle(4.0, Paint.valueOf("#4CAF50"))
+                "BigBuy" -> data.node = Circle(6.0, Paint.valueOf("#673AB7"))
+                "BigSell" -> data.node = Circle(6.0, Paint.valueOf("#4CAF50"))
                 else -> data.node = Circle(0.0)
             }
             if (description != null && data.node != null) {
@@ -101,66 +102,49 @@ class TradeChart {
         }
     }
 
-    private var lastAddedXAxis: NumberAxis? = null
+    private var lastExtraXAxis: NumberAxis? = null
 
     fun addPointExtra(chartId: String, type: String, epoch: Long, value: Double, description: String? = null) {
         Platform.runLater {
-            // Get or create chart
             val chart = extraCharts.getOrPut(chartId) {
-                val xAxis = NumberAxis("date", 0.0, 8.0, 1.0).apply {
+                val xAxis = NumberAxis("Date", 0.0, 8.0, 1.0).apply {
                     upperBoundProperty().bind((mainChart.xAxis as NumberAxis).upperBoundProperty())
                     lowerBoundProperty().bind((mainChart.xAxis as NumberAxis).lowerBoundProperty())
-                    tickUnit = (3600*24*7).toDouble()
-                    tickLabelFormatter = object : StringConverter<Number>() {
-                        override fun toString(t: Number) = Instant
-                                .ofEpochSecond(t.toLong())
-                                .atZone(ZoneOffset.UTC)
-                                .format(DateTimeFormatter.ofPattern("MM-dd HH:mm"))
-
-                        override fun fromString(string: String): Number = TODO()
-                    }
+                    tickUnitProperty().bind((mainChart.xAxis as NumberAxis).tickUnitProperty())
+                    tickLabelFormatterProperty().bind((mainChart.xAxis as NumberAxis).tickLabelFormatterProperty())
+                    animatedProperty().bind(mainChart.xAxis.animatedProperty())
                 }
-                val yAxis = NumberAxis("value", 0.0, 8.0, 1.0)
-                yAxis.tickUnit = 50.0
-                val result = LineChart<Number, Number>(xAxis, yAxis, FXCollections.observableArrayList<XYChart.Series<Number, Number>>())
-                result.animated = false
-                result.prefHeightProperty().bind(Bindings.divide(mainChart.heightProperty(), 3.0))
-                result.maxHeightProperty().bind(Bindings.divide(mainChart.heightProperty(), 3.0))
-                result.minHeightProperty().bind(Bindings.divide(mainChart.heightProperty(), 3.0))
-                result.prefWidthProperty().bind(mainChart.widthProperty())
+                val yAxis = NumberAxis(chartId, 0.0, 8.0, 1.0).apply {
+                    tickUnitProperty().bind(Bindings.divide(Bindings.subtract(upperBoundProperty(), lowerBoundProperty()), 3.0))
+                }
+                val result = LineChart<Number, Number>(xAxis, yAxis, FXCollections.observableArrayList<XYChart.Series<Number, Number>>()).apply {
+                    prefHeightProperty().bind(Bindings.divide(mainChart.prefHeightProperty(), 2.0))
+                }
 
                 extraChartsSeries[chartId] = mutableMapOf()
                 hbox.children.add(result)
 
-                // Hide main x axis stuff
-                mainChart.xAxis.isTickLabelsVisible = false
-                mainChart.xAxis.isTickMarkVisible = false
-                mainChart.xAxis.isVisible = false
-                mainChart.xAxis.opacity = 0.0
-
-                // Hide last chart X axis
-                lastAddedXAxis?.let {
-                    it.opacity = 0.0
-                    it.isVisible = false
-                    it.isTickMarkVisible = false
-                    it.isTickLabelsVisible = false
+                val bottomXAxis = lastExtraXAxis ?: mainChart.xAxis
+                bottomXAxis.apply {
+                    //isTickLabelsVisible = false
+                    //isTickMarkVisible = false
+                    //isVisible = false
+                    //opacity = 0.0
                 }
+                lastExtraXAxis = xAxis
 
-                lastAddedXAxis = xAxis
-                // Update ranges when change
                 (mainChart.xAxis as NumberAxis).lowerBoundProperty().addListener { _, _, _ -> adjustYRangeByXBounds(result) }
                 (mainChart.xAxis as NumberAxis).upperBoundProperty().addListener { _, _, _ -> adjustYRangeByXBounds(result) }
+
                 result
             }
 
-            // Get or create series
             val series = extraChartsSeries[chartId]!!.getOrPut(type) {
                 val result = XYChart.Series<Number, Number>(type, FXCollections.observableArrayList())
                 chart.data.add(result)
                 result
             }
 
-            // add point
             val dataPoint = XYChart.Data<Number, Number>(epoch, value)
             if (description == null) {
                 dataPoint.node = Circle(0.0)
