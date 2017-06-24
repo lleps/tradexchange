@@ -9,8 +9,8 @@ import kotlin.concurrent.thread
 
 class App : Application() {
     private lateinit var chart: TradeChart
-    private val pair = "USDT_ETH"
-    private val backTestDays = 14L*4
+    private val pair = "USDT_BTC"
+    private val backTestDays = 20L
     private var balance = Balance(0.0, 0.0)
     private var lastSellPrice = 0.0
     private var lastBuyPrice = Double.MAX_VALUE
@@ -20,6 +20,7 @@ class App : Application() {
     private var lastDiffFromMacd = 0.0
     private var coinId = 0
     private var consecutiveBuys = 0
+    private var consecutiveSells = 0
 
     private class HoldingCoin(val id: Int, val price: Double) {
         override fun toString() = "$id (\$$price)"
@@ -35,7 +36,7 @@ class App : Application() {
         val macd = history.macd()
         val macdSellSignal = lastMacd.histogram < 0 && macd.histogram > 0
         val macdBuySignal = lastMacd.histogram > 0 && macd.histogram < 0
-        val rsi = history.rsi(14)
+        val rsi = history.rsi(10)
         val lastRsi = history.dropLast(1).rsi(14)
         val rsiReturnedBelow70 = lastRsi > 70.0 && rsi < 70.0
         val rsiReturnedOver30 = lastRsi < 30.0 && rsi > 30.0
@@ -58,14 +59,16 @@ class App : Application() {
                 && diffFromLastMacd > lastDiffFromMacd*2
                 && farAboveLastSell
                 && boughtCoins.any { it.price < price-divergence24h*0.2 }) {
-            val soldCoins = boughtCoins.filter { it.price < price-divergence24h*0.2 }
+            val rsiMultiplier = if (rsi >= 70.0) 2 else 1
+            consecutiveBuys = 0
+            consecutiveSells += 1
+            val soldCoins = boughtCoins.filter { it.price < price-divergence24h*0.2 }.take(consecutiveSells)
             lastSellPrice = price
             lastBuyPrice = 9999999.9
             balance = balance.sell(soldCoins.size.toDouble(), price)
             lastSellPeriodId = periodId
             chart.addPoint("Sell", epoch, price, "price $price\nsold ${soldCoins}\n$balance")
             boughtCoins -= soldCoins
-            consecutiveBuys = 0
         } else if (price < history.ema(period.forHours(12)) && lastHistogram < 0 && histogram < 0 && macd.macd < 0 && diffFromLastMacd < lastDiffFromMacd*2 && farBelowLastBuy /*history.isLocalMinimum() && farBelowLastBuy && divergedFarBelowEma*/) {
             // buy track
             lastBuyPrice = price
@@ -73,7 +76,9 @@ class App : Application() {
             lastBuyPeriodId = periodId
 
             // add to list
-            consecutiveBuys++
+            val rsiMultiplier = if (rsi <= 30.0) 2 else 1
+            consecutiveSells = 0
+            consecutiveBuys += 1
             var coinsToBuy = emptyList<HoldingCoin>()
             for (i in 1..consecutiveBuys) {
                 coinsToBuy += HoldingCoin(coinId++, price)
@@ -87,9 +92,7 @@ class App : Application() {
             chart.addPoint("Price", epoch, price)
         }
         lastDiffFromMacd = diffFromLastMacd
-        //chart.addPoint("SMA(6h)", epoch, history.ema(period.forHours(6)))
-        //chart.addPoint("SMA(12h)", epoch, history.ema(period.forHours(12)))
-        //chart.addPoint("SMA(24h)", epoch, history.ema(period.forHours(24*2)))
+        chart.addPoint("SMA(12h)", epoch, history.ema(period.forHours(12)))
         chart.addPointExtra("MACD", "macd", epoch, history.macd().macd)
         chart.addPointExtra("MACD", "signal", epoch, history.macd().signal)
         chart.addPointExtra("MACD", "histogram", epoch, history.macd().histogram)
