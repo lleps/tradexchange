@@ -92,7 +92,7 @@ class TradeChart {
                 "Sell" -> data.node = Circle(4.0, Paint.valueOf("#4CAF50"))
                 "BigBuy" -> data.node = Circle(6.0, Paint.valueOf("#673AB7"))
                 "BigSell" -> data.node = Circle(6.0, Paint.valueOf("#4CAF50"))
-                else -> data.node = Circle(0.0)
+                else -> data.node = Circle(0.0).apply { isVisible = false }
             }
             if (description != null && data.node != null) {
                 Tooltip.install(data.node, Tooltip(description).apply { hackTooltipStartTiming(this) })
@@ -147,7 +147,7 @@ class TradeChart {
 
             val dataPoint = XYChart.Data<Number, Number>(epoch, value)
             if (description == null) {
-                dataPoint.node = Circle(0.0)
+                dataPoint.node = Circle(0.0).apply { isVisible = false }
             } else {
                 dataPoint.node = Circle(3.0, Paint.valueOf("#673AB7"))
                 Tooltip.install(dataPoint.node, Tooltip(description).apply { hackTooltipStartTiming(this) })

@@ -31,7 +31,7 @@ fun List<Double>.sma(periods: Long): Double {
 typealias EmaEntry = Pair<List<Double>, Int>
 private val emaCache = mutableMapOf<EmaEntry, Double>()
 
-fun List<Double>.ema(periods: Int): Double {
+fun List<Double>.ema(periods: Int): Double { // TODO improve perf
     var cached = emaCache[EmaEntry(this, periods)]
     if (cached != null) return cached
 
@@ -44,11 +44,8 @@ fun List<Double>.ema(periods: Int): Double {
     return cached
 }
 
-data class MACDEntry(val list: List<Double>, val emaShortPeriod: Int, val emaLongPeriod: Int, val signalPeriod: Int)
-
 data class MACD(val macd: Double, val signal: Double, val histogram: Double)
 
-private val macdCache = mutableMapOf<MACDEntry, MACD>()
 fun List<Double>.macd(emaShortPeriod: Int = 12, emaLongPeriod: Int = 26, signalPeriod: Int = 9): MACD {
     val emaShortResult = ema(emaShortPeriod)
     val emaLongResult = ema(emaLongPeriod)
