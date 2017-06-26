@@ -13,5 +13,5 @@ interface Exchange {
 
     fun sell(coins: Double, price: Double)
 
-    fun prettyBalance() = "money: \$${moneyBalance} coins: $coinBalance"
+    fun prettyBalance() = "money: \$$moneyBalance coins: $coinBalance"
 }
