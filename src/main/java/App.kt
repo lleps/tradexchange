@@ -47,48 +47,46 @@ class App : Application() {
         val lastHistogram = history.dropLast(1).macd().histogram
         val histogram = history.macd().histogram
         if (
-                //price > history.ema(period.forHours(12))
+                //price > history.ema(period.forHours(24)) &&
                 /*&& lastHistogram > 0
                 && histogram > 0
                 && macd.macd > 0
                 && diffFromLastMacd > lastDiffFromMacd*2*/
-                /*&&*/ history.rsi(10) > 70.0
+                exchange.coinBalance >= 1.0
+                && history.rsi(14) >= 70.0
                 && farAboveLastSell
                 //&& state.unSoldCoins.any { it.price < price-divergence24h*0.2 }
                 ) {
-            exchange.sell(1.0, price)
-            val buyEventsToSell = state.unSoldCoins.filter { it.price < price-divergence24h*0.2 }.take((consecutiveSells+1)*2)
-            val coinAmount = buyEventsToSell.sumByDouble { it.coins }
             val nextEventId = (state.events.map { it.id }.max() ?: 0) + 1
-            val sellEvent = TradeEvent(nextEventId, TradeType.SELL, coinAmount, price, epoch)
-            state = state.copy(events = state.events + sellEvent, unSoldCoins = state.unSoldCoins - buyEventsToSell)
-            exchange.sell(coinAmount, price)
-            chart.addPoint("Sell", epoch, price, "Sell event: $price\n${exchange.prettyBalance()}")
+            val sellEvent = TradeEvent(nextEventId, TradeType.SELL, 1.0, price, epoch)
+            state = state.copy(events = state.events + sellEvent)
+            exchange.sell(sellEvent.coins, sellEvent.price)
+            chart.addPoint("Sell", epoch, price, "Sell event: $sellEvent\n${exchange.prettyBalance()}")
         } else if (
-                //price < history.ema(period.forHours(12))
+                //price < history.ema(period.forHours(24)) &&
                 /*&& lastHistogram < 0
                 && histogram < 0
                 && macd.macd < 0
                 && diffFromLastMacd < lastDiffFromMacd*2*/
-                /*&&*/ history.rsi(10) < 30
+                exchange.moneyBalance >= price
+                && history.rsi(14) <= 30.0
                 && farBelowLastBuy
                 ) {
-            var buyEvents = emptyList<TradeEvent>()
-            for (i in 1..1/*(consecutiveBuys+1)*/) {
-                val nextEventId = (state.events.map { it.id }.max() ?: 0) + 1
-                buyEvents += TradeEvent(nextEventId, TradeType.BUY, 5.0, price, epoch)
-            }
-            state = state.copy(events = state.events + buyEvents, unSoldCoins = state.unSoldCoins + buyEvents)
-            exchange.buy(buyEvents.sumByDouble { it.coins }, price)
-            chart.addPoint("Buy", epoch, price, "Buy events: $buyEvents\n${exchange.prettyBalance()}")
+            val nextEventId = (state.events.map { it.id }.max() ?: 0) + 1
+            val buyEvent = TradeEvent(nextEventId, TradeType.BUY, 1.0, price, epoch)
+            state = state.copy(events = state.events + buyEvent)
+            exchange.buy(buyEvent.coins, buyEvent.price)
+            chart.addPoint("Buy", epoch, price, "Buy event: $buyEvent\n${exchange.prettyBalance()}")
         } else {
             chart.addPoint("Price", epoch, price)
         }
         lastDiffFromMacd = diffFromLastMacd
-        chart.addPoint("SMA(12h)", epoch, history.ema(period.forHours(12)))
         chart.addPointExtra("MACD", "macd", epoch, history.macd().macd)
         chart.addPointExtra("MACD", "signal", epoch, history.macd().signal)
         chart.addPointExtra("MACD", "histogram", epoch, history.macd().histogram)
+        chart.addPointExtra("RSI(14)", "rsi", epoch, history.rsi(14))
+        chart.addPointExtra("RSI(14)", "rsi-70", epoch, 70.0)
+        chart.addPointExtra("RSI(14)", "rsi-30", epoch, 30.0)
         chart.addPointExtra("BALANCE", "money", epoch, exchange.moneyBalance)
     }
 
@@ -128,7 +126,8 @@ class App : Application() {
                         period = period,
                         fromEpoch = ZonedDateTime.now(ZoneOffset.UTC).minusDays(backTestDays).toEpochSecond(),
                         warmUpPeriods = period.forHours(48),
-                        initialMoney = 5000.0)
+                        initialMoney = 2000.0,
+                        initialCoins = 5.0)
                 state = TradePersistentState(emptyList(), emptyList())
             } else {
                 Platform.runLater { stage.title = "Tradexchange live trading for $pair" }
