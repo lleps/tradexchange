@@ -1,13 +1,8 @@
-import com.google.gson.Gson
-import com.google.gson.GsonBuilder
 import javafx.application.Application
 import javafx.application.Platform
 import javafx.scene.Scene
 import javafx.scene.image.Image
 import javafx.stage.Stage
-import java.nio.charset.Charset
-import java.nio.file.Files
-import java.nio.file.Paths
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import kotlin.concurrent.thread
@@ -26,36 +21,18 @@ class App : Application() {
 
     private data class TradePersistentState(val events: List<TradeEvent>, val unSoldCoins: List<TradeEvent>)
 
-    // TODO Testear PoloniexLiveExchange
-    // TODO definir estrategia, multi coin, hacer un balance check, etc
-    // TODO days para el modo live:<days> que te muestre historial
-    // TODO tradexchange-poloniex-auth.json con apiKey y apiSecret.
-    private var lastDiffFromMacd = 0.0
-
     private fun handle(period: Long, price: Double, history: List<Double>, epoch: Long) {
         val max24h = history.takeLast(period.forHours(48)).max()!!
         val min24h = history.takeLast(period.forHours(48)).min()!!
         val divergence24h = (max24h - min24h)
-        val macd = history.macd()
         val lastSellPrice = if (state.events.lastOrNull()?.type == TradeType.SELL) state.events.last().price else 0.0
         val lastBuyPrice = if (state.events.lastOrNull()?.type == TradeType.BUY) state.events.last().price else Double.MAX_VALUE
-        val consecutiveBuys = state.events.takeLastWhile { it.type == TradeType.BUY }.size
-        val consecutiveSells = state.events.takeLastWhile { it.type == TradeType.SELL }.size
         val farAboveLastSell = price > lastSellPrice+divergence24h*0.2
         val farBelowLastBuy = price < lastBuyPrice-divergence24h*0.2
-        val diffFromLastMacd = history.macd().histogram - history.dropLast(1).macd().histogram
-        val lastHistogram = history.dropLast(1).macd().histogram
-        val histogram = history.macd().histogram
         if (
-                //price > history.ema(period.forHours(24)) &&
-                /*&& lastHistogram > 0
-                && histogram > 0
-                && macd.macd > 0
-                && diffFromLastMacd > lastDiffFromMacd*2*/
                 exchange.coinBalance >= 1.0
                 && history.rsi(14) >= 70.0
                 && farAboveLastSell
-                //&& state.unSoldCoins.any { it.price < price-divergence24h*0.2 }
                 ) {
             val nextEventId = (state.events.map { it.id }.max() ?: 0) + 1
             val sellEvent = TradeEvent(nextEventId, TradeType.SELL, 1.0, price, epoch)
@@ -63,11 +40,6 @@ class App : Application() {
             exchange.sell(sellEvent.coins, sellEvent.price)
             chart.addPoint("Sell", epoch, price, "Sell event: $sellEvent\n${exchange.prettyBalance()}")
         } else if (
-                //price < history.ema(period.forHours(24)) &&
-                /*&& lastHistogram < 0
-                && histogram < 0
-                && macd.macd < 0
-                && diffFromLastMacd < lastDiffFromMacd*2*/
                 exchange.moneyBalance >= price
                 && history.rsi(14) <= 30.0
                 && farBelowLastBuy
@@ -80,7 +52,6 @@ class App : Application() {
         } else {
             chart.addPoint("Price", epoch, price)
         }
-        lastDiffFromMacd = diffFromLastMacd
         chart.addPointExtra("MACD", "macd", epoch, history.macd().macd)
         chart.addPointExtra("MACD", "signal", epoch, history.macd().signal)
         chart.addPointExtra("MACD", "histogram", epoch, history.macd().histogram)
@@ -139,24 +110,11 @@ class App : Application() {
                 )
                 stateFileName = "tradexchange-state-$pair.json"
                 println("Trying to recover algorithm state from $stateFileName ...")
-                state = try {
-                    Gson().fromJson(Files.readAllBytes(Paths.get(stateFileName)).toString(Charset.defaultCharset()), TradePersistentState::class.java)
-                } catch (e: Exception) {
-                    println("Failed to load ($e). Creating an empty state ...")
-                    TradePersistentState(emptyList(), emptyList())
-                }
+                state = loadFrom<TradePersistentState>(stateFileName!!) ?: TradePersistentState(emptyList(), emptyList())
             }
-
-            // TODO recover state events to chart if not in backtest
-
 
             var firstPrice: Double? = null
             var priceHistory = exchange.warmUpHistory
-
-            if (!backtestMode && state.events.isNotEmpty()) {
-                println("Drawing in chart past events ...")
-            }
-
             while (true) {
                 val ticker = exchange.fetchTicker() ?: break
                 if (firstPrice == null) firstPrice = ticker.price
@@ -166,13 +124,12 @@ class App : Application() {
 
                 if (!backtestMode) {
                     println("Saving algorithm state to file ${stateFileName!!} ... ")
-                    val gson = GsonBuilder().setPrettyPrinting().create()
-                    Files.write(Paths.get(stateFileName!!), gson.toJson(state).toByteArray(Charset.defaultCharset()))
+                    state.saveTo(stateFileName!!)
                 }
             }
 
             if (!backtestMode) {
-                println("Balance resume only aviable in backtest mode. Exiting...")
+                println("Balance resume only available in backtest mode. Exiting...")
                 System.exit(0)
                 return@thread
             }
