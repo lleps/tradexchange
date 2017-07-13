@@ -130,6 +130,8 @@ class App : Application() {
                         exchange.sell(coinsToSell, latestPrice)
                     } else if (exchange.coinBalance < initialCoins) {
                         val coinsToBuy = initialCoins - exchange.coinBalance
+                        println("[Done] Buying $coinsToBuy coins at latest price \$$latestPrice to get " +
+                                "total coins (hold vs trade)")
                         exchange.buy(coinsToBuy, latestPrice)
                     }
                     println("[Done] Holding: \$${latestPrice - firstPrice} money.")
