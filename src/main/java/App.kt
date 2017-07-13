@@ -1,3 +1,9 @@
+import eu.verdelhan.ta4j.TimeSeries
+import eu.verdelhan.ta4j.indicators.simple.ClosePriceIndicator
+import eu.verdelhan.ta4j.indicators.trackers.MACDIndicator
+import eu.verdelhan.ta4j.indicators.trackers.RSIIndicator
+import indicator.MaximumIndicator
+import indicator.MinimumIndicator
 import javafx.application.Application
 import javafx.application.Platform
 import javafx.scene.Scene
@@ -21,17 +27,23 @@ class App : Application() {
 
     private data class TradePersistentState(val events: List<TradeEvent>, val unSoldCoins: List<TradeEvent>)
 
-    private fun handle(period: Long, price: Double, history: List<Double>, epoch: Long) {
-        val max24h = history.takeLast(period.forHours(48)).max()!!
-        val min24h = history.takeLast(period.forHours(48)).min()!!
-        val divergence24h = (max24h - min24h)
+    private fun handle(period: Long, history: TimeSeries, end: Int) {
+        val closePrice = ClosePriceIndicator(history)
+        val rsiIndicator = RSIIndicator(closePrice, 14)
+        val price = closePrice.getValue(end).toDouble()
+        val maxIndicator = MaximumIndicator(closePrice, 48*2)
+        val minIndicator = MinimumIndicator(closePrice, 48*2)
+        val epoch = history.getTick(end).endTime.toEpochSecond()
+        val macdIndicator = MACDIndicator(closePrice, 12, 26)
+        val divergence = (maxIndicator.getValue(end).toDouble() - minIndicator.getValue(end).toDouble())
         val lastSellPrice = if (state.events.lastOrNull()?.type == TradeType.SELL) state.events.last().price else 0.0
         val lastBuyPrice = if (state.events.lastOrNull()?.type == TradeType.BUY) state.events.last().price else Double.MAX_VALUE
-        val farAboveLastSell = price > lastSellPrice+divergence24h*0.2
-        val farBelowLastBuy = price < lastBuyPrice-divergence24h*0.2
+        val farAboveLastSell = price > lastSellPrice+divergence*0.2
+        val farBelowLastBuy = price < lastBuyPrice-divergence*0.2
         if (
                 exchange.coinBalance >= 1.0
-                && history.rsi(14) >= 70.0
+                && rsiIndicator.getValue(end).toDouble() >= 70.0
+                && macdIndicator.getValue(end).toDouble() > 0
                 && farAboveLastSell
                 ) {
             val nextEventId = (state.events.map { it.id }.max() ?: 0) + 1
@@ -39,9 +51,9 @@ class App : Application() {
             state = state.copy(events = state.events + sellEvent)
             exchange.sell(sellEvent.coins, sellEvent.price)
             chart.addPoint("Sell", epoch, price, "Sell event: $sellEvent\n${exchange.prettyBalance()}")
-        } else if (
-                exchange.moneyBalance >= price
-                && history.rsi(14) <= 30.0
+        } else if (exchange.moneyBalance >= price
+                && rsiIndicator.getValue(end).toDouble() <= 30.0
+                && macdIndicator.getValue(end).toDouble() < 0
                 && farBelowLastBuy
                 ) {
             val nextEventId = (state.events.map { it.id }.max() ?: 0) + 1
@@ -52,32 +64,25 @@ class App : Application() {
         } else {
             chart.addPoint("Price", epoch, price)
         }
-        chart.addPointExtra("MACD", "macd", epoch, history.macd().macd)
-        chart.addPointExtra("MACD", "signal", epoch, history.macd().signal)
-        chart.addPointExtra("MACD", "histogram", epoch, history.macd().histogram)
-        chart.addPointExtra("RSI(14)", "rsi", epoch, history.rsi(14))
+        chart.addPointExtra("MACD", "macd", epoch, macdIndicator.getValue(end).toDouble())
+        chart.addPointExtra("RSI(14)", "rsi", epoch, rsiIndicator.getValue(end).toDouble())
         chart.addPointExtra("RSI(14)", "rsi-70", epoch, 70.0)
         chart.addPointExtra("RSI(14)", "rsi-30", epoch, 30.0)
         chart.addPointExtra("BALANCE", "money", epoch, exchange.moneyBalance)
     }
 
+    private enum class Mode { BACKTEST, LIVE }
     override fun start(stage: Stage) {
         val pair: String
-        val backtestMode: Boolean
-        var backTestDays = 0L
-        var stateFileName: String? = null // only in live mode
+        val mode: Mode
+        val days: Int
 
         try {
             pair = args[0]
-            if (args[1].startsWith("backtest")) {
-                backtestMode = true
-                backTestDays = args[1].split(":")[1].toLong()
-            } else if (args[1] == "live") {
-                backtestMode = false
-            } else throw Exception()
+            mode = Mode.valueOf(args[1].toUpperCase())
+            days = args[2].toInt()
         } catch (e: Exception) {
-            println("Params: <pair> <mode>")
-            println("Mode 1: backtest:[days] Mode 2: live")
+            println("Parameters: <pair> <mode> <days>")
             System.exit(0)
             return
         }
@@ -89,66 +94,50 @@ class App : Application() {
 
         thread(start = true, isDaemon = true) {
             val period = 1800L
-            if (backtestMode) {
-                Platform.runLater { stage.title = "Tradexchange $backTestDays-day backtest for $pair" }
-                println("Starting backtesting $backTestDays-day for $pair...")
-                exchange = PoloniexBacktestExchange(
-                        pair = pair,
-                        period = period,
-                        fromEpoch = ZonedDateTime.now(ZoneOffset.UTC).minusDays(backTestDays).toEpochSecond(),
-                        warmUpPeriods = period.forHours(48),
-                        initialMoney = 2000.0,
-                        initialCoins = 5.0)
-                state = TradePersistentState(emptyList(), emptyList())
-            } else {
-                Platform.runLater { stage.title = "Tradexchange live trading for $pair" }
-                println("Starting live trading for $pair...")
-                exchange = PoloniexLiveExchange(
-                        pair = pair,
-                        period = period,
-                        warmUpPeriods = period.forHours(48)
-                )
-                stateFileName = "tradexchange-state-$pair.json"
-                println("Trying to recover algorithm state from $stateFileName ...")
-                state = loadFrom<TradePersistentState>(stateFileName!!) ?: TradePersistentState(emptyList(), emptyList())
-            }
+            when (mode) {
+                Mode.BACKTEST -> {
+                    // Set up
+                    Platform.runLater { stage.title = "Tradexchange $days-day backtest for $pair" }
+                    println("Starting backtesting $days-day for $pair...")
+                    val initialMoney = 2000.0
+                    val initialCoins = 5.0
+                    exchange = PoloniexBacktestExchange(
+                            pair = pair,
+                            period = period,
+                            fromEpoch = ZonedDateTime.now(ZoneOffset.UTC).minusDays(days.toLong()).toEpochSecond(),
+                            warmUpPeriods = period.forHours(48),
+                            initialMoney = initialMoney,
+                            initialCoins = initialCoins)
+                    state = TradePersistentState(emptyList(), emptyList())
+                    val allTicks = mutableListOf(*exchange.warmUpHistory.toTypedArray())
+                    while (true) {
+                        val tick = exchange.fetchTick() ?: break
+                        allTicks += tick
+                    }
 
-            var firstPrice: Double? = null
-            var priceHistory = exchange.warmUpHistory
-            while (true) {
-                val ticker = exchange.fetchTicker() ?: break
-                if (firstPrice == null) firstPrice = ticker.price
+                    // Test
+                    val timeSeries = TimeSeries(allTicks)
+                    for (i in exchange.warmUpHistory.size..timeSeries.end) handle(period, timeSeries, i)
 
-                handle(period, ticker.price, priceHistory, ticker.epoch)
-                priceHistory += ticker.price
-
-                if (!backtestMode) {
-                    println("Saving algorithm state to file ${stateFileName!!} ... ")
-                    state.saveTo(stateFileName!!)
+                    // Resume
+                    println("[Done] Final balance: ${exchange.coinBalance} coins | \$${exchange.moneyBalance} money.")
+                    val firstPrice = ClosePriceIndicator(timeSeries).getValue(exchange.warmUpHistory.size).toDouble()
+                    val latestPrice = ClosePriceIndicator(timeSeries).getValue(timeSeries.end).toDouble()
+                    if (exchange.coinBalance > initialCoins) {
+                        val coinsToSell = exchange.coinBalance - initialCoins
+                        println("[Done] Selling $coinsToSell coins at latest price \$$latestPrice to get " +
+                                "total money (hold vs trade)")
+                        exchange.sell(coinsToSell, latestPrice)
+                    } else if (exchange.coinBalance < initialCoins) {
+                        val coinsToBuy = initialCoins - exchange.coinBalance
+                        exchange.buy(coinsToBuy, latestPrice)
+                    }
+                    println("[Done] Holding: \$${latestPrice - firstPrice} money.")
+                    println("[Done] Trading: \$${exchange.moneyBalance - initialMoney} money.")
+                    println("[Done] Fixed balance: ${exchange.coinBalance} coins | \$${exchange.moneyBalance} money.")
                 }
+                Mode.LIVE -> TODO("Implement live mode")
             }
-
-            if (!backtestMode) {
-                println("Balance resume only available in backtest mode. Exiting...")
-                System.exit(0)
-                return@thread
-            }
-
-            if (exchange.coinBalance < 0.0) {
-                println("Fixing exchange balance: Buying ${-exchange.coinBalance} coins.")
-                exchange.buy(-exchange.coinBalance, priceHistory.last())
-            } else if (exchange.coinBalance > 0.0) {
-                println("Fixing exchange balance: Selling ${exchange.coinBalance} coins.")
-                exchange.sell(exchange.coinBalance, priceHistory.last())
-            }
-
-            val moneyWonHolding = priceHistory.last() - firstPrice!!
-            val moneyWonTrading = exchange.moneyBalance - 5000.0
-            val tradingOverHolding = moneyWonTrading - moneyWonHolding
-            val percentTradingOverHolding = (moneyWonTrading / moneyWonHolding) * 100
-            println("Money won holding: $moneyWonHolding | " +
-                    "Money won trading: $moneyWonTrading | " +
-                    "Trading over holding: $tradingOverHolding ($percentTradingOverHolding%)")
         }
     }
 

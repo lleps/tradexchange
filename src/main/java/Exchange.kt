@@ -1,13 +1,13 @@
-interface Exchange {
-    data class Ticker(val price: Double, val epoch: Long)
+import eu.verdelhan.ta4j.Tick
 
-    val warmUpHistory: List<Double>
+interface Exchange {
+    val warmUpHistory: List<Tick>
 
     val moneyBalance: Double
 
     val coinBalance: Double
 
-    fun fetchTicker(): Ticker?
+    fun fetchTick(): Tick?
 
     fun buy(coins: Double, price: Double)
 

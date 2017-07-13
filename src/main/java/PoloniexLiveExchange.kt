@@ -1,5 +1,9 @@
 import com.cf.client.poloniex.PoloniexExchangeService
+import eu.verdelhan.ta4j.Decimal
+import eu.verdelhan.ta4j.Tick
 import java.math.BigDecimal
+import java.time.Duration
+import java.time.Instant
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
 
@@ -15,8 +19,12 @@ class PoloniexLiveExchange(
     private val initialNowEpoch = ZonedDateTime.now(ZoneOffset.UTC).toEpochSecond()
     private val warmUp = poloniex.returnChartData(pair, period, initialNowEpoch - warmUpPeriods*period).toMutableList()
 
-    override val warmUpHistory: List<Double>
-        get() = warmUp.map { it.price }
+    override val warmUpHistory: List<Tick>
+        get() = warmUp.map {
+            Tick(Duration.ofSeconds(period), Instant.ofEpochSecond(it.date.toLong()).atZone(ZoneOffset.UTC),
+                    Decimal.valueOf(it.open), Decimal.valueOf(it.high), Decimal.valueOf(it.low), Decimal.valueOf(it.close),
+                    Decimal.valueOf(it.volume))
+        }
 
     override val moneyBalance: Double
         get() = poloniex.returnBalance(pair.split("_")[0]).available.toDouble() // X_IGNORED
@@ -24,22 +32,15 @@ class PoloniexLiveExchange(
     override val coinBalance: Double
         get() = poloniex.returnBalance(pair.split("_")[1]).available.toDouble() // IGNORED_X
 
-    override fun fetchTicker(): Exchange.Ticker? {
-        Thread.sleep(period * 1000)
-        val nowEpoch = ZonedDateTime.now(ZoneOffset.UTC).toEpochSecond()
-        val ticker = poloniex.returnTicker(pair) ?: error("ticker for $pair is null")
-        return Exchange.Ticker(ticker.last.toDouble(), nowEpoch)
-    }
+    override fun fetchTick(): Tick? = null
 
     override fun buy(coins: Double, price: Double) {
         println("Buy $coins coins at $price on poloniex.")
-        val result = poloniex.buy(pair, BigDecimal.valueOf(price), BigDecimal.valueOf(coins), false, false, false)
-        println("error: ${result.error}")
+        poloniex.buy(pair, BigDecimal.valueOf(price), BigDecimal.valueOf(coins), false, false, false)
     }
 
     override fun sell(coins: Double, price: Double) {
         println("Sell $coins coins at $price on poloniex.")
-        val result = poloniex.sell(pair, BigDecimal.valueOf(price), BigDecimal.valueOf(coins), false, false, false)
-        println("error: ${result.error}")
+         poloniex.sell(pair, BigDecimal.valueOf(price), BigDecimal.valueOf(coins), false, false, false)
     }
 }

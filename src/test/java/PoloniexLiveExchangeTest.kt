@@ -10,7 +10,7 @@ class PoloniexLiveExchangeTest {
                     apiSecret = "7fe0d64f187fd333a9754085fa7a1e57c6a98345908f7c84dcbeed1465aa55a7adb7b36a276e95557a4598887673cbdbfbc8bacc0f9968f970bbe96fccb0745b")
             println("coin balance: ${poloniex.coinBalance}")
             println("money balance: ${poloniex.moneyBalance}")
-            println("ticker: ${poloniex.fetchTicker()}")
+            println("ticker: ${poloniex.fetchTick()}")
             println("selling 0.001 for 19.0")
             poloniex.sell(coins = 0.001, price = 19.0)
             Thread.sleep(30000)

@@ -1,8 +1,13 @@
 import com.cf.client.poloniex.PoloniexExchangeService
 import com.cf.data.model.poloniex.PoloniexChartData
+import eu.verdelhan.ta4j.Decimal
+import eu.verdelhan.ta4j.Tick
+import java.time.Duration
+import java.time.Instant
+import java.time.ZoneOffset
 
 class PoloniexBacktestExchange(pair: String,
-                               period: Long,
+                               private val period: Long,
                                fromEpoch: Long,
                                warmUpPeriods: Int,
                                initialMoney: Double = 0.0,
@@ -31,17 +36,29 @@ class PoloniexBacktestExchange(pair: String,
 
     private val testingChartData = chartData.subList(warmUpPeriods, chartData.size).toMutableList()
 
-    override val warmUpHistory: List<Double>
-        get() = warmUpChartData.map { it.price }
+    override val warmUpHistory: List<Tick>
+        get() = warmUpChartData.map {
+            Tick(Duration.ofSeconds(period), Instant.ofEpochSecond(it.date.toLong()).atZone(ZoneOffset.UTC),
+                    Decimal.valueOf(it.open), Decimal.valueOf(it.high), Decimal.valueOf(it.low), Decimal.valueOf(it.close),
+                    Decimal.valueOf(it.volume))
+        }
 
     override var moneyBalance: Double = initialMoney
 
     override var coinBalance: Double = initialCoins
 
-    override fun fetchTicker(): Exchange.Ticker? {
-        if (testingChartData.isEmpty()) return null
-        val result = testingChartData.removeAt(0)
-        return Exchange.Ticker(result.price, result.date.toLong())
+    private val chartDataAsTicks: MutableList<Tick> by lazy {
+        testingChartData.map {
+            Tick(Duration.ofSeconds(period), Instant.ofEpochSecond(it.date.toLong()).atZone(ZoneOffset.UTC),
+                    Decimal.valueOf(it.open), Decimal.valueOf(it.high), Decimal.valueOf(it.low), Decimal.valueOf(it.close),
+                    Decimal.valueOf(it.volume))
+        }.toMutableList()
+    }
+
+    override fun fetchTick(): Tick? {
+        if (chartDataAsTicks.isEmpty()) return null
+        val result = chartDataAsTicks.removeAt(0)
+        return result
     }
 
     override fun buy(coins: Double, price: Double) {
