@@ -4,6 +4,8 @@ import eu.verdelhan.ta4j.indicators.trackers.MACDIndicator
 import eu.verdelhan.ta4j.indicators.trackers.RSIIndicator
 import indicator.MaximumIndicator
 import indicator.MinimumIndicator
+import indicator.NormalizationIndicator
+import indicator.OBVOscillatorIndicator
 import javafx.application.Application
 import javafx.application.Platform
 import javafx.scene.Scene
@@ -33,18 +35,21 @@ class App : Application() {
         val price = closePrice.getValue(end).toDouble()
         val maxIndicator = MaximumIndicator(closePrice, 48*2)
         val minIndicator = MinimumIndicator(closePrice, 48*2)
+        val obvOscillatorIndicator = NormalizationIndicator(OBVOscillatorIndicator(history, 3*2))
         val epoch = history.getTick(end).endTime.toEpochSecond()
-        val macdIndicator = MACDIndicator(closePrice, 12, 26)
+        val macdIndicator = NormalizationIndicator(MACDIndicator(closePrice, 12, 26))
         val divergence = (maxIndicator.getValue(end).toDouble() - minIndicator.getValue(end).toDouble())
         val lastSellPrice = if (state.events.lastOrNull()?.type == TradeType.SELL) state.events.last().price else 0.0
         val lastBuyPrice = if (state.events.lastOrNull()?.type == TradeType.BUY) state.events.last().price else Double.MAX_VALUE
         val farAboveLastSell = price > lastSellPrice+divergence*0.2
         val farBelowLastBuy = price < lastBuyPrice-divergence*0.2
+        val percent = obvOscillatorIndicator.getValue(end).toDouble() + macdIndicator.getValue(end).toDouble()
         if (
                 exchange.coinBalance >= 1.0
-                && rsiIndicator.getValue(end).toDouble() >= 70.0
-                && macdIndicator.getValue(end).toDouble() > 0
-                && farAboveLastSell
+                //&& rsiIndicator.getValue(end).toDouble() >= 70.0
+                //&& macdIndicator.getValue(end).toDouble() > 0
+                        && percent > 1.165
+                        && farAboveLastSell
                 ) {
             val nextEventId = (state.events.map { it.id }.max() ?: 0) + 1
             val sellEvent = TradeEvent(nextEventId, TradeType.SELL, 1.0, price, epoch)
@@ -52,8 +57,9 @@ class App : Application() {
             exchange.sell(sellEvent.coins, sellEvent.price)
             chart.addPoint("Sell", epoch, price, "Sell event: $sellEvent\n${exchange.prettyBalance()}")
         } else if (exchange.moneyBalance >= price
-                && rsiIndicator.getValue(end).toDouble() <= 30.0
-                && macdIndicator.getValue(end).toDouble() < 0
+                //&& rsiIndicator.getValue(end).toDouble() <= 30.0
+                //&& macdIndicator.getValue(end).toDouble() < 0
+                && percent < 0.619
                 && farBelowLastBuy
                 ) {
             val nextEventId = (state.events.map { it.id }.max() ?: 0) + 1
@@ -65,11 +71,12 @@ class App : Application() {
             chart.addPoint("Price", epoch, price)
         }
         chart.addPointExtra("MACD", "macd", epoch, macdIndicator.getValue(end).toDouble())
-        chart.addPointExtra("RSI(14)", "rsi", epoch, rsiIndicator.getValue(end).toDouble())
-        chart.addPointExtra("RSI(14)", "rsi-70", epoch, 70.0)
-        chart.addPointExtra("RSI(14)", "rsi-30", epoch, 30.0)
+        chart.addPointExtra("MACD", "percent", epoch, percent)
+        chart.addPointExtra("OBV OSCILLATOR", "value", epoch, obvOscillatorIndicator.getValue(end).toDouble())
         chart.addPointExtra("BALANCE", "money", epoch, exchange.moneyBalance)
     }
+
+    private fun sigmoid(z: Double) = 1.0 / (1.0 + Math.exp(-z))
 
     private enum class Mode { BACKTEST, LIVE }
     override fun start(stage: Stage) {
