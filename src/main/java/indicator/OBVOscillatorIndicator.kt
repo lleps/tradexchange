@@ -1,9 +1,9 @@
 package indicator
 
-import eu.verdelhan.ta4j.Decimal
-import eu.verdelhan.ta4j.TimeSeries
-import eu.verdelhan.ta4j.indicators.CachedIndicator
-import eu.verdelhan.ta4j.indicators.volume.OnBalanceVolumeIndicator
+import org.ta4j.core.Decimal
+import org.ta4j.core.TimeSeries
+import org.ta4j.core.indicators.CachedIndicator
+import org.ta4j.core.indicators.volume.OnBalanceVolumeIndicator
 
 class OBVOscillatorIndicator(private val series: TimeSeries, val ticks: Int) : CachedIndicator<Decimal>(series) {
     private val obv = OnBalanceVolumeIndicator(series)

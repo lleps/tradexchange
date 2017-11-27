@@ -1,7 +1,9 @@
 import com.cf.client.poloniex.PoloniexExchangeService
 import com.cf.data.model.poloniex.PoloniexChartData
-import eu.verdelhan.ta4j.Decimal
-import eu.verdelhan.ta4j.Tick
+import org.ta4j.core.BaseTick
+import org.ta4j.core.Decimal
+import org.ta4j.core.Tick
+import java.io.File
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
@@ -21,6 +23,7 @@ class PoloniexBacktestExchange(pair: String,
 
     init {
         val from = fromEpoch - warmUpPeriods
+        File("data").mkdir()
         val file = "data/cache-pol-$pair-$period-${from/3600}.json"
         val cached = loadFrom<ChartDataWrapper>(file)
         if (cached == null) {
@@ -38,7 +41,7 @@ class PoloniexBacktestExchange(pair: String,
 
     override val warmUpHistory: List<Tick>
         get() = warmUpChartData.map {
-            Tick(Duration.ofSeconds(period), Instant.ofEpochSecond(it.date.toLong()).atZone(ZoneOffset.UTC),
+            BaseTick(Duration.ofSeconds(period), Instant.ofEpochSecond(it.date.toLong()).atZone(ZoneOffset.UTC),
                     Decimal.valueOf(it.open), Decimal.valueOf(it.high), Decimal.valueOf(it.low), Decimal.valueOf(it.close),
                     Decimal.valueOf(it.volume))
         }
@@ -47,9 +50,9 @@ class PoloniexBacktestExchange(pair: String,
 
     override var coinBalance: Double = initialCoins
 
-    private val chartDataAsTicks: MutableList<Tick> by lazy {
+    private val chartDataAsTicks: MutableList<BaseTick> by lazy {
         testingChartData.map {
-            Tick(Duration.ofSeconds(period), Instant.ofEpochSecond(it.date.toLong()).atZone(ZoneOffset.UTC),
+            BaseTick(Duration.ofSeconds(period), Instant.ofEpochSecond(it.date.toLong()).atZone(ZoneOffset.UTC),
                     Decimal.valueOf(it.open), Decimal.valueOf(it.high), Decimal.valueOf(it.low), Decimal.valueOf(it.close),
                     Decimal.valueOf(it.volume))
         }.toMutableList()

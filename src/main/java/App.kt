@@ -1,7 +1,4 @@
-import eu.verdelhan.ta4j.TimeSeries
-import eu.verdelhan.ta4j.indicators.simple.ClosePriceIndicator
-import eu.verdelhan.ta4j.indicators.trackers.MACDIndicator
-import eu.verdelhan.ta4j.indicators.trackers.RSIIndicator
+
 import indicator.MaximumIndicator
 import indicator.MinimumIndicator
 import indicator.NormalizationIndicator
@@ -11,6 +8,11 @@ import javafx.application.Platform
 import javafx.scene.Scene
 import javafx.scene.image.Image
 import javafx.stage.Stage
+import org.ta4j.core.BaseTimeSeries
+import org.ta4j.core.TimeSeries
+import org.ta4j.core.indicators.MACDIndicator
+import org.ta4j.core.indicators.RSIIndicator
+import org.ta4j.core.indicators.helpers.ClosePriceIndicator
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import kotlin.concurrent.thread
@@ -38,12 +40,12 @@ class App : Application() {
         val obvOscillatorIndicator = NormalizationIndicator(OBVOscillatorIndicator(history, 3*2))
         val epoch = history.getTick(end).endTime.toEpochSecond()
         val macdIndicator = NormalizationIndicator(MACDIndicator(closePrice, 12, 26))
-        val divergence = (maxIndicator.getValue(end).toDouble() - minIndicator.getValue(end).toDouble())
+        val divergence = (maxIndicator.calculate(end).toDouble() - minIndicator.calculate(end).toDouble())
         val lastSellPrice = if (state.events.lastOrNull()?.type == TradeType.SELL) state.events.last().price else 0.0
         val lastBuyPrice = if (state.events.lastOrNull()?.type == TradeType.BUY) state.events.last().price else Double.MAX_VALUE
         val farAboveLastSell = price > lastSellPrice+divergence*0.2
         val farBelowLastBuy = price < lastBuyPrice-divergence*0.2
-        val percent = obvOscillatorIndicator.getValue(end).toDouble() + macdIndicator.getValue(end).toDouble()
+        val percent = obvOscillatorIndicator.calculate(end).toDouble() + macdIndicator.calculate(end).toDouble()
         if (
                 exchange.coinBalance >= 1.0
                 //&& rsiIndicator.getValue(end).toDouble() >= 70.0
@@ -70,15 +72,14 @@ class App : Application() {
         } else {
             chart.addPoint("Price", epoch, price)
         }
-        chart.addPointExtra("MACD", "macd", epoch, macdIndicator.getValue(end).toDouble())
+        chart.addPointExtra("MACD", "macd", epoch, macdIndicator.calculate(end).toDouble())
         chart.addPointExtra("MACD", "percent", epoch, percent)
-        chart.addPointExtra("OBV OSCILLATOR", "value", epoch, obvOscillatorIndicator.getValue(end).toDouble())
+        chart.addPointExtra("OBV OSCILLATOR", "value", epoch, obvOscillatorIndicator.calculate(end).toDouble())
         chart.addPointExtra("BALANCE", "money", epoch, exchange.moneyBalance)
     }
 
-    private fun sigmoid(z: Double) = 1.0 / (1.0 + Math.exp(-z))
-
     private enum class Mode { BACKTEST, LIVE }
+    
     override fun start(stage: Stage) {
         val pair: String
         val mode: Mode
@@ -123,13 +124,13 @@ class App : Application() {
                     }
 
                     // Test
-                    val timeSeries = TimeSeries(allTicks)
-                    for (i in exchange.warmUpHistory.size..timeSeries.end) handle(period, timeSeries, i)
+                    val timeSeries = BaseTimeSeries(allTicks)
+                    for (i in exchange.warmUpHistory.size..timeSeries.endIndex) handle(period, timeSeries, i)
 
                     // Resume
                     println("[Done] Final balance: ${exchange.coinBalance} coins | \$${exchange.moneyBalance} money.")
                     val firstPrice = ClosePriceIndicator(timeSeries).getValue(exchange.warmUpHistory.size).toDouble()
-                    val latestPrice = ClosePriceIndicator(timeSeries).getValue(timeSeries.end).toDouble()
+                    val latestPrice = ClosePriceIndicator(timeSeries).getValue(timeSeries.endIndex).toDouble()
                     if (exchange.coinBalance > initialCoins) {
                         val coinsToSell = exchange.coinBalance - initialCoins
                         println("[Done] Selling $coinsToSell coins at latest price \$$latestPrice to get " +

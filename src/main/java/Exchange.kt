@@ -1,4 +1,4 @@
-import eu.verdelhan.ta4j.Tick
+import org.ta4j.core.Tick
 
 interface Exchange {
     val warmUpHistory: List<Tick>

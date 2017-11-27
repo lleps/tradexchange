@@ -1,6 +1,7 @@
 import com.cf.client.poloniex.PoloniexExchangeService
-import eu.verdelhan.ta4j.Decimal
-import eu.verdelhan.ta4j.Tick
+import org.ta4j.core.BaseTick
+import org.ta4j.core.Decimal
+import org.ta4j.core.Tick
 import java.math.BigDecimal
 import java.time.Duration
 import java.time.Instant
@@ -21,7 +22,7 @@ class PoloniexLiveExchange(
 
     override val warmUpHistory: List<Tick>
         get() = warmUp.map {
-            Tick(Duration.ofSeconds(period), Instant.ofEpochSecond(it.date.toLong()).atZone(ZoneOffset.UTC),
+            BaseTick(Duration.ofSeconds(period), Instant.ofEpochSecond(it.date.toLong()).atZone(ZoneOffset.UTC),
                     Decimal.valueOf(it.open), Decimal.valueOf(it.high), Decimal.valueOf(it.low), Decimal.valueOf(it.close),
                     Decimal.valueOf(it.volume))
         }
