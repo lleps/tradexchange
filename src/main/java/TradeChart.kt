@@ -118,7 +118,7 @@ class TradeChart {
                     tickUnitProperty().bind(Bindings.divide(Bindings.subtract(upperBoundProperty(), lowerBoundProperty()), 3.0))
                 }
                 val result = LineChart<Number, Number>(xAxis, yAxis, FXCollections.observableArrayList<XYChart.Series<Number, Number>>()).apply {
-                    prefHeightProperty().bind(Bindings.divide(mainChart.prefHeightProperty(), 2.0))
+                    prefHeightProperty().bind(Bindings.divide(mainChart.prefHeightProperty(), 3.0))
                 }
 
                 extraChartsSeries[chartId] = mutableMapOf()
