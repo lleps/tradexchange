@@ -58,6 +58,7 @@ class TradeChart {
                 adjustYRangeByXBounds(this)
             }
             animated = false
+            prefHeightProperty().bind(Bindings.divide(node.heightProperty(), 2.0))
         }
         hbox.children.add(mainChart)
         hbox.alignment = Pos.TOP_CENTER
@@ -118,7 +119,7 @@ class TradeChart {
                     tickUnitProperty().bind(Bindings.divide(Bindings.subtract(upperBoundProperty(), lowerBoundProperty()), 3.0))
                 }
                 val result = LineChart<Number, Number>(xAxis, yAxis, FXCollections.observableArrayList<XYChart.Series<Number, Number>>()).apply {
-                    prefHeightProperty().bind(Bindings.divide(mainChart.prefHeightProperty(), 3.0))
+                    prefHeightProperty().bind(Bindings.divide(mainChart.prefHeightProperty(), 5.0))
                 }
 
                 extraChartsSeries[chartId] = mutableMapOf()
