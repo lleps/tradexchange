@@ -1,3 +1,7 @@
 .default-color0.chart-series-line { -fx-stroke: rgba(255, 0, 0, 1.0); }
-.default-color1.chart-series-line { -fx-stroke: rgba(255, 255, 0, 0.35); }
-.default-color2.chart-series-line { -fx-stroke: rgba(0, 255, 0, 0.35); }
+.default-color1.chart-series-line { -fx-stroke: rgba(255, 255, 0, 0.2); }
+.default-color2.chart-series-line { -fx-stroke: rgba(0, 255, 0, 0.2); }
+.default-color3.chart-series-line { -fx-stroke: rgba(0, 255, 255, 0.2); }
+.default-color4.chart-series-line { -fx-stroke: rgba(0, 0, 255, 0.2); }
+.default-color5.chart-series-line { -fx-stroke: rgba(255, 0, 255, 0.2); }
+.default-color5.chart-series-line { -fx-stroke: rgba(128, 126, 0, 0.2); }

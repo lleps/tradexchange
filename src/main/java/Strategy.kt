@@ -5,84 +5,59 @@ import indicator.OBVOscillatorIndicator
 import org.ta4j.core.TimeSeries
 import org.ta4j.core.indicators.EMAIndicator
 import org.ta4j.core.indicators.MACDIndicator
+import org.ta4j.core.indicators.RSIIndicator
 import org.ta4j.core.indicators.bollinger.BollingerBandsLowerIndicator
 import org.ta4j.core.indicators.bollinger.BollingerBandsMiddleIndicator
 import org.ta4j.core.indicators.bollinger.BollingerBandsUpperIndicator
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
 import org.ta4j.core.indicators.statistics.StandardDeviationIndicator
+import org.ta4j.core.indicators.volume.OnBalanceVolumeIndicator
 
 class Strategy(private val series: TimeSeries,
                private val chart: TradeChart,
                private val exchange: Exchange) {
 
-    private val close = ClosePriceIndicator(series)
-    private val max = MaximumIndicator(close, 48*2)
-    private val min = MinimumIndicator(close, 48*2)
-    private val obvOscillator = NormalizationIndicator(OBVOscillatorIndicator(series, 3*2))
-    private val macd = NormalizationIndicator(MACDIndicator(close, 12, 26))
-    private val longSMA = EMAIndicator(close, 48*2)
-    private val shortSMA = EMAIndicator(close, 48/2)
-    private val avg14 = EMAIndicator(close, 14)
-    private val sd14 = StandardDeviationIndicator(close, 14)
-    private val middleBBand = BollingerBandsMiddleIndicator(avg14)
-    private val lowBBand = BollingerBandsLowerIndicator(middleBBand, sd14)
-    private val upBBand = BollingerBandsUpperIndicator(middleBBand, sd14)
+    // Each tick is every 30 min, therefore, 2 ticks = 1 hour
+    val Int.hours get() = this * 2
+    val Int.days get() = this * (2 * 24)
 
-    private var timePassed = 0
-    private val maxTime = 24*2 // Limit time for a trade
-    private var wantToSell = true
+    val close = ClosePriceIndicator(series)
+    val max = MaximumIndicator(close, 2.days) // 2-day Maximum price
+    val min = MinimumIndicator(close, 2.days) // 2-day Minimum price
+    val macd = MACDIndicator(close, 12.hours, 26.hours)
+    val longMA = EMAIndicator(close, 5.days)
+    val shortMA = EMAIndicator(close, 12.hours)
+    val rsi = RSIIndicator(close, 20.hours)
+    val obv = OnBalanceVolumeIndicator(series)
 
-    private var lastSellPrice = Double.MIN_VALUE
-    private var lastBuyPrice = Double.MAX_VALUE
+    val avg14 = EMAIndicator(close, 14.hours)
+    val sd14 = StandardDeviationIndicator(close, 14.hours)
+    val middleBBand = BollingerBandsMiddleIndicator(avg14)
+    val lowBBand = BollingerBandsLowerIndicator(middleBBand, sd14)
+    val upBBand = BollingerBandsUpperIndicator(middleBBand, sd14)
 
+    // Executed for each tick (30 mins)
     fun onTick(i: Int) {
-        timePassed++
-
-        var action = false
         val epoch = series.getTick(i).endTime.toEpochSecond()
-        val percent = avg(obvOscillator[i] to 1, macd[i] to 2)
 
-        if (wantToSell) {
-            val offBBand = close[i] - upBBand[i]
-            val passed = (timePassed / maxTime).toDouble()
-            val chanceOfSell = avg(passed to 1, percent to 6/*, offBBand to 6*/)
-            if (chanceOfSell > .8) {
-                action = true
-                chart.addPoint("Sell", epoch, close[i])
-                timePassed = 0
-                exchange.sell(exchange.coinBalance, close[i])
-                wantToSell = false
-                lastSellPrice = close[i]
-            }
-        }
-
-        // Waiting to buy
-        else if (!wantToSell) {
-            val offBBand = lowBBand[i] - close[i]
-            val passed = (timePassed / maxTime).toDouble()
-            val chanceOfBuy = avg(passed to 1, (1.0 - percent) to 6/*, offBBand to 6*/)
-            if (chanceOfBuy > .8) {
-                action = true
-                chart.addPoint("Buy", epoch, close[i])
-                timePassed = 0
-                exchange.buy(exchange.moneyBalance / close[i], close[i])
-                wantToSell = true
-                lastBuyPrice = close[i]
-            }
-        }
-
-        if (!action) {
+        // Strategy
+        if (rsi[i] > 70) {
+            chart.addPoint("Sell", epoch, close[i])
+            exchange.sell(exchange.coinBalance, close[i])
+        } else if (rsi[i] < 30) {
+            chart.addPoint("Buy", epoch, close[i])
+            exchange.buy(exchange.moneyBalance / close[i], close[i])
+        } else {
             chart.addPoint("Price", epoch, close[i])
         }
 
-        chart.addPoint("bbUpper", epoch, upBBand[i])
-        chart.addPoint("bbLower", epoch, lowBBand[i])
-        chart.addPointExtra("MACD-OBV", "macd", epoch, macd[i])
-        chart.addPointExtra("MACD-OBV", "obv", epoch, obvOscillator[i])
-        chart.addPointExtra("MACD-OBV", "both", epoch, percent)
-        chart.addPointExtra("BALANCE", "money", epoch, exchange.moneyBalance)
-
-        // Es necesario normalizar todo? Incluido el precio?
-
+        // Plot indicators
+        chart.addPoint("short MA", epoch, shortMA[i])
+        chart.addPoint("long MA", epoch, longMA[i])
+        chart.addPoint("BB Upper", epoch, upBBand[i])
+        chart.addPoint("BB Lower", epoch, lowBBand[i])
+        chart.addPointExtra("MACD", "macd", epoch, macd[i])
+        chart.addPointExtra("RSI", "obv", epoch, rsi[i])
+        chart.addPointExtra("OBV", "both", epoch, obv[i])
     }
 }
