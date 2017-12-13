@@ -32,6 +32,9 @@ class Strategy(private val series: TimeSeries,
     private val maxTime = 24*2 // Limit time for a trade
     private var wantToSell = true
 
+    private var lastSellPrice = Double.MIN_VALUE
+    private var lastBuyPrice = Double.MAX_VALUE
+
     fun onTick(i: Int) {
         timePassed++
 
@@ -40,31 +43,31 @@ class Strategy(private val series: TimeSeries,
         val percent = avg(obvOscillator[i] to 1, macd[i] to 2)
 
         if (wantToSell) {
-            if (close[i] > upBBand[i]) {
-                val passed = (timePassed / maxTime).toDouble()
-                val chanceOfSell = avg(passed to 1, percent to 6)
-                if (chanceOfSell > .8) {
-                    action = true
-                    chart.addPoint("Sell", epoch, close[i])
-                    timePassed = 0
-                    exchange.sell(exchange.coinBalance, close[i])
-                    wantToSell = false
-                }
+            val offBBand = close[i] - upBBand[i]
+            val passed = (timePassed / maxTime).toDouble()
+            val chanceOfSell = avg(passed to 1, percent to 6/*, offBBand to 6*/)
+            if (chanceOfSell > .8) {
+                action = true
+                chart.addPoint("Sell", epoch, close[i])
+                timePassed = 0
+                exchange.sell(exchange.coinBalance, close[i])
+                wantToSell = false
+                lastSellPrice = close[i]
             }
         }
 
         // Waiting to buy
         else if (!wantToSell) {
-            if (close[i] < lowBBand[i]) {
-                val passed = (timePassed / maxTime).toDouble()
-                val chanceOfBuy = avg(passed to 1, (1.0 - percent) to 6)
-                if (chanceOfBuy > .8) {
-                    action = true
-                    chart.addPoint("Buy", epoch, close[i])
-                    timePassed = 0
-                    exchange.buy(exchange.moneyBalance / close[i], close[i])
-                    wantToSell = true
-                }
+            val offBBand = lowBBand[i] - close[i]
+            val passed = (timePassed / maxTime).toDouble()
+            val chanceOfBuy = avg(passed to 1, (1.0 - percent) to 6/*, offBBand to 6*/)
+            if (chanceOfBuy > .8) {
+                action = true
+                chart.addPoint("Buy", epoch, close[i])
+                timePassed = 0
+                exchange.buy(exchange.moneyBalance / close[i], close[i])
+                wantToSell = true
+                lastBuyPrice = close[i]
             }
         }
 
@@ -78,5 +81,8 @@ class Strategy(private val series: TimeSeries,
         chart.addPointExtra("MACD-OBV", "obv", epoch, obvOscillator[i])
         chart.addPointExtra("MACD-OBV", "both", epoch, percent)
         chart.addPointExtra("BALANCE", "money", epoch, exchange.moneyBalance)
+
+        // Es necesario normalizar todo? Incluido el precio?
+
     }
 }

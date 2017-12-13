@@ -42,6 +42,7 @@ class App : Application() {
 
         chart = TradeChart()
         stage.scene = Scene(chart.node)
+        stage.scene.stylesheets.add("style.css")
         stage.icons.add(Image("money-icon.png"))
         stage.show()
 
@@ -52,6 +53,7 @@ class App : Application() {
                     // Set up
                     Platform.runLater { stage.title = "Tradexchange $days-day backtest for $pair" }
                     println("Starting backtesting $days-day for $pair...")
+
                     val initialMoney = 0.0
                     val initialCoins = 1.0
 

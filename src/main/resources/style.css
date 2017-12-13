@@ -1,0 +1,3 @@
+.default-color0.chart-series-line { -fx-stroke: rgba(255, 0, 0, 1.0); }
+.default-color1.chart-series-line { -fx-stroke: rgba(255, 255, 0, 0.35); }
+.default-color2.chart-series-line { -fx-stroke: rgba(0, 255, 0, 0.35); }
