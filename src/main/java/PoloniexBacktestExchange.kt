@@ -3,6 +3,7 @@ import com.cf.data.model.poloniex.PoloniexChartData
 import org.ta4j.core.BaseTick
 import org.ta4j.core.Decimal
 import org.ta4j.core.Tick
+import org.ta4j.core.indicators.HMAIndicator
 import java.io.File
 import java.time.Duration
 import java.time.Instant
@@ -25,12 +26,15 @@ class PoloniexBacktestExchange(pair: String,
         val from = fromEpoch - warmUpPeriods
         File("data").mkdir()
         val file = "data/cache-pol-$pair-$period-${from/3600}.json"
+        println("Trying to load data from '$file'...")
         val cached = loadFrom<ChartDataWrapper>(file)
         if (cached == null) {
+            println("Failed. Fetching online...")
             val result = ChartDataWrapper(poloniex.returnChartData(pair, period, from).toList())
             result.saveTo(file)
             chartData = result.content
         } else {
+            println("Loaded from cache.")
             chartData = cached.content
         }
     }

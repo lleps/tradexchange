@@ -99,7 +99,7 @@ class TradeChart {
                 Tooltip.install(data.node, Tooltip(description).apply { hackTooltipStartTiming(this) })
             }
             series.data.add(data)
-            adjustYRangeByXBounds(mainChart)
+            //adjustYRangeByXBounds(mainChart)
         }
     }
 
@@ -154,7 +154,12 @@ class TradeChart {
                 Tooltip.install(dataPoint.node, Tooltip(description).apply { hackTooltipStartTiming(this) })
             }
             series.data.add(dataPoint)
-            adjustYRangeByXBounds(chart)
+            //adjustYRangeByXBounds(chart)
         }
+    }
+
+    fun fix() {
+        adjustYRangeByXBounds(mainChart)
+        extraCharts.values.forEach { adjustYRangeByXBounds(it) }
     }
 }

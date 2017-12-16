@@ -22,8 +22,8 @@ class Strategy(private val series: TimeSeries,
     val Int.days get() = this * (2 * 24)
 
     val close = ClosePriceIndicator(series)
-    val max = MaximumIndicator(close, 2.days) // 2-day Maximum price
-    val min = MinimumIndicator(close, 2.days) // 2-day Minimum price
+    val max = MaximumIndicator(close, 4.hours) // 2-day Maximum price
+    val min = MinimumIndicator(close, 4.hours) // 2-day Minimum price
     val macd = MACDIndicator(close, 12.hours, 26.hours)
     val longMA = EMAIndicator(close, 5.days)
     val shortMA = EMAIndicator(close, 12.hours)
@@ -36,18 +36,55 @@ class Strategy(private val series: TimeSeries,
     val lowBBand = BollingerBandsLowerIndicator(middleBBand, sd14)
     val upBBand = BollingerBandsUpperIndicator(middleBBand, sd14)
 
+    val maxWeekly = MaximumIndicator(close, 7.days)
+    val maxMonthly = MaximumIndicator(close, 30.days)
+
+    var wantToSell = true
+
+    private val MAX_COINS = 5
+    // Strategy a. Hold up to MAX_COINS coins. Sell when their price is up 10%
+
+    class UnsoldCoin(val buyPrice: Double, val amount: Double)
+    var unsoldCoins = listOf<UnsoldCoin>()
+
+    var actionLock = 0
+
     // Executed for each tick (30 mins)
     fun onTick(i: Int) {
         val epoch = series.getTick(i).endTime.toEpochSecond()
+        var action = false
 
+        if (actionLock > 0) actionLock--
         // Strategy
-        if (rsi[i] > 70) {
-            chart.addPoint("Sell", epoch, close[i])
-            exchange.sell(exchange.coinBalance, close[i])
-        } else if (rsi[i] < 30) {
-            chart.addPoint("Buy", epoch, close[i])
-            exchange.buy(exchange.moneyBalance / close[i], close[i])
-        } else {
+        else if (close[i] >= upBBand[i]) {
+            if (!unsoldCoins.isEmpty()) {
+                // Check if there are any coin to sell (the coin whose price is up +20 usd)
+                // Sell ALL coins that match the predicate? Or only one? For now, one.
+
+                // TODO check for recent sells?
+                val coinToSell = unsoldCoins.firstOrNull { close[i] > it.buyPrice + 20 }
+                if (coinToSell != null) {
+                    exchange.sell(coinToSell.amount, close[i])
+                    chart.addPoint("Sell", epoch, close[i])
+                    action = true
+                    unsoldCoins -= coinToSell
+                    actionLock = 4.hours
+                }
+            }
+        } else if (close[i] <= lowBBand[i] && exchange.moneyBalance > 0) {
+            if (unsoldCoins.size < MAX_COINS) {
+                // amount = if (unsoldCoins == 0) exchange.moneyBalance / 5
+                val amountOfMoney = exchange.moneyBalance / (MAX_COINS - unsoldCoins.size).toDouble()
+                val amountOfCoins = amountOfMoney / close[i]
+                chart.addPoint("Buy", epoch, close[i])
+                exchange.buy(amountOfCoins, close[i])
+                action = true
+                unsoldCoins += UnsoldCoin(close[i], amountOfCoins)
+                actionLock = 4.hours
+            }
+        }
+
+        if (!action) {
             chart.addPoint("Price", epoch, close[i])
         }
 
@@ -58,6 +95,6 @@ class Strategy(private val series: TimeSeries,
         chart.addPoint("BB Lower", epoch, lowBBand[i])
         chart.addPointExtra("MACD", "macd", epoch, macd[i])
         chart.addPointExtra("RSI", "obv", epoch, rsi[i])
-        chart.addPointExtra("OBV", "both", epoch, obv[i])
+        //chart.addPointExtra("OBV", "both", epoch, obv[i])
     }
 }

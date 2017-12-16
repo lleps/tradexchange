@@ -54,8 +54,8 @@ class App : Application() {
                     Platform.runLater { stage.title = "Tradexchange $days-day backtest for $pair" }
                     println("Starting backtesting $days-day for $pair...")
 
-                    val initialMoney = 0.0
-                    val initialCoins = 1.0
+                    val initialMoney = 3500.0
+                    val initialCoins = 0.0
 
                     exchange = PoloniexBacktestExchange(
                             pair = pair,
@@ -72,6 +72,7 @@ class App : Application() {
                         allTicks += tick
                     }
 
+                    Platform.runLater { chart.fix() }
 
                     // Test
                     val timeSeries = BaseTimeSeries(allTicks)
