@@ -26,6 +26,32 @@ fun hackTooltipStartTiming(tooltip: Tooltip) {
     }
 }
 
+fun Indicator<Decimal>.crossOver(other: Indicator<Decimal>, tick: Int): Boolean {
+    return get(tick) > other[tick] && get(tick - 1) < other[tick - 1]
+}
+
+fun Indicator<Decimal>.crossUnder(other: Indicator<Decimal>, tick: Int): Boolean {
+    return get(tick) < other[tick] && get(tick - 1) > other[tick - 1]
+}
+
+fun Indicator<Decimal>.falling(tick: Int, length: Int): Boolean {
+    repeat(length) { i ->
+        if (get(tick - i - 1) > get(tick - i)) {
+            return false
+        }
+    }
+    return true
+}
+
+fun Indicator<Decimal>.rising(tick: Int, length: Int): Boolean {
+    repeat(length) { i ->
+        if (get(tick - i - 1) < get(tick - i)) {
+            return false
+        }
+    }
+    return true
+}
+
 fun Long.forHours(hours: Long) = ((hours*3600) / this).toInt()
 
 fun List<Double>.isLocalMaximum(periods: Int = 3): Boolean {
@@ -45,3 +71,4 @@ fun List<Double>.isLocalMinimum(periods: Int = 3): Boolean {
     val c = if (periods == 3) reversed[0] else if (periods == 6) ((reversed[1] + reversed[0]) / 2.0) else error("unsupported period")
     return b < a && b < c
 }
+

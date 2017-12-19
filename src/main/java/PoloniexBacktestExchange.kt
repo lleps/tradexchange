@@ -1,5 +1,6 @@
 import com.cf.client.poloniex.PoloniexExchangeService
 import com.cf.data.model.poloniex.PoloniexChartData
+import org.slf4j.LoggerFactory
 import org.ta4j.core.BaseTick
 import org.ta4j.core.Decimal
 import org.ta4j.core.Tick
@@ -22,19 +23,23 @@ class PoloniexBacktestExchange(pair: String,
     private class ChartDataWrapper(val content: List<PoloniexChartData> = mutableListOf())
     private val chartData: List<PoloniexChartData>
 
+    companion object {
+        private val LOGGER = LoggerFactory.getLogger(PoloniexBacktestExchange::class.java)
+    }
+
     init {
         val from = fromEpoch - warmUpPeriods
         File("data").mkdir()
         val file = "data/cache-pol-$pair-$period-${from/3600}.json"
-        println("Trying to load data from '$file'...")
+        LOGGER.info("Trying to load data from '$file'...")
         val cached = loadFrom<ChartDataWrapper>(file)
         if (cached == null) {
-            println("Failed. Fetching online...")
+            LOGGER.info("Failed. Fetching online...")
             val result = ChartDataWrapper(poloniex.returnChartData(pair, period, from).toList())
             result.saveTo(file)
             chartData = result.content
         } else {
-            println("Loaded from cache.")
+            LOGGER.info("Loaded from cache.")
             chartData = cached.content
         }
     }
@@ -70,23 +75,23 @@ class PoloniexBacktestExchange(pair: String,
 
     override fun buy(coins: Double, price: Double) {
         if (moneyBalance < coins * price) {
-            println("Error: Not enough balance to buy $coins coins at $price each.")
+            LOGGER.error("Not enough balance to buy $coins coins at $price each.")
             return
         }
 
         moneyBalance -= coins * price
         coinBalance += coins
-        println("Buying $coins coins at $price (total: ${coins * price})")
+        LOGGER.debug("Buying $coins coins at $price (total: ${coins * price})")
     }
 
     override fun sell(coins: Double, price: Double) {
         if (coinBalance < coins) {
-            println("Error: Want to sell $coins coins at $price but got only $coinBalance coins.")
+            LOGGER.error("Want to sell $coins coins at $price but got only $coinBalance coins.")
             return
         }
 
         moneyBalance += coins * price
         coinBalance -= coins
-        println("Selling $coins coins at $price (total: ${coins * price})")
+        LOGGER.debug("Selling $coins coins at $price (total: ${coins * price})")
     }
 }

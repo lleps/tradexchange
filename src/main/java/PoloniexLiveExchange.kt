@@ -1,4 +1,5 @@
 import com.cf.client.poloniex.PoloniexExchangeService
+import org.slf4j.LoggerFactory
 import org.ta4j.core.BaseTick
 import org.ta4j.core.Decimal
 import org.ta4j.core.Tick
@@ -20,6 +21,10 @@ class PoloniexLiveExchange(
     private val initialNowEpoch = ZonedDateTime.now(ZoneOffset.UTC).toEpochSecond()
     private val warmUp = poloniex.returnChartData(pair, period, initialNowEpoch - warmUpPeriods*period).toMutableList()
 
+    companion object {
+        private val LOGGER = LoggerFactory.getLogger(PoloniexLiveExchange::class.java)
+    }
+
     override val warmUpHistory: List<Tick>
         get() = warmUp.map {
             BaseTick(Duration.ofSeconds(period), Instant.ofEpochSecond(it.date.toLong()).atZone(ZoneOffset.UTC),
@@ -36,12 +41,12 @@ class PoloniexLiveExchange(
     override fun fetchTick(): Tick? = null
 
     override fun buy(coins: Double, price: Double) {
-        println("Buy $coins coins at $price on poloniex.")
+        LOGGER.info("Buy $coins coins at $price on poloniex.")
         poloniex.buy(pair, BigDecimal.valueOf(price), BigDecimal.valueOf(coins), false, false, false)
     }
 
     override fun sell(coins: Double, price: Double) {
-        println("Sell $coins coins at $price on poloniex.")
-         poloniex.sell(pair, BigDecimal.valueOf(price), BigDecimal.valueOf(coins), false, false, false)
+        LOGGER.info("Sell $coins coins at $price on poloniex.")
+        poloniex.sell(pair, BigDecimal.valueOf(price), BigDecimal.valueOf(coins), false, false, false)
     }
 }

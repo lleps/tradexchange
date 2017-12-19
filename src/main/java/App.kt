@@ -3,6 +3,7 @@ import javafx.application.Platform
 import javafx.scene.Scene
 import javafx.scene.image.Image
 import javafx.stage.Stage
+import org.slf4j.LoggerFactory
 import org.ta4j.core.BaseTimeSeries
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
 import java.time.ZoneOffset
@@ -35,7 +36,7 @@ class App : Application() {
             mode = Mode.valueOf(args[1].toUpperCase())
             days = args[2].toInt()
         } catch (e: Exception) {
-            println("Parameters: <pair> <mode> <days>")
+            LOGGER.error("Parameters: <pair> <mode> <days>")
             System.exit(0)
             return
         }
@@ -52,9 +53,9 @@ class App : Application() {
                 Mode.BACKTEST -> {
                     // Set up
                     Platform.runLater { stage.title = "Tradexchange $days-day backtest for $pair" }
-                    println("Starting backtesting $days-day for $pair...")
+                    LOGGER.info("Starting backtesting $days-day for $pair...")
 
-                    val initialMoney = 3500.0
+                    val initialMoney = 1000.0
                     val initialCoins = 0.0
 
                     exchange = PoloniexBacktestExchange(
@@ -83,21 +84,20 @@ class App : Application() {
                     }
 
                     // Resume
-                    println("[Done] Final balance: ${exchange.coinBalance} coins | \$${exchange.moneyBalance} money.")
-
                     val firstPrice = ClosePriceIndicator(timeSeries)[exchange.warmUpHistory.size]
                     val latestPrice = ClosePriceIndicator(timeSeries)[timeSeries.endIndex]
 
-                    println("[Done] Start price: \$$firstPrice | Last price: \$$latestPrice")
-
-                    println("[Done] Holding: 1.0c and $0 = \$$latestPrice " +
-                            "(won \$${latestPrice - firstPrice})")
-
-                    val finalValue = exchange.moneyBalance + (exchange.coinBalance * latestPrice)
-
-                    println("[Done] Trading: " +
-                            "${exchange.coinBalance}c and ${exchange.moneyBalance} = \$${latestPrice * exchange.coinBalance} " +
-                            "(won ${finalValue - firstPrice})")
+                    LOGGER.info(" ______________________________________________________ ")
+                    LOGGER.info("                  RESULTS                               ")
+                    LOGGER.info("Initial balance        %.03f'c $%.03f"
+                            .format(initialCoins, initialMoney))
+                    LOGGER.info("Final balance          %.03f'c $%.03f (net %.03f'c \$%.03f)"
+                            .format(exchange.coinBalance, exchange.moneyBalance,
+                                    exchange.coinBalance - initialCoins,
+                                    exchange.moneyBalance - initialMoney))
+                    LOGGER.info("Coin start/end value   $%.03f / $%.03f (net $%.03f)"
+                            .format(firstPrice, latestPrice, latestPrice - firstPrice))
+                    LOGGER.info(" ______________________________________________________ ")
                 }
                 Mode.LIVE -> TODO("Implement live mode")
             }
@@ -105,6 +105,8 @@ class App : Application() {
     }
 
     companion object {
+        private val LOGGER = LoggerFactory.getLogger(App::class.java)
+
         private lateinit var args: Array<String>
 
         @JvmStatic
