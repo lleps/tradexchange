@@ -52,6 +52,14 @@ fun Indicator<Decimal>.rising(tick: Int, length: Int): Boolean {
     return true
 }
 
+fun Indicator<Decimal>.isAfterLocalMaximum(tick: Int): Boolean {
+    return get(tick - 1) > get(tick) && get(tick - 1) > get(tick - 2)
+}
+
+fun Indicator<Decimal>.isAfterLocalMinimum(tick: Int): Boolean {
+    return get(tick - 1) < get(tick) && get(tick - 1) < get(tick - 2)
+}
+
 fun Long.forHours(hours: Long) = ((hours*3600) / this).toInt()
 
 fun List<Double>.isLocalMaximum(periods: Int = 3): Boolean {
