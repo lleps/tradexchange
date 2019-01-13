@@ -80,7 +80,14 @@ class App : Application() {
 
                     // Test
                     val timeSeries = BaseTimeSeries(allTicks)
-                    val strategy = Strategy(timeSeries, chart, period, exchange)
+                    val strategy = Strategy(
+                        series = timeSeries,
+                        chart = chart,
+                        period = period,
+                        backtest = true,
+                        epochStopBuy = ZonedDateTime.now(ZoneOffset.UTC).minusHours(8).toEpochSecond(),
+                        exchange = exchange
+                    )
 
                     for (i in exchange.warmUpHistory.size..timeSeries.endIndex) {
                         strategy.onTick(i)

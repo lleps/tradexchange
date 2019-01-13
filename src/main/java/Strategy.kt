@@ -16,6 +16,8 @@ class Strategy(
     private val series: TimeSeries,
     private val chart: TradeChart,
     private val period: Long,
+    private val backtest: Boolean,
+    private val epochStopBuy: Long,
     private val exchange: Exchange) {
 
     companion object {
@@ -29,7 +31,8 @@ class Strategy(
 
     // Indicators
     private val close = ClosePriceIndicator(series)
-    private val normalMacd = NormalizationIndicator(MACDIndicator(close, 12, 26), 30)
+    private val macd = MACDIndicator(close, 12, 26)
+    private val normalMacd = NormalizationIndicator(macd, 30)
     private val longMA = EMAIndicator(close, 24)
     private val shortMA = EMAIndicator(close, 12)
     private val rsi = RSIIndicator(close, 14)
@@ -43,7 +46,7 @@ class Strategy(
     // Strategy config
     private val openTradesCount = 7
     private val tradeExpiry = 50 // give up if can't meet the margin
-
+    private val marginToSell = 5
 
     private fun shouldOpen(i: Int, epoch: Long): Boolean {
         return close[i] < lowBBand[i]
@@ -51,7 +54,7 @@ class Strategy(
 
     private fun shouldClose(i: Int, epoch: Long, trade: OpenTrade): Boolean {
         if (epoch - trade.epoch > tradeExpiry * period) return true // trade expire at this point
-        return close[i] > trade.buyPrice + 1
+        return close[i] > trade.buyPrice + marginToSell
     }
 
     fun onTick(i: Int) {
@@ -62,9 +65,9 @@ class Strategy(
             actionLock--
         } else {
             // Try to buy
-            if (openTrades.size < openTradesCount) { // BUY
+            if (openTrades.size < openTradesCount && (!backtest || epoch < epochStopBuy)) { // BUY
                 if (shouldOpen(i, epoch)) { // TODO: don't open if backtest is finishing, to get better results
-                    val amountOfMoney = exchange.moneyBalance / (openTradesCount - openTrades.size).toDouble()
+                    val amountOfMoney = (exchange.moneyBalance) / (openTradesCount - openTrades.size).toDouble()
                     val amountOfCoins = amountOfMoney / close[i]
                     val trade = OpenTrade(close[i], amountOfCoins, epoch, Random().nextInt(2000))
                     chart.addPoint("Buy", epoch, close[i], "Open #%d at $%.03f".format(trade.code, trade.buyPrice))
@@ -80,19 +83,20 @@ class Strategy(
                 val closedTrades = openTrades.filter { shouldClose(i, epoch, it) }
                 openTrades -= closedTrades
                 for (trade in closedTrades) {
-                    exchange.sell(trade.amount, close[i])
+                    exchange.sell(trade.amount * 0.99999, close[i])
+                    val diff = close[i] - trade.buyPrice
                     val tradeStrLog =
                         "Trade %.03f'c    buy $%.03f    sell $%.03f    won $%.03f"
-                            .format(trade.amount, trade.buyPrice, close[i], close[i] - trade.buyPrice)
+                            .format(trade.amount, trade.buyPrice, close[i], diff)
                     val tooltip = "Close #%d: $%.03f\nBuy $%.03f   Sell $%.03f\nTime %d min (%d ticks)".format(
                         trade.code,
-                        close[i] - trade.buyPrice,
+                        diff,
                         trade.buyPrice,
                         close[i],
                         (epoch - trade.epoch) / 60,
                         (epoch - trade.epoch) / period
                     )
-                    chart.addPoint("Sell", epoch, close[i], tooltip)
+                    chart.addPoint(if (diff < 0f) "BadSell" else "GoodSell", epoch, close[i], tooltip)
                     action = true
                     LOGGER.info(tradeStrLog)
                 }
@@ -106,9 +110,13 @@ class Strategy(
         }
 
         // Plot indicators
-        chart.addPoint("short MA", epoch, shortMA[i])
-        chart.addPoint("long MA", epoch, longMA[i])
+        //chart.addPoint("short MA", epoch, shortMA[i])
+        //chart.addPoint("long MA", epoch, longMA[i])
         chart.addPoint("BB Upper", epoch, upBBand[i])
         chart.addPoint("BB Lower", epoch, lowBBand[i])
+        chart.addPointExtra("RSI", "rsi", epoch, rsi[i])
+        chart.addPointExtra("RSI", "line30", epoch, 30.0)
+        chart.addPointExtra("RSI", "line70", epoch, 70.0)
+        chart.addPointExtra("MACD", "macd", epoch, macd[i])
     }
 }

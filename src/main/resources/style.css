@@ -1,4 +1,5 @@
-.default-color0.chart-series-line { -fx-stroke: rgba(255, 0, 0, 1.0); }
+/*.default-color0.chart-series-line { -fx-stroke: rgba(255, 0, 0, 1.0); }*/
+.default-color0.chart-series-line { -fx-stroke: rgba(40, 40, 40, 1.0); }
 .default-color1.chart-series-line { -fx-stroke: rgba(255, 255, 0, 0.2); }
 .default-color2.chart-series-line { -fx-stroke: rgba(0, 255, 0, 0.2); }
 .default-color3.chart-series-line { -fx-stroke: rgba(0, 255, 255, 0.2); }

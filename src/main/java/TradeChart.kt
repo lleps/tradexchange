@@ -81,7 +81,7 @@ class TradeChart {
 
     fun addPoint(type: String, epoch: Long, value: Double, description: String? = null) {
         Platform.runLater {
-            val seriesName = if (type == "Buy" || type == "Sell" || type == "BigBuy" || type == "BigSell") "Price" else type
+            val seriesName = if (type == "Buy" || type.contains("Sell")) "Price" else type
             val series = mainChartSeries.getOrPut(seriesName) {
                 val result = XYChart.Series<Number, Number>(seriesName, FXCollections.observableArrayList())
                 mainChart.data.add(result)
@@ -90,10 +90,10 @@ class TradeChart {
 
             val data = XYChart.Data<Number, Number>(epoch, value)
             when (type) {
-                "Buy" -> data.node = Circle(4.0, Paint.valueOf("#673AB7"))
-                "Sell" -> data.node = Circle(4.0, Paint.valueOf("#4CAF50"))
-                "BigBuy" -> data.node = Circle(6.0, Paint.valueOf("#673AB7"))
-                "BigSell" -> data.node = Circle(6.0, Paint.valueOf("#4CAF50"))
+                "Buy" -> data.node = Circle(5.0, Paint.valueOf("#673AB7"))
+                "Sell" -> data.node = Circle(5.0, Paint.valueOf("#4CAF50"))
+                "BadSell" -> data.node = Circle(5.0, Paint.valueOf("#F44336"))
+                "GoodSell" -> data.node = Circle(5.0, Paint.valueOf("#43A047"))
                 else -> data.node = Circle(0.0).apply { isVisible = false }
             }
             if (description != null && data.node != null) {
