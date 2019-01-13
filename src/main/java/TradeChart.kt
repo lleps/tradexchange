@@ -45,9 +45,10 @@ class TradeChart {
 
         mainChart = LineChart<Number, Number>(xAxis, yAxis, FXCollections.observableArrayList<XYChart.Series<Number, Number>>()).apply {
             setOnScroll {
-                xAxis.lowerBound -= 3600*12 * if (it.deltaY < 0.0) 1.0 else -1.0
+                xAxis.lowerBound -= 3600*6 * if (it.deltaY < 0.0) 1.0 else -1.0
                 adjustYRangeByXBounds(this)
             }
+            stylesheets.add("style.css")
             var lastX = 0.0
             setOnMouseMoved { lastX = it.x }
             setOnMouseDragged {
@@ -58,7 +59,7 @@ class TradeChart {
                 adjustYRangeByXBounds(this)
             }
             animated = false
-            prefHeightProperty().bind(Bindings.divide(node.heightProperty(), 2.0))
+            //prefHeightProperty().bind(Bindings.divide(node.heightProperty(), 2.0))
         }
         hbox.children.add(mainChart)
         hbox.alignment = Pos.TOP_CENTER

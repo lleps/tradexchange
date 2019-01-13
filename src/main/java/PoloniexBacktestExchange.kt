@@ -4,18 +4,19 @@ import org.slf4j.LoggerFactory
 import org.ta4j.core.BaseTick
 import org.ta4j.core.Decimal
 import org.ta4j.core.Tick
-import org.ta4j.core.indicators.HMAIndicator
 import java.io.File
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 
-class PoloniexBacktestExchange(pair: String,
-                               private val period: Long,
-                               fromEpoch: Long,
-                               warmUpPeriods: Int,
-                               initialMoney: Double = 0.0,
-                               initialCoins: Double = 0.0) : Exchange {
+class PoloniexBacktestExchange(
+    pair: String,
+    private val period: Long,
+    fromEpoch: Long,
+    warmUpTicks: Int,
+    initialMoney: Double = 0.0,
+    initialCoins: Double = 0.0
+) : Exchange {
 
     private val apiKey = "GW202H58-HQULS9AJ-SZDSHJZ1-FXRYESKK"
     private val apiSecret = "7fe0d64f187fd333a9754085fa7a1e57c6a98345908f7c84dcbeed1465aa55a7adb7b36a276e95557a4598887673cbdbfbc8bacc0f9968f970bbe96fccb0745b"
@@ -28,7 +29,7 @@ class PoloniexBacktestExchange(pair: String,
     }
 
     init {
-        val from = fromEpoch - warmUpPeriods
+        val from = fromEpoch - (warmUpTicks * period)
         File("data").mkdir()
         val file = "data/cache-pol-$pair-$period-${from/3600}.json"
         LOGGER.info("Trying to load data from '$file'...")
@@ -44,15 +45,21 @@ class PoloniexBacktestExchange(pair: String,
         }
     }
 
-    private val warmUpChartData = chartData.subList(0, warmUpPeriods).toMutableList()
+    private val warmUpChartData = chartData.subList(0, warmUpTicks).toMutableList()
 
-    private val testingChartData = chartData.subList(warmUpPeriods, chartData.size).toMutableList()
+    private val testingChartData = chartData.subList(warmUpTicks, chartData.size).toMutableList()
 
     override val warmUpHistory: List<Tick>
         get() = warmUpChartData.map {
-            BaseTick(Duration.ofSeconds(period), Instant.ofEpochSecond(it.date.toLong()).atZone(ZoneOffset.UTC),
-                    Decimal.valueOf(it.open), Decimal.valueOf(it.high), Decimal.valueOf(it.low), Decimal.valueOf(it.close),
-                    Decimal.valueOf(it.volume))
+            BaseTick(
+                Duration.ofSeconds(period),
+                Instant.ofEpochSecond(it.date.toEpochSecond()).atZone(ZoneOffset.UTC),
+                Decimal.valueOf(it.open.toDouble()),
+                Decimal.valueOf(it.high.toDouble()),
+                Decimal.valueOf(it.low.toDouble()),
+                Decimal.valueOf(it.close.toDouble()),
+                Decimal.valueOf(it.volume.toDouble())
+            )
         }
 
     override var moneyBalance: Double = initialMoney
@@ -61,9 +68,15 @@ class PoloniexBacktestExchange(pair: String,
 
     private val chartDataAsTicks: MutableList<BaseTick> by lazy {
         testingChartData.map {
-            BaseTick(Duration.ofSeconds(period), Instant.ofEpochSecond(it.date.toLong()).atZone(ZoneOffset.UTC),
-                    Decimal.valueOf(it.open), Decimal.valueOf(it.high), Decimal.valueOf(it.low), Decimal.valueOf(it.close),
-                    Decimal.valueOf(it.volume))
+            BaseTick(
+                Duration.ofSeconds(period),
+                Instant.ofEpochSecond(it.date.toEpochSecond()).atZone(ZoneOffset.UTC),
+                Decimal.valueOf(it.open.toDouble()),
+                Decimal.valueOf(it.high.toDouble()),
+                Decimal.valueOf(it.low.toDouble()),
+                Decimal.valueOf(it.close.toDouble()),
+                Decimal.valueOf(it.volume.toDouble())
+            )
         }.toMutableList()
     }
 

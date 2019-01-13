@@ -27,16 +27,22 @@ class PoloniexLiveExchange(
 
     override val warmUpHistory: List<Tick>
         get() = warmUp.map {
-            BaseTick(Duration.ofSeconds(period), Instant.ofEpochSecond(it.date.toLong()).atZone(ZoneOffset.UTC),
-                    Decimal.valueOf(it.open), Decimal.valueOf(it.high), Decimal.valueOf(it.low), Decimal.valueOf(it.close),
-                    Decimal.valueOf(it.volume))
+            BaseTick(
+                Duration.ofSeconds(period),
+                Instant.ofEpochSecond(it.date.toEpochSecond()).atZone(ZoneOffset.UTC),
+                Decimal.valueOf(it.open.toDouble()),
+                Decimal.valueOf(it.high.toDouble()),
+                Decimal.valueOf(it.low.toDouble()),
+                Decimal.valueOf(it.close.toDouble()),
+                Decimal.valueOf(it.volume.toDouble())
+            )
         }
 
     override val moneyBalance: Double
-        get() = poloniex.returnBalance(pair.split("_")[0]).available.toDouble() // X_IGNORED
+        get() = poloniex.returnCurrencyBalance(pair.split("_")[0]).available.toDouble() // X_IGNORED
 
     override val coinBalance: Double
-        get() = poloniex.returnBalance(pair.split("_")[1]).available.toDouble() // IGNORED_X
+        get() = poloniex.returnCurrencyBalance(pair.split("_")[1]).available.toDouble() // IGNORED_X
 
     override fun fetchTick(): Tick? = null
 

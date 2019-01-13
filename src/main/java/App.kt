@@ -16,11 +16,14 @@ class App : Application() {
     private lateinit var state: TradePersistentState
 
     private enum class TradeType { BUY, SELL }
-    private data class TradeEvent(val id: Int,
-                                  val type: TradeType,
-                                  val coins: Double,
-                                  val price: Double,
-                                  val epoch: Long)
+
+    private data class TradeEvent(
+        val id: Int,
+        val type: TradeType,
+        val coins: Double,
+        val price: Double,
+        val epoch: Long
+    )
 
     private data class TradePersistentState(val events: List<TradeEvent>, val unSoldCoins: List<TradeEvent>)
 
@@ -43,17 +46,17 @@ class App : Application() {
 
         chart = TradeChart()
         stage.scene = Scene(chart.node)
-        stage.scene.stylesheets.add("style.css")
+//        stage.scene.stylesheets.add("style.css")
         stage.icons.add(Image("money-icon.png"))
         stage.show()
 
         thread(start = true, isDaemon = true) {
-            val period = 1800L
+            val period = 300L
             when (mode) {
                 Mode.BACKTEST -> {
                     // Set up
                     Platform.runLater { stage.title = "Tradexchange $days-day backtest for $pair" }
-                    LOGGER.info("Starting backtesting $days-day for $pair...")
+                    LOGGER.info("Starting backtesting $days-day for $pair... (period: ${period/60} min)")
 
                     val initialMoney = 1000.0
                     val initialCoins = 0.0
@@ -62,7 +65,7 @@ class App : Application() {
                             pair = pair,
                             period = period,
                             fromEpoch = ZonedDateTime.now(ZoneOffset.UTC).minusDays(days.toLong()).toEpochSecond(),
-                            warmUpPeriods = period.forHours(48),
+                            warmUpTicks = 50,
                             initialMoney = initialMoney,
                             initialCoins = initialCoins)
 
@@ -77,7 +80,7 @@ class App : Application() {
 
                     // Test
                     val timeSeries = BaseTimeSeries(allTicks)
-                    val strategy = Strategy(timeSeries, chart, exchange)
+                    val strategy = Strategy(timeSeries, chart, period, exchange)
 
                     for (i in exchange.warmUpHistory.size..timeSeries.endIndex) {
                         strategy.onTick(i)
