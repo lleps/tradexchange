@@ -1,3 +1,5 @@
+package com.lleps.tradexchange
+
 import org.ta4j.core.Tick
 
 interface Exchange {

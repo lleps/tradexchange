@@ -1,3 +1,5 @@
+package com.lleps.tradexchange
+
 import com.cf.client.poloniex.PoloniexExchangeService
 import org.slf4j.LoggerFactory
 import org.ta4j.core.BaseTick

@@ -1,3 +1,5 @@
+package com.lleps.tradexchange
+
 import javafx.application.Application
 import javafx.application.Platform
 import javafx.scene.Scene
@@ -62,12 +64,12 @@ class App : Application() {
                     val initialCoins = 0.0
 
                     exchange = PoloniexBacktestExchange(
-                            pair = pair,
-                            period = period,
-                            fromEpoch = ZonedDateTime.now(ZoneOffset.UTC).minusDays(days.toLong()).toEpochSecond(),
-                            warmUpTicks = 50,
-                            initialMoney = initialMoney,
-                            initialCoins = initialCoins)
+                        pair = pair,
+                        period = period,
+                        fromEpoch = ZonedDateTime.now(ZoneOffset.UTC).minusDays(days.toLong()).toEpochSecond(),
+                        warmUpTicks = 50,
+                        initialMoney = initialMoney,
+                        initialCoins = initialCoins)
 
                     val allTicks = mutableListOf(*exchange.warmUpHistory.toTypedArray())
 
@@ -121,7 +123,7 @@ class App : Application() {
 
         @JvmStatic
         fun main(args: Array<String>) {
-            this.args = args
+            Companion.args = args
             launch(App::class.java)
         }
     }

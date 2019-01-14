@@ -1,3 +1,5 @@
+package com.lleps.tradexchange
+
 import com.google.gson.GsonBuilder
 import java.io.IOException
 import java.nio.charset.Charset

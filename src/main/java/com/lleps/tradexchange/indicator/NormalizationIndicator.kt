@@ -1,6 +1,6 @@
-package indicator
+package com.lleps.tradexchange.indicator
 
-import get
+import com.lleps.tradexchange.get
 import org.ta4j.core.Decimal
 import org.ta4j.core.Indicator
 import org.ta4j.core.indicators.CachedIndicator

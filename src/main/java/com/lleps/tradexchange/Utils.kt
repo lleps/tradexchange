@@ -1,3 +1,5 @@
+package com.lleps.tradexchange
+
 import javafx.animation.KeyFrame
 import javafx.animation.Timeline
 import javafx.scene.control.Tooltip

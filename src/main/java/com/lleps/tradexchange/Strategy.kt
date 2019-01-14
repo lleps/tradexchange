@@ -1,5 +1,7 @@
-import indicator.CompositeIndicator
-import indicator.NormalizationIndicator
+package com.lleps.tradexchange
+
+import com.lleps.tradexchange.indicator.CompositeIndicator
+import com.lleps.tradexchange.indicator.NormalizationIndicator
 import org.slf4j.LoggerFactory
 import org.ta4j.core.TimeSeries
 import org.ta4j.core.indicators.EMAIndicator
@@ -41,12 +43,13 @@ class Strategy(
     private val middleBBand = BollingerBandsMiddleIndicator(avg14)
     private val lowBBand = BollingerBandsLowerIndicator(middleBBand, sd14)
     private val upBBand = BollingerBandsUpperIndicator(middleBBand, sd14)
-    private val volatilityIndicator = NormalizationIndicator(CompositeIndicator(upBBand, lowBBand) { up, low -> up - low}, 24)
+    private val volatiltyIndicatorBB = CompositeIndicator(upBBand, lowBBand) { up, low -> up - low }
+    private val normalMacd2 = NormalizationIndicator(macd, 200)
 
-    // Strategy config
-    private val openTradesCount = 7
-    private val tradeExpiry = 50 // give up if can't meet the margin
-    private val marginToSell = 5
+    // com.tradexchange.Strategy config
+    private val openTradesCount = 6
+    private val tradeExpiry = 40 // give up if can't meet the margin
+    private val marginToSell = 4
 
     private fun shouldOpen(i: Int, epoch: Long): Boolean {
         return close[i] < lowBBand[i]
@@ -66,7 +69,7 @@ class Strategy(
         } else {
             // Try to buy
             if (openTrades.size < openTradesCount && (!backtest || epoch < epochStopBuy)) { // BUY
-                if (shouldOpen(i, epoch)) { // TODO: don't open if backtest is finishing, to get better results
+                if (shouldOpen(i, epoch)) {
                     val amountOfMoney = (exchange.moneyBalance) / (openTradesCount - openTrades.size).toDouble()
                     val amountOfCoins = amountOfMoney / close[i]
                     val trade = OpenTrade(close[i], amountOfCoins, epoch, Random().nextInt(2000))
@@ -117,6 +120,8 @@ class Strategy(
         chart.addPointExtra("RSI", "rsi", epoch, rsi[i])
         chart.addPointExtra("RSI", "line30", epoch, 30.0)
         chart.addPointExtra("RSI", "line70", epoch, 70.0)
+        //chart.addPointExtra("Volatility", "v", epoch, normalMacd2[i])
         chart.addPointExtra("MACD", "macd", epoch, macd[i])
+        //chart.addPointExtra("MACD", "0", epoch, 0.0)
     }
 }

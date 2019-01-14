@@ -1,3 +1,5 @@
+package com.lleps.tradexchange
+
 import javafx.application.Platform
 import javafx.beans.binding.Bindings
 import javafx.collections.FXCollections
@@ -44,6 +46,8 @@ class TradeChart {
         }
 
         mainChart = LineChart<Number, Number>(xAxis, yAxis, FXCollections.observableArrayList<XYChart.Series<Number, Number>>()).apply {
+            //isCache = true
+            //isCacheShape = true
             setOnScroll {
                 xAxis.lowerBound -= 3600*6 * if (it.deltaY < 0.0) 1.0 else -1.0
                 adjustYRangeByXBounds(this)
@@ -66,7 +70,12 @@ class TradeChart {
         node.center = hbox
     }
 
+    private var lastAdjust = HashMap<LineChart<Number, Number>, Long>()
+
     private fun adjustYRangeByXBounds(chart: LineChart<Number, Number>) {
+        if (System.currentTimeMillis() - lastAdjust.getOrPut(chart) { 0L } < 1000) return
+        lastAdjust[chart] = System.currentTimeMillis()
+
         val xAxis = chart.xAxis as NumberAxis
         val pricesBetweenRange = chart.data
                 .flatMap { it.data }
@@ -78,6 +87,15 @@ class TradeChart {
         yAxis.upperBound = pricesBetweenRange.max() ?: 0.0
         yAxis.lowerBound = pricesBetweenRange.min() ?: 0.0
     }
+
+    // TODO improve chart navigation performance
+    //  Threaded?
+    //  Data streaming. Separate series in blocks of X points. When fixing, should stream the main chart.
+
+
+    private class SeriesList()
+
+    private val mainChartDataRaw = mutableMapOf<String, SeriesList>()
 
     fun addPoint(type: String, epoch: Long, value: Double, description: String? = null) {
         Platform.runLater {
@@ -120,6 +138,8 @@ class TradeChart {
                     tickUnitProperty().bind(Bindings.divide(Bindings.subtract(upperBoundProperty(), lowerBoundProperty()), 3.0))
                 }
                 val result = LineChart<Number, Number>(xAxis, yAxis, FXCollections.observableArrayList<XYChart.Series<Number, Number>>()).apply {
+                    //isCache = true
+                    //isCacheShape = true
                     prefHeightProperty().bind(Bindings.divide(mainChart.prefHeightProperty(), 5.0))
                 }
 

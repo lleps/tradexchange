@@ -1,4 +1,4 @@
-package indicator
+package com.lleps.tradexchange.indicator
 
 import org.ta4j.core.Decimal
 import org.ta4j.core.TimeSeries

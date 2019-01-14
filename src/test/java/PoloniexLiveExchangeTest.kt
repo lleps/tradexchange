@@ -1,13 +1,15 @@
+import com.lleps.tradexchange.PoloniexLiveExchange
+
 class PoloniexLiveExchangeTest {
     companion object {
         @JvmStatic
         fun main(args: Array<String>) {
             val poloniex = PoloniexLiveExchange(
-                    pair = "USDT_ETC",
-                    period = 10,
-                    warmUpPeriods = 10,
-                    apiKey = "GW202H58-HQULS9AJ-SZDSHJZ1-FXRYESKK",
-                    apiSecret = "7fe0d64f187fd333a9754085fa7a1e57c6a98345908f7c84dcbeed1465aa55a7adb7b36a276e95557a4598887673cbdbfbc8bacc0f9968f970bbe96fccb0745b")
+                pair = "USDT_ETC",
+                period = 10,
+                warmUpPeriods = 10,
+                apiKey = "GW202H58-HQULS9AJ-SZDSHJZ1-FXRYESKK",
+                apiSecret = "7fe0d64f187fd333a9754085fa7a1e57c6a98345908f7c84dcbeed1465aa55a7adb7b36a276e95557a4598887673cbdbfbc8bacc0f9968f970bbe96fccb0745b")
             println("coin balance: ${poloniex.coinBalance}")
             println("money balance: ${poloniex.moneyBalance}")
             println("ticker: ${poloniex.fetchTick()}")

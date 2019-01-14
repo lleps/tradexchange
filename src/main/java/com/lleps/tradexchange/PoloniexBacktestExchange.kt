@@ -1,3 +1,5 @@
+package com.lleps.tradexchange
+
 import com.cf.client.poloniex.PoloniexExchangeService
 import com.cf.data.model.poloniex.PoloniexChartData
 import org.slf4j.LoggerFactory
