@@ -3,6 +3,8 @@ package com.lleps.tradexchange
 import com.lleps.tradexchange.indicator.CompositeIndicator
 import com.lleps.tradexchange.indicator.NormalizationIndicator
 import org.slf4j.LoggerFactory
+import org.ta4j.core.Decimal
+import org.ta4j.core.Indicator
 import org.ta4j.core.TimeSeries
 import org.ta4j.core.indicators.EMAIndicator
 import org.ta4j.core.indicators.MACDIndicator
@@ -12,6 +14,8 @@ import org.ta4j.core.indicators.bollinger.BollingerBandsMiddleIndicator
 import org.ta4j.core.indicators.bollinger.BollingerBandsUpperIndicator
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
 import org.ta4j.core.indicators.statistics.StandardDeviationIndicator
+import org.ta4j.core.indicators.volume.OnBalanceVolumeIndicator
+import java.awt.Composite
 import java.util.*
 
 class Strategy(
@@ -34,6 +38,8 @@ class Strategy(
     // Indicators
     private val close = ClosePriceIndicator(series)
     private val macd = MACDIndicator(close, 12, 26)
+    private val macdSignal = EMAIndicator(macd, 9)
+    private val macdHistogram = CompositeIndicator(macd, macdSignal) { macd, macdSignal -> macd - macdSignal }
     private val normalMacd = NormalizationIndicator(macd, 30)
     private val longMA = EMAIndicator(close, 24)
     private val shortMA = EMAIndicator(close, 12)
@@ -45,19 +51,30 @@ class Strategy(
     private val upBBand = BollingerBandsUpperIndicator(middleBBand, sd14)
     private val volatiltyIndicatorBB = CompositeIndicator(upBBand, lowBBand) { up, low -> up - low }
     private val normalMacd2 = NormalizationIndicator(macd, 200)
+    private val obvIndicator = NormalizationIndicator(OnBalanceVolumeIndicator(series), 80)
 
     // com.tradexchange.Strategy config
-    private val openTradesCount = 6
-    private val tradeExpiry = 40 // give up if can't meet the margin
-    private val marginToSell = 4
+    private val openTradesCount = 10
+    private val tradeExpiry = 200 // give up if can't meet the margin
+    private val marginToSell = 2
+
+    private fun crossedOver(indicator: Indicator<Decimal>, target: Indicator<Decimal>, i: Int): Boolean {
+        return indicator[i] > target[i] && indicator[i - 1] < target[i - 1]
+    }
+
+    private fun crossedBelow(indicator: Indicator<Decimal>, target: Indicator<Decimal>, i: Int): Boolean {
+        return indicator[i] < target[i] && indicator[i - 1] > target[i - 1]
+    }
 
     private fun shouldOpen(i: Int, epoch: Long): Boolean {
-        return close[i] < lowBBand[i]
+        //return /*close[i] < lowBBand[i] || */rsi[i] < 30 || (macd[i - 1] < 0 && macd[i] > 0)
+        return close[i] < lowBBand[i]//rsi[i] < 30 //crossedBelow(macd, macdSignal, i)
     }
 
     private fun shouldClose(i: Int, epoch: Long, trade: OpenTrade): Boolean {
         if (epoch - trade.epoch > tradeExpiry * period) return true // trade expire at this point
-        return close[i] > trade.buyPrice + marginToSell
+        // TODO why not
+        return close[i] > upBBand[i]//close[i] > trade.buyPrice + marginToSell // || crossedOver(macd, macdSignal, i) //rsi[i] > 70 || (macd[i - 1] > 0 && macd[i] < 0)
     }
 
     fun onTick(i: Int) {
@@ -108,20 +125,24 @@ class Strategy(
             }
         }
 
-        if (!action) {
-            chart.addPoint("Price", epoch, close[i])
-        }
-
-        // Plot indicators
-        //chart.addPoint("short MA", epoch, shortMA[i])
-        //chart.addPoint("long MA", epoch, longMA[i])
+        // Main chart
+        if (!action) chart.addPoint("Price", epoch, close[i])
         chart.addPoint("BB Upper", epoch, upBBand[i])
         chart.addPoint("BB Lower", epoch, lowBBand[i])
+        //chart.addPoint("short MA", epoch, shortMA[i])
+        //chart.addPoint("long MA", epoch, longMA[i])
+
+        // RSI
         chart.addPointExtra("RSI", "rsi", epoch, rsi[i])
         chart.addPointExtra("RSI", "line30", epoch, 30.0)
         chart.addPointExtra("RSI", "line70", epoch, 70.0)
-        //chart.addPointExtra("Volatility", "v", epoch, normalMacd2[i])
-        chart.addPointExtra("MACD", "macd", epoch, macd[i])
-        //chart.addPointExtra("MACD", "0", epoch, 0.0)
+
+        // MACD
+        //chart.addPointExtra("MACD", "macd", epoch, macd[i])
+        //chart.addPointExtra("MACD", "signal", epoch, macdSignal[i])
+        //chart.addPointExtra("MACD", "histogram", epoch, macdHistogram[i])
+
+        // OBV
+        chart.addPointExtra("OBV", "obv", epoch, obvIndicator[i])
     }
 }

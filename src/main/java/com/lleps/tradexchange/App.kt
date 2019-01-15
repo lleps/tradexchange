@@ -48,7 +48,7 @@ class App : Application() {
 
         chart = TradeChart()
         stage.scene = Scene(chart.node)
-//        stage.scene.stylesheets.add("style.css")
+        stage.scene.stylesheets.add("style.css")
         stage.icons.add(Image("money-icon.png"))
         stage.show()
 
