@@ -53,7 +53,7 @@ class Strategy(
     private val obvIndicator = NormalizationIndicator(OnBalanceVolumeIndicator(series), 80)
 
     // com.tradexchange.Strategy config
-    private val openTradesCount = 6
+    private val openTradesCount = 1
     private val tradeExpiry = 12*5 // give up if can't meet the margin
     private val marginToSell = 1
     private val buyCooldown = 12*2 // 4h. During cooldown won't buy anything
