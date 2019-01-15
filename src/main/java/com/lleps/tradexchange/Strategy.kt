@@ -15,7 +15,6 @@ import org.ta4j.core.indicators.bollinger.BollingerBandsUpperIndicator
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
 import org.ta4j.core.indicators.statistics.StandardDeviationIndicator
 import org.ta4j.core.indicators.volume.OnBalanceVolumeIndicator
-import java.awt.Composite
 import java.util.*
 
 class Strategy(
@@ -54,9 +53,10 @@ class Strategy(
     private val obvIndicator = NormalizationIndicator(OnBalanceVolumeIndicator(series), 80)
 
     // com.tradexchange.Strategy config
-    private val openTradesCount = 10
-    private val tradeExpiry = 200 // give up if can't meet the margin
-    private val marginToSell = 2
+    private val openTradesCount = 6
+    private val tradeExpiry = 12*5 // give up if can't meet the margin
+    private val marginToSell = 1
+    private val buyCooldown = 12*2 // 4h. During cooldown won't buy anything
 
     private fun crossedOver(indicator: Indicator<Decimal>, target: Indicator<Decimal>, i: Int): Boolean {
         return indicator[i] > target[i] && indicator[i - 1] < target[i - 1]
@@ -68,24 +68,26 @@ class Strategy(
 
     private fun shouldOpen(i: Int, epoch: Long): Boolean {
         //return /*close[i] < lowBBand[i] || */rsi[i] < 30 || (macd[i - 1] < 0 && macd[i] > 0)
-        return close[i] < lowBBand[i]//rsi[i] < 30 //crossedBelow(macd, macdSignal, i)
+        //return close[i] < lowBBand[i]//rsi[i] < 30 //crossedBelow(macd, macdSignal, i)
+        return close[i] < shortMA[i]
     }
 
     private fun shouldClose(i: Int, epoch: Long, trade: OpenTrade): Boolean {
         if (epoch - trade.epoch > tradeExpiry * period) return true // trade expire at this point
         // TODO why not
-        return close[i] > upBBand[i]//close[i] > trade.buyPrice + marginToSell // || crossedOver(macd, macdSignal, i) //rsi[i] > 70 || (macd[i - 1] > 0 && macd[i] < 0)
+        //return close[i] > upBBand[i]//close[i] > trade.buyPrice + marginToSell // || crossedOver(macd, macdSignal, i) //rsi[i] > 70 || (macd[i - 1] > 0 && macd[i] < 0)
+        return close[i] > shortMA[i] //close[i] > (trade.buyPrice + 1)// || close[i] > shortMA[i]
     }
 
     fun onTick(i: Int) {
         val epoch = series.getTick(i).endTime.toEpochSecond()
         var action = false
 
-        if (actionLock > 0) {
-            actionLock--
-        } else {
-            // Try to buy
-            if (openTrades.size < openTradesCount && (!backtest || epoch < epochStopBuy)) { // BUY
+        // Try to buy
+        if (openTrades.size < openTradesCount && (!backtest || epoch < epochStopBuy)) { // BUY
+            if (actionLock > 0) {
+                actionLock--
+            } else {
                 if (shouldOpen(i, epoch)) {
                     val amountOfMoney = (exchange.moneyBalance) / (openTradesCount - openTrades.size).toDouble()
                     val amountOfCoins = amountOfMoney / close[i]
@@ -94,43 +96,41 @@ class Strategy(
                     exchange.buy(amountOfCoins, close[i])
                     action = true
                     openTrades += trade
-                    actionLock = 5
+                    actionLock = buyCooldown
                 }
             }
+        }
 
-            // Try to sell
-            if (!action) {
-                val closedTrades = openTrades.filter { shouldClose(i, epoch, it) }
-                openTrades -= closedTrades
-                for (trade in closedTrades) {
-                    exchange.sell(trade.amount * 0.99999, close[i])
-                    val diff = close[i] - trade.buyPrice
-                    val tradeStrLog =
-                        "Trade %.03f'c    buy $%.03f    sell $%.03f    won $%.03f"
-                            .format(trade.amount, trade.buyPrice, close[i], diff)
-                    val tooltip = "Close #%d: $%.03f\nBuy $%.03f   Sell $%.03f\nTime %d min (%d ticks)".format(
-                        trade.code,
-                        diff,
-                        trade.buyPrice,
-                        close[i],
-                        (epoch - trade.epoch) / 60,
-                        (epoch - trade.epoch) / period
-                    )
-                    chart.addPoint(if (diff < 0f) "BadSell" else "GoodSell", epoch, close[i], tooltip)
-                    action = true
-                    LOGGER.info(tradeStrLog)
-                }
-
-                if (!openTrades.isEmpty()) actionLock = 5
+        // Try to sell
+        if (!action) {
+            val closedTrades = openTrades.filter { shouldClose(i, epoch, it) }
+            openTrades -= closedTrades
+            for (trade in closedTrades) {
+                exchange.sell(trade.amount * 0.99999, close[i])
+                val diff = close[i] - trade.buyPrice
+                val tradeStrLog =
+                    "Trade %.03f'c    buy $%.03f    sell $%.03f    won $%.03f"
+                        .format(trade.amount, trade.buyPrice, close[i], diff)
+                val tooltip = "Close #%d: $%.03f\nBuy $%.03f   Sell $%.03f\nTime %d min (%d ticks)".format(
+                    trade.code,
+                    diff,
+                    trade.buyPrice,
+                    close[i],
+                    (epoch - trade.epoch) / 60,
+                    (epoch - trade.epoch) / period
+                )
+                chart.addPoint(if (diff < 0f) "BadSell" else "GoodSell", epoch, close[i], tooltip)
+                action = true
+                LOGGER.info(tradeStrLog)
             }
         }
 
         // Main chart
         if (!action) chart.addPoint("Price", epoch, close[i])
-        chart.addPoint("BB Upper", epoch, upBBand[i])
-        chart.addPoint("BB Lower", epoch, lowBBand[i])
-        //chart.addPoint("short MA", epoch, shortMA[i])
-        //chart.addPoint("long MA", epoch, longMA[i])
+        //chart.addPoint("BB Upper", epoch, upBBand[i])
+        //chart.addPoint("BB Lower", epoch, lowBBand[i])
+        chart.addPoint("short MA", epoch, shortMA[i])
+        chart.addPoint("long MA", epoch, longMA[i])
 
         // RSI
         chart.addPointExtra("RSI", "rsi", epoch, rsi[i])

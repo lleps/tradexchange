@@ -57,7 +57,7 @@ class App : Application() {
             when (mode) {
                 Mode.BACKTEST -> {
                     // Set up
-                    Platform.runLater { stage.title = "Tradexchange $days-day backtest for $pair" }
+                    Platform.runLater { stage.title = "Tradexchange $days-day backtest for $pair \uD83D\uDD34" }
                     LOGGER.info("Starting backtesting $days-day for $pair... (period: ${period/60} min)")
 
                     val initialMoney = 1000.0
@@ -67,7 +67,7 @@ class App : Application() {
                         pair = pair,
                         period = period,
                         fromEpoch = ZonedDateTime.now(ZoneOffset.UTC).minusDays(days.toLong()).toEpochSecond(),
-                        warmUpTicks = 50,
+                        warmUpTicks = 100,
                         initialMoney = initialMoney,
                         initialCoins = initialCoins)
 
