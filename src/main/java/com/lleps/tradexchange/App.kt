@@ -109,6 +109,7 @@ class App : Application() {
                                     exchange.moneyBalance - initialMoney))
                     LOGGER.info("Coin start/end value   $%.03f / $%.03f (net $%.03f)"
                             .format(firstPrice, latestPrice, latestPrice - firstPrice))
+                    LOGGER.info("Trades: ${strategy.tradeCount}")
                     LOGGER.info(" ______________________________________________________ ")
                 }
                 Mode.LIVE -> TODO("Implement live mode")

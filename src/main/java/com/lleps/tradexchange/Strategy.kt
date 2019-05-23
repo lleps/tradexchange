@@ -29,8 +29,17 @@ class Strategy(
         private val LOGGER = LoggerFactory.getLogger(Strategy::class.java)
     }
 
+    var tradeCount = 0
+        private set
+
     // State
-    private class OpenTrade(val buyPrice: Double, val amount: Double, val epoch: Long, val code: Int)
+    private class OpenTrade(
+            val buyPrice: Double,
+            val amount: Double,
+            val epoch: Long,
+            val code: Int,
+            var passed1Barrier: Boolean = false
+    )
     private var openTrades = listOf<OpenTrade>()
     private var actionLock = 0
 
@@ -52,31 +61,36 @@ class Strategy(
     private val normalMacd2 = NormalizationIndicator(macd, 200)
     private val obvIndicator = NormalizationIndicator(OnBalanceVolumeIndicator(series), 80)
 
-    // com.tradexchange.Strategy config
-    private val openTradesCount = 1
+    // Strategy config
+    private val openTradesCount = 5
     private val tradeExpiry = 12*5 // give up if can't meet the margin
-    private val marginToSell = 1
-    private val buyCooldown = 12*2 // 4h. During cooldown won't buy anything
-
-    private fun crossedOver(indicator: Indicator<Decimal>, target: Indicator<Decimal>, i: Int): Boolean {
-        return indicator[i] > target[i] && indicator[i - 1] < target[i - 1]
-    }
-
-    private fun crossedBelow(indicator: Indicator<Decimal>, target: Indicator<Decimal>, i: Int): Boolean {
-        return indicator[i] < target[i] && indicator[i - 1] > target[i - 1]
-    }
+    private val marginToSell = 1f
+    private val buyCooldown = 5 // 4h. During cooldown won't buy anything
+    private val topLoss = -10f
 
     private fun shouldOpen(i: Int, epoch: Long): Boolean {
-        //return /*close[i] < lowBBand[i] || */rsi[i] < 30 || (macd[i - 1] < 0 && macd[i] > 0)
-        //return close[i] < lowBBand[i]//rsi[i] < 30 //crossedBelow(macd, macdSignal, i)
-        return close[i] < shortMA[i]
+        return macd[i] < 0f //&& rsi[i] < 60f
     }
 
     private fun shouldClose(i: Int, epoch: Long, trade: OpenTrade): Boolean {
         if (epoch - trade.epoch > tradeExpiry * period) return true // trade expire at this point
-        // TODO why not
-        //return close[i] > upBBand[i]//close[i] > trade.buyPrice + marginToSell // || crossedOver(macd, macdSignal, i) //rsi[i] > 70 || (macd[i - 1] > 0 && macd[i] < 0)
-        return close[i] > shortMA[i] //close[i] > (trade.buyPrice + 1)// || close[i] > shortMA[i]
+
+        val diff = close[i] - trade.buyPrice
+        if (diff < topLoss) {
+            return true // panic - sell.
+        }
+
+        if (diff > marginToSell) {
+            trade.passed1Barrier = true
+            if (diff > marginToSell*3f) {
+                return true
+            }
+        } else if (diff < marginToSell && trade.passed1Barrier) {
+            return true
+        }
+
+        return false
+        // V1: return close[i] > trade.buyPrice + marginToSell || trade.buyPrice - close[i] > -topLoss
     }
 
     fun onTick(i: Int) {
@@ -109,10 +123,11 @@ class Strategy(
                 exchange.sell(trade.amount * 0.99999, close[i])
                 val diff = close[i] - trade.buyPrice
                 val tradeStrLog =
-                    "Trade %.03f'c    buy $%.03f    sell $%.03f    won $%.03f"
-                        .format(trade.amount, trade.buyPrice, close[i], diff)
-                val tooltip = "Close #%d: $%.03f\nBuy $%.03f   Sell $%.03f\nTime %d min (%d ticks)".format(
+                    "Trade %.03f'c    buy $%.03f    sell $%.03f    diff $%.03f    won $%.03f"
+                        .format(trade.amount, trade.buyPrice, close[i], diff, diff*trade.amount)
+                val tooltip = "Close #%d: won $%.03f (diff $%.03f)\nBuy $%.03f   Sell $%.03f\nTime %d min (%d ticks)".format(
                     trade.code,
+                    diff*trade.amount,
                     diff,
                     trade.buyPrice,
                     close[i],
@@ -121,6 +136,7 @@ class Strategy(
                 )
                 chart.addPoint(if (diff < 0f) "BadSell" else "GoodSell", epoch, close[i], tooltip)
                 action = true
+                tradeCount++
                 LOGGER.info(tradeStrLog)
             }
         }
@@ -138,9 +154,9 @@ class Strategy(
         chart.addPointExtra("RSI", "line70", epoch, 70.0)
 
         // MACD
-        //chart.addPointExtra("MACD", "macd", epoch, macd[i])
-        //chart.addPointExtra("MACD", "signal", epoch, macdSignal[i])
-        //chart.addPointExtra("MACD", "histogram", epoch, macdHistogram[i])
+        chart.addPointExtra("MACD", "macd", epoch, macd[i])
+        chart.addPointExtra("MACD", "signal", epoch, macdSignal[i])
+        chart.addPointExtra("MACD", "histogram", epoch, macdHistogram[i])
 
         // OBV
         chart.addPointExtra("OBV", "obv", epoch, obvIndicator[i])

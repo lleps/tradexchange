@@ -64,9 +64,9 @@ class PoloniexBacktestExchange(
             )
         }
 
-    override var moneyBalance: Double = initialMoney
+    override var moneyBalance: Double = initialMoney// + 0.001
 
-    override var coinBalance: Double = initialCoins
+    override var coinBalance: Double = initialCoins// + 0.001
 
     private val chartDataAsTicks: MutableList<BaseTick> by lazy {
         testingChartData.map {
@@ -91,7 +91,7 @@ class PoloniexBacktestExchange(
     override fun buy(coins: Double, price: Double) {
         if (moneyBalance < coins * price) {
             LOGGER.error("Not enough balance to buy $coins coins at $price each.")
-            return
+            //return
         }
 
         moneyBalance -= coins * price
@@ -102,7 +102,7 @@ class PoloniexBacktestExchange(
     override fun sell(coins: Double, price: Double) {
         if (coinBalance < coins) {
             LOGGER.error("Want to sell $coins coins at $price but got only $coinBalance coins.")
-            return
+            //return
         }
 
         moneyBalance += coins * price

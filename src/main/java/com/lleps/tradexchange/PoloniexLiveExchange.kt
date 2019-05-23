@@ -1,6 +1,7 @@
 package com.lleps.tradexchange
 
 import com.cf.client.poloniex.PoloniexExchangeService
+import com.cf.data.model.poloniex.PoloniexTicker
 import org.slf4j.LoggerFactory
 import org.ta4j.core.BaseTick
 import org.ta4j.core.Decimal
@@ -46,7 +47,32 @@ class PoloniexLiveExchange(
     override val coinBalance: Double
         get() = poloniex.returnCurrencyBalance(pair.split("_")[1]).available.toDouble() // IGNORED_X
 
-    override fun fetchTick(): Tick? = null
+    override fun fetchTick(): Tick? {
+        // Fetch ticker every few seconds, to grab max,min,open,close,etc and return as a candle
+        val tickExpire = System.currentTimeMillis() + period*1000
+        var high = 0.0
+        var low = Double.MAX_VALUE
+        var ticker = poloniex.returnTicker(pair)
+        val open = ticker.last.toDouble()
+        Thread.sleep(5000)
+        while (System.currentTimeMillis() < tickExpire) {
+            ticker = poloniex.returnTicker(pair)
+            val price = ticker.last.toDouble()
+            if (price > high) high = price
+            if (price < low) low = price
+            Thread.sleep(10*1000)
+        }
+        val close = ticker.last.toDouble()
+        return BaseTick(
+                Duration.ofSeconds(period),
+                Instant.now().atZone(ZoneOffset.UTC),
+                Decimal.valueOf(open), // open
+                Decimal.valueOf(high), // high
+                Decimal.valueOf(low), // low
+                Decimal.valueOf(close), // close
+                Decimal.valueOf(ticker.baseVolume.toDouble())
+        )
+    }
 
     override fun buy(coins: Double, price: Double) {
         LOGGER.info("Buy $coins coins at $price on poloniex.")
