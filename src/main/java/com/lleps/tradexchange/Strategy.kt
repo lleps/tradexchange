@@ -52,8 +52,8 @@ class Strategy(
     private val longMA = EMAIndicator(close, 24)
     private val shortMA = EMAIndicator(close, 12)
     private val rsi = RSIIndicator(close, 14)
-    private val avg14 = EMAIndicator(close, 24)
-    private val sd14 = StandardDeviationIndicator(close, 24)
+    private val avg14 = EMAIndicator(close, 12)
+    private val sd14 = StandardDeviationIndicator(close, 12)
     private val middleBBand = BollingerBandsMiddleIndicator(avg14)
     private val lowBBand = BollingerBandsLowerIndicator(middleBBand, sd14)
     private val upBBand = BollingerBandsUpperIndicator(middleBBand, sd14)
@@ -144,7 +144,7 @@ class Strategy(
         // Main chart
         if (!action) chart.addPoint("Price", epoch, close[i])
         //chart.addPoint("BB Upper", epoch, upBBand[i])
-        //chart.addPoint("BB Lower", epoch, lowBBand[i])
+        chart.addPoint("BB Lower", epoch, lowBBand[i])
         chart.addPoint("short MA", epoch, shortMA[i])
         chart.addPoint("long MA", epoch, longMA[i])
 
@@ -159,6 +159,6 @@ class Strategy(
         chart.addPointExtra("MACD", "histogram", epoch, macdHistogram[i])
 
         // OBV
-        chart.addPointExtra("OBV", "obv", epoch, obvIndicator[i])
+        //chart.addPointExtra("OBV", "obv", epoch, obvIndicator[i])
     }
 }

@@ -1,0 +1,125 @@
+/*
+ * Copyright (c) 2008, 2016, Oracle and/or its affiliates.
+ * All rights reserved. Use is subject to license terms.
+ *
+ * This file is available and licensed under the following license:
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *  - Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *  - Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the distribution.
+ *  - Neither the name of Oracle Corporation nor the names of its
+ *    contributors may be used to endorse or promote products derived
+ *    from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+ * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+ /* ====== CANDLE STICK CHART =========================================================== */
+.candlestick-tooltip-label {
+    -fx-font-size: 0.75em;
+    -fx-font-weight: bold;
+    -fx-text-fill: yellow;
+    -fx-padding: 2 5 2 0;
+}
+.candlestick-average-line {
+    /*-fx-stroke: #106ece;*/
+    /*visibility: hidden;*/
+    /*-fx-stroke-width: 2px;*/
+}
+.candlestick-series-1 {
+    -fx-stroke: rgba(0, 255, 255, 0.5);
+    -fx-stroke-width: 1px;
+}
+.candlestick-series-2 {
+    -fx-stroke: rgba(0, 0, 255, 0.5);;
+    -fx-stroke-width: 1px;
+}
+.candlestick-series-3 {
+    -fx-stroke: rgba(255, 0, 255, 0.5);
+    -fx-stroke-width: 1px;
+}
+.candlestick-series-4 {
+    -fx-stroke: rgba(128, 126, 0, 0.5);
+    -fx-stroke-width: 1px;
+}
+/*
+IMPORTANTE.
+Ponerse objetivos!!
+Por ejemplo, ahora tengo en la mente la idea de un programa nuevo.
+Seria:
+Una interfaz "backtester".
+Entras, te dice tipo...
+
+# 1. Crear panel de run.
+
+--------------
+[grafico]        [panel de run]
+[indicadores]    [trades]
+
+En panel de run te saldria:
+Pair  <pair>
+Days
+Mode backtest
+BalanceUsd    1000
+BalanceCoins  53
+StrategyInput1 5
+TopLoss      56
+
+Ejecutar
+
+Tendria que existir un StrategyRunner(strategy, pair, interval)
+y en Strategy, un metodo plotIndicators.
+Y tambien que retorne como se habia dicho antes, lista de operaciones.
+
+# 2. Mejorar el grafico
+Usar candles en vez de lineas. Usar el codigo este de java.
+Crear estilo streaming. O sea, al tocar algun boton (que le den al scroll) que haga
+ok, estos son los datos. Write.
+Grafico tendria un metodo setPriceData(list<candlevalues>).
+Tambien un setOperations(list<operations>)
+y setPriceChartIndicators(map<string, list<values>>)
+y un setIndependentChartIndicators<map<string, list<values>>)
+
+# 3. Guardar esos backtests de algun modo
+Que se puedan guardar y cargar. O que tenga una db.
+No se. algo asi para ver diferentes estrategias con diferentes input.
+Pero eso es lo proximo.
+
+*/
+/*.candlestick-candle {
+    -fx-effect: dropshadow( two-pass-box , rgba(0,0,0,0.4) , 10, 0.0 , 2 , 4 );
+}*/
+.candlestick-line {
+    -fx-stroke: #666666;
+    -fx-stroke-width: 1px;
+}
+.candlestick-bar {
+    -fx-padding: 5;
+    -demo-bar-fill: red;
+    -fx-background-color: -demo-bar-fill;
+    /*-fx-background-color: linear-gradient(derive(-demo-bar-fill,-30%), derive(-demo-bar-fill,-40%)),
+                          linear-gradient(derive(-demo-bar-fill,100%), derive(-demo-bar-fill, 10%)),
+                          linear-gradient(derive(-demo-bar-fill,30%), derive(-demo-bar-fill,-10%));*/
+    -fx-background-insets: 0,1,2;
+}
+.candlestick-bar.close-above-open {
+    -demo-bar-fill: #95ce1b;
+}
+.candlestick-bar.open-above-close {
+    -demo-bar-fill: #ce2700;
+}
