@@ -115,13 +115,13 @@ public class CandleStickChart extends XYChart<Number, Number> {
                     double high = yAxis.getDisplayPosition(extra.getHigh());
                     double low = yAxis.getDisplayPosition(extra.getLow());
                     // calculate candle width
-                    double candleWidth = -1;
-                    if (getXAxis() instanceof NumberAxis) {
+                    double candleWidth = 7.0;
+                    /*if (getXAxis() instanceof NumberAxis) {
                         // use 90% width between ticks
                         NumberAxis xa = (NumberAxis) getXAxis();
                         double unit = xa.getDisplayPosition(xa.getTickUnit());
                         candleWidth = unit * 0.90;
-                    }
+                    }*/
                     // update candle
                     Candle candle = (Candle)itemNode;
                     candle.update(close - y, high - y, low - y, candleWidth);
@@ -274,7 +274,7 @@ public class CandleStickChart extends XYChart<Number, Number> {
      * all data that the given axis has to plot and call invalidateRange()
      * on the axis passing it that data.
      */
-    @Override
+    /*@Override
     protected void updateAxisRange() {
         // For candle stick chart we need to override this method as we need
         // to let the axis know that they need to be able to cover the area
@@ -314,5 +314,5 @@ public class CandleStickChart extends XYChart<Number, Number> {
                 ya.invalidateRange(yData);
             }
         }
-    }
+    }*/
 }
