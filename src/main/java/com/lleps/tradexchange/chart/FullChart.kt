@@ -46,10 +46,15 @@ class FullChart : BorderPane() {
 
 
     private val nodeHBox = VBox(-10.0)
-    private val priceChart: CandleStickChart
+    private lateinit var priceChart: CandleStickChart
     private val extraCharts = mutableListOf<LineChart<Number, Number>>()
 
     init {
+        center = nodeHBox
+        createPriceChart()
+    }
+
+    private fun createPriceChart() {
         val xAxis = NumberAxis(0.0, 5.0, 500.0)
         xAxis.minorTickCount = 0
         val yAxis = NumberAxis(0.0, 5.0, 5.0)
@@ -72,8 +77,11 @@ class FullChart : BorderPane() {
                 lastX = it.x
                 //adjustYRangeByXBounds(this)
             }
+        }
+        if (nodeHBox.children.isNotEmpty()) {
+            nodeHBox.children[0] = priceChart
+        } else {
             nodeHBox.children.add(priceChart)
-            center = nodeHBox
         }
     }
 
@@ -89,6 +97,7 @@ class FullChart : BorderPane() {
         var maxValue = 0.0
         val allSeries = FXCollections.observableArrayList<XYChart.Series<Number, Number>>()
         val candleSeries = XYChart.Series<Number, Number>()
+        createPriceChart()
         for (candle in priceData) {
             // should only add if inside bounds.
             candleSeries.data.add(
@@ -179,6 +188,8 @@ class FullChart : BorderPane() {
         }
 
         // update ranges
+        if (minTimestamp == Long.MAX_VALUE) minTimestamp = 0
+        if (minValue == Double.MAX_VALUE) minValue = 0.0
         val xa = (priceChart.xAxis as NumberAxis)
         val ya = (priceChart.yAxis as NumberAxis)
         xa.tickUnit = (maxTimestamp - minTimestamp) / 20.0
