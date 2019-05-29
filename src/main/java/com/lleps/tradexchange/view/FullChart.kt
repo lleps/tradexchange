@@ -1,4 +1,4 @@
-package com.lleps.tradexchange.chart
+package com.lleps.tradexchange.view
 
 import com.lleps.tradexchange.PoloniexBacktestExchange
 import com.lleps.tradexchange.hackTooltipStartTiming
@@ -6,21 +6,17 @@ import javafx.application.Application
 import javafx.beans.binding.Bindings
 import javafx.collections.FXCollections
 import javafx.geometry.Side
-import javafx.scene.Node
 import javafx.scene.Scene
 import javafx.scene.chart.LineChart
 import javafx.scene.chart.NumberAxis
 import javafx.scene.chart.XYChart
 import javafx.scene.control.Tooltip
 import javafx.scene.layout.BorderPane
-import javafx.scene.layout.Pane
 import javafx.scene.layout.VBox
 import javafx.scene.paint.Paint
-import javafx.scene.shape.Circle
 import javafx.scene.shape.Polygon
 import javafx.stage.Stage
 import javafx.util.StringConverter
-import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter

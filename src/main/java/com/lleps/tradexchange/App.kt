@@ -1,17 +1,16 @@
 package com.lleps.tradexchange
 
-import com.lleps.tradexchange.chart.FullChart
+import com.lleps.tradexchange.view.FullChart
 import javafx.application.Application
 import javafx.application.Platform
+import javafx.collections.FXCollections
 import javafx.scene.Scene
-import javafx.scene.control.Button
-import javafx.scene.control.Label
-import javafx.scene.control.TextArea
-import javafx.scene.control.TextField
+import javafx.scene.control.*
+import javafx.scene.control.cell.PropertyValueFactory
 import javafx.scene.image.Image
 import javafx.scene.layout.BorderPane
-import javafx.scene.layout.TilePane
 import javafx.scene.layout.VBox
+import javafx.scene.paint.Color
 import javafx.stage.Stage
 import org.apache.log4j.AppenderSkeleton
 import org.apache.log4j.Logger
@@ -45,6 +44,7 @@ class App : Application() {
     private fun runStrategy(
         input: Map<String, String>,
         mode: Mode,
+        onTrade: (buy: Double, sell: Double, amount: Double) -> Unit,
         onFinish: () -> Unit
     ) {
         val pair = input["pair"] ?: error("pair")
@@ -127,6 +127,11 @@ class App : Application() {
                                     FullChart.OperationType.SELL
                                 FullChart.Operation(epoch, type, tick.closePrice.toDouble(), op.description)
                             })
+                            for (op in operations) {
+                                if (op.type == Strategy.OperationType.SELL) {
+                                    onTrade(op.buyPrice, tick.closePrice.toDouble(), op.amount)
+                                }
+                            }
                         }
 
                         // Resume
@@ -166,15 +171,64 @@ class App : Application() {
         }
     }
 
+    class TradeTableEntry(val buyPrice: Double, val sellPrice: Double, val amount: Double, val profit: Double)
+
+    private fun createTradesTable(trades: List<TradeTableEntry>): TableView<TradeTableEntry> {
+        val items = FXCollections.observableArrayList<TradeTableEntry>(*trades.toTypedArray())
+        val table = TableView(items)
+        // this cell factory format objects as prices
+        val cellFactory = {
+            object : TableCell<TradeTableEntry, Any>() {
+                override fun updateItem(item: Any?, empty: Boolean) {
+                    super.updateItem(item, empty)
+                    if (item == null || empty) {
+                        text = null
+                        style = ""
+                    } else {
+                        val color = if (item.toString().contains("-")) Color.ORANGERED else Color.GREEN
+                        text = "\$$item"
+                        textFill = color
+                    }
+                }
+            }
+        }
+        table.columns.add(TableColumn<TradeTableEntry, Any>("buy").apply {
+            cellValueFactory = PropertyValueFactory("buyPrice")
+            setCellFactory { cellFactory() }
+        })
+        table.columns.add(TableColumn<TradeTableEntry, Any>("sell")
+            .apply {
+                cellValueFactory = PropertyValueFactory("sellPrice")
+                setCellFactory { cellFactory() }
+            })
+        table.columns.add(TableColumn<TradeTableEntry, Any>("amount")
+            .apply {
+                cellValueFactory = PropertyValueFactory("amount")
+            })
+        table.columns.add(TableColumn<TradeTableEntry, Any>("profit")
+            .apply {
+                cellValueFactory = PropertyValueFactory("profit")
+                setCellFactory { cellFactory() }
+            })
+        return table
+    }
+
     override fun start(stage: Stage) {
         // Init scene, chart and main pane
         chart = FullChart()
-        val rootPane = BorderPane()
-        stage.scene = Scene(BorderPane(chart, null, rootPane, null, null))
+        val controlPane = VBox()
+        stage.scene = Scene(BorderPane(chart, null, controlPane, null, null))
         stage.icons.add(Image("money-icon.png"))
-        stage.title = "Tradexchange backtest \uD83D\uDD34"
+        stage.title = "Tradexchange"
         stage.show()
         val outputPane = TextArea()
+
+        val tradeTableItems = mutableListOf<TradeTableEntry>()
+        val tradeTableContainer = BorderPane()
+        val tabOutput = Tab("Output", outputPane)
+        val tabTrades = Tab("Trades", tradeTableContainer)
+        val tabPane = TabPane(tabOutput, tabTrades)
+        tabPane.tabClosingPolicy = TabPane.TabClosingPolicy.UNAVAILABLE
 
         // Input pane start
         val defaultInput = mutableMapOf(
@@ -202,13 +256,21 @@ class App : Application() {
                 for ((label, field) in inputUIElements) map[label.text] = field.text
                 outputPane.text = ""
                 LOGGER.info("Input: $map")
-                runStrategy(map, Mode.BACKTEST) {
-                    Platform.runLater { this@apply.isDisable = false }
-                }
+                runStrategy(map, Mode.BACKTEST,
+                    onTrade = { buy, sell, amount ->
+                        tradeTableItems.add(TradeTableEntry(buy, sell, amount, (sell-buy)*amount))
+                    },
+                    onFinish = {
+                        Platform.runLater {
+                            this@apply.isDisable = false
+                            tradeTableContainer.center = createTradesTable(tradeTableItems)
+                            tradeTableItems.clear()
+                        }
+                    })
             }
         })
         // ok. ejecutar deberia ejecutar la estrategia...
-        rootPane.top = inputPane
+        controlPane.children.add(inputPane)
 
         // Log start
         Logger.getRootLogger().addAppender(object : AppenderSkeleton() {
@@ -218,8 +280,8 @@ class App : Application() {
             override fun close() {}
             override fun requiresLayout() = false
         })
-        outputPane.prefWidth = 300.0
-        rootPane.center = outputPane
+        outputPane.prefWidth = 400.0
+        controlPane.children.add(tabPane)
     }
 
     companion object {

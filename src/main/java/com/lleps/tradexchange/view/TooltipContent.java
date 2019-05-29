@@ -29,44 +29,45 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package com.lleps.tradexchange.chart;
+package com.lleps.tradexchange.view;
 
-/** Data extra values for storing close, high and low. */
-public class CandleStickExtraValues  {
-    private double close;
-    private double high;
-    private double low;
-    private double average;
+import javafx.scene.control.Label;
+import javafx.scene.layout.GridPane;
 
-    public CandleStickExtraValues(double close, double high,
-                                  double low, double average) {
-        this.close = close;
-        this.high = high;
-        this.low = low;
-        this.average = average;
+/**
+ * The content for Candle tool tips
+ */
+public class TooltipContent  extends GridPane {
+    private Label openValue = new Label();
+    private Label closeValue = new Label();
+    private Label highValue = new Label();
+    private Label lowValue = new Label();
+
+    TooltipContent() {
+        Label open = new Label("OPEN:");
+        Label close = new Label("CLOSE:");
+        Label high = new Label("HIGH:");
+        Label low = new Label("LOW:");
+        open.getStyleClass().add("candlestick-tooltip-label");
+        close.getStyleClass().add("candlestick-tooltip-label");
+        high.getStyleClass().add("candlestick-tooltip-label");
+        low.getStyleClass().add("candlestick-tooltip-label");
+        setConstraints(open, 0, 0);
+        setConstraints(openValue, 1, 0);
+        setConstraints(close, 0, 1);
+        setConstraints(closeValue, 1, 1);
+        setConstraints(high, 0, 2);
+        setConstraints(highValue, 1, 2);
+        setConstraints(low, 0, 3);
+        setConstraints(lowValue, 1, 3);
+        getChildren().addAll(open, openValue, close, closeValue,
+                high, highValue, low, lowValue);
     }
 
-    public double getClose() {
-        return close;
-    }
-
-    public double getHigh() {
-        return high;
-    }
-
-    public double getLow() {
-        return low;
-    }
-
-    public double getAverage() {
-        return average;
-    }
-
-    private static final String FORMAT =
-            "CandleStickExtraValues{close=%f, high=%f, low=%f, average=%f}";
-
-    @Override
-    public String toString() {
-        return String.format(FORMAT, close, high, low, average);
+    public void update(double open, double close, double high, double low) {
+        openValue.setText(Double.toString(open));
+        closeValue.setText(Double.toString(close));
+        highValue.setText(Double.toString(high));
+        lowValue.setText(Double.toString(low));
     }
 }

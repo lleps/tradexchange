@@ -30,7 +30,10 @@ class Strategy(
     }
 
     enum class OperationType { BUY, SELL }
-    class Operation(val type: OperationType, val amount: Double, val description: String? = null)
+    class Operation(val type: OperationType,
+                    val amount: Double,
+                    val description: String? = null,
+                    val buyPrice: Double = 0.0/* used only for Type.SELL to know the trade profit */)
 
     var tradeCount = 0
         private set
@@ -62,7 +65,8 @@ class Strategy(
     private val upBBand = BollingerBandsUpperIndicator(middleBBand, sd14)
     private val volatiltyIndicatorBB = CompositeIndicator(upBBand, lowBBand) { up, low -> up - low }
     private val normalMacd2 = NormalizationIndicator(macd, 200)
-    private val obvIndicator = NormalizationIndicator(OnBalanceVolumeIndicator(series), 80)
+    private val obvIndicator = OnBalanceVolumeIndicator(series)
+    private val obvIndicatorNormal = NormalizationIndicator(obvIndicator, 80)
 
     private val openTradesCount = input.getValue("openTradesCount").toInt()
 
@@ -126,6 +130,9 @@ class Strategy(
         chart.extraIndicator("MACD", "macd", epoch, macd[i])
         //chart.extraIndicator("MACD", "signal", epoch, macdSignal[i])
         //chart.extraIndicator("MACD", "histogram", epoch, macdHistogram[i])
+
+        // OBV
+        chart.extraIndicator("OBV", "obv", epoch, obvIndicator[i])
     }
 
     fun onTick(i: Int): List<Operation> {
@@ -176,7 +183,7 @@ class Strategy(
                     (epoch - trade.epoch) / 60,
                     (epoch - trade.epoch) / period
                 )
-                operations = operations + Operation(OperationType.SELL, trade.amount, tooltip)
+                operations = operations + Operation(OperationType.SELL, trade.amount, tooltip, trade.buyPrice)
                 openTrades = openTrades - trade
                 tradeCount++
             }
