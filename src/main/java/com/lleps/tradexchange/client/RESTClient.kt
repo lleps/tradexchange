@@ -3,6 +3,7 @@ package com.lleps.tradexchange.client
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.lleps.tradexchange.RESTInterface
+import com.mashape.unirest.http.HttpResponse
 import com.mashape.unirest.http.Unirest
 import org.slf4j.LoggerFactory
 import java.util.*
@@ -31,11 +32,16 @@ class RESTClient(private val host: String = "http://localhost:8080") : RESTInter
         }
     }
 
+    private fun <T> checkResponse(response: HttpResponse<T>) {
+        if (response.status != 200)
+            error("error in request: ${response.status} (${response.statusText}) ${response.body}")
+    }
+
     override fun getInstances(onResult: (List<String>, Throwable?) -> Unit) {
         makeRequest<List<String>>(
             request = {
                 val response = Unirest.get("$host/instances").asString()
-                if (response.status != 200) error(response.statusText)
+                checkResponse(response)
                 val typeRef = object : TypeReference<ArrayList<String>>() {}
                 jacksonMapper.readValue(response.body, typeRef)
             },
@@ -48,7 +54,7 @@ class RESTClient(private val host: String = "http://localhost:8080") : RESTInter
         makeRequest<RESTInterface.InstanceState>(
             request = {
                 val response = Unirest.get("$host/instanceState/$instance").asString()
-                if (response.status != 200) error(response.statusText)
+                checkResponse(response)
                 jacksonMapper.readValue(response.body, RESTInterface.InstanceState::class.java)
             },
             errorValue = RESTInterface.InstanceState(),
@@ -60,7 +66,7 @@ class RESTClient(private val host: String = "http://localhost:8080") : RESTInter
         makeRequest<RESTInterface.InstanceChartData>(
             request = {
                 val response = Unirest.get("$host/instanceChartData/$instance").asString()
-                if (response.status != 200) error(response.statusText)
+                checkResponse(response)
                 // Gson doesn't deserialize this properly, creates map<string,double> instead of map<long,double>
                 // So use jackson here.
                 jacksonMapper.readValue(response.body, RESTInterface.InstanceChartData::class.java)
@@ -78,7 +84,7 @@ class RESTClient(private val host: String = "http://localhost:8080") : RESTInter
                     .header("Content-Type", "application/json")
                     .body(jacksonMapper.writeValueAsString(input))
                     .asString()
-                if (response.status != 200) error(response.statusText)
+                checkResponse(response)
                 Unit
             },
             errorValue = Unit,

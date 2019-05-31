@@ -37,7 +37,7 @@ class FullChart : BorderPane() {
     }
 
     // this classes should be serializable (i.e default constructor)
-    class Candle(
+    data class Candle(
         val timestamp: Long = 0L,
         val open: Double = 0.0,
         val close: Double = 0.0,
@@ -45,13 +45,12 @@ class FullChart : BorderPane() {
         val low: Double = 0.0
     )
     enum class OperationType { BUY, SELL }
-    class Operation(
+    data class Operation(
         val timestamp: Long = 0L,
         val type: OperationType = OperationType.BUY,
         val price: Double = 0.0,
         val description: String? = null
     )
-
 
     private val nodeHBox = VBox(-10.0)
     private lateinit var priceChart: CandleStickChart
@@ -60,10 +59,10 @@ class FullChart : BorderPane() {
     init {
         center = nodeHBox
         createPriceChart()
-
     }
 
     private fun adjustYRangeByXBounds(chart: XYChart<Number, Number>) {
+        if (chart.data == null) return
         val xAxis = chart.xAxis as NumberAxis
         val pricesBetweenRange = chart.data
             .flatMap { it.data }
@@ -200,18 +199,10 @@ class FullChart : BorderPane() {
             nodeHBox.children.add(chart)
             extraCharts.add(chart)
             val chartData = FXCollections.observableArrayList<XYChart.Series<Number, Number>>()
-            println("indicatorData: $indicatorData")
-            println("indicatorData: $indicatorData - ${indicatorData.entries.first()}")
             for ((seriesName, seriesData) in indicatorData) {
-                println("seriseData: $seriesData")
-                println("keys: ${seriesData.mapKeys { it.key.javaClass }}")
                 val series = XYChart.Series<Number, Number>()
                 series.name = seriesName
-                for (entries in seriesData) {
-                    println("entry key: ${entries.key.javaClass}")
-                    println("entry value: ${entries.value}")
-                    val epoch = entries.key
-                    val value = entries.value
+                for ((epoch, value) in seriesData) {
                     minExtraVal = minOf(value, minExtraVal)
                     maxExtraVal = maxOf(value, maxExtraVal)
                     series.data.add(XYChart.Data<Number, Number>(epoch, value))

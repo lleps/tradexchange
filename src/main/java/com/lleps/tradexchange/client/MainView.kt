@@ -17,7 +17,7 @@ import javafx.scene.paint.Color
  * through setters passing bulk data.
  */
 class MainView {
-    class TradeEntry(val id: Int, val buy: Double, val sell: Double, val amount: Double)
+    data class TradeEntry(val id: Int = 0, val buy: Double = 0.0, val sell: Double = 0.0, val amount: Double = 0.0)
 
     private lateinit var chart: FullChart
     private lateinit var outputPane: TextArea
@@ -103,6 +103,10 @@ class MainView {
             chart.operations == operations &&
             chart.priceIndicators == priceIndicators &&
             chart.extraIndicators == extraIndicators) return
+        println("priceData: ${chart.priceData == candles}")
+        println("operations: ${chart.operations == operations}")
+        println("priceIndicators: ${chart.priceIndicators == priceIndicators}")
+        println("extraIndicators: ${chart.extraIndicators == extraIndicators}")
         chart.priceData = candles
         chart.operations = operations
         chart.priceIndicators = priceIndicators

@@ -62,7 +62,7 @@ class RESTServer {
 
     @RequestMapping("/instanceChartData/{instance}")
     fun getInstanceChartData(@PathVariable instance: String): RESTInterface.InstanceChartData {
-        LOGGER.info(Gson().toJson(instanceChartData[instance]?.copy()!!))
+        LOGGER.info(Gson().toJson(instanceChartData[instance]?.copy()))
         return instanceChartData[instance]?.copy() ?: RESTInterface.InstanceChartData()
     }
 
