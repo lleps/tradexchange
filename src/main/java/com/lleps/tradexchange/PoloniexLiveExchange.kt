@@ -1,7 +1,9 @@
 package com.lleps.tradexchange
 
 import com.cf.client.poloniex.PoloniexExchangeService
+import com.cf.data.model.poloniex.PoloniexOpenOrder
 import com.cf.data.model.poloniex.PoloniexTicker
+import com.cf.data.model.poloniex.PoloniexTradeHistory
 import org.slf4j.LoggerFactory
 import org.ta4j.core.BaseTick
 import org.ta4j.core.Decimal
@@ -13,19 +15,38 @@ import java.time.ZoneOffset
 import java.time.ZonedDateTime
 
 class PoloniexLiveExchange(
-        private val pair: String,
-        private val period: Long,
-        warmUpPeriods: Int,
-        apiKey: String = "GW202H58-HQULS9AJ-SZDSHJZ1-FXRYESKK",
-        apiSecret: String = "7fe0d64f187fd333a9754085fa7a1e57c6a98345908f7c84dcbeed1465aa55a7adb7b36a276e95557a4598887673cbdbfbc8bacc0f9968f970bbe96fccb0745b"
+    private val pair: String,
+    private val period: Long,
+    warmUpPeriods: Int,
+    apiKey: String = API_KEY,
+    apiSecret: String = API_SECRET
 ) : Exchange {
-
     private val poloniex = PoloniexExchangeService(apiKey, apiSecret)
     private val initialNowEpoch = ZonedDateTime.now(ZoneOffset.UTC).toEpochSecond()
     private val warmUp = poloniex.returnChartData(pair, period, initialNowEpoch - warmUpPeriods*period).toMutableList()
 
     companion object {
         private val LOGGER = LoggerFactory.getLogger(PoloniexLiveExchange::class.java)
+        private const val API_KEY = "GW202H58-HQULS9AJ-SZDSHJZ1-FXRYESKK"
+        private const val API_SECRET = "7fe0d64f187fd333a9754085fa7a1e57c6a98345908f7c84dcbeed1465aa55a7adb7b36a276e95557a4598887673cbdbfbc8bacc0f9968f970bbe96fccb0745b"
+
+        @JvmStatic
+        fun main(args: Array<String>) {
+            // Try to sell immediately
+            val poloniex = PoloniexExchangeService(API_KEY, API_SECRET)
+            val pair = "USDT_ETH"
+            val ticker = poloniex.returnTicker(pair)
+            val ethsPerUsd = 1.1 / ticker.last.toDouble()
+            val buy = poloniex.buy("USDT_ETH", ticker.lowestAsk, BigDecimal(ethsPerUsd), true, true, false)
+            println("err: ${buy.error}")
+            println("num: ${buy.orderNumber}")
+            println("trades: ${buy.resultingTrades}")
+            println("return open orders...")
+            val orders = poloniex.returnOpenOrders(pair)
+            println(orders.toString())
+            println("return trade history...")
+            println(poloniex.returnTradeHistory(pair))
+        }
     }
 
     override val warmUpHistory: List<Tick>

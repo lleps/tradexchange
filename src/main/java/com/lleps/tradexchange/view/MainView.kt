@@ -84,8 +84,14 @@ class MainView {
         }
     }
 
-    fun log(message: String) {
-        Platform.runLater { outputPane.text += "$message\n" }
+    private var lastOutput = ""
+    fun setOutput(output: String) {
+        if (output == lastOutput) return
+        lastOutput = output
+        Platform.runLater {
+            outputPane.text = output
+            outputPane.appendText("")
+        }
     }
 
     fun setChart(
@@ -93,6 +99,10 @@ class MainView {
         operations: List<FullChart.Operation>,
         priceIndicators: Map<String, Map<Long, Double>>,
         extraIndicators: Map<String, Map<String, Map<Long, Double>>>) {
+        if (chart.priceData == candles &&
+            chart.operations == operations &&
+            chart.priceIndicators == priceIndicators &&
+            chart.extraIndicators == extraIndicators) return
         chart.priceData = candles
         chart.operations = operations
         chart.priceIndicators = priceIndicators
@@ -100,7 +110,10 @@ class MainView {
         Platform.runLater { chart.fill() }
     }
 
+    private var lastTrades = emptyList<TradeEntry>()
     fun setTrades(trades: List<TradeEntry>) {
+        if (trades == lastTrades) return
+        lastTrades = trades
         Platform.runLater { tradeTableContainer.center = createTradesTable(trades) }
     }
 
