@@ -2,6 +2,7 @@ package com.lleps.tradexchange.server
 
 import com.lleps.tradexchange.indicator.CompositeIndicator
 import com.lleps.tradexchange.indicator.NormalizationIndicator
+import com.lleps.tradexchange.util.get
 import org.slf4j.LoggerFactory
 import org.ta4j.core.TimeSeries
 import org.ta4j.core.indicators.EMAIndicator
@@ -115,7 +116,6 @@ class Strategy(
         // V1: return close[i] > trade.buyPrice + marginToSell || trade.buyPrice - close[i] > -topLoss
     }
 
-
     fun onDrawChart(chart: ChartWriter, epoch: Long, i: Int) {
         //chart.priceIndicator("BB Lower", epoch, lowBBand[i])
         chart.priceIndicator("short MA", epoch, shortMA[i])
@@ -132,7 +132,7 @@ class Strategy(
         //chart.extraIndicator("MACD", "histogram", epoch, macdHistogram[i])
 
         // OBV
-        chart.extraIndicator("OBV", "obv", epoch, obvIndicator[i])
+        //chart.extraIndicator("OBV", "obv", epoch, obvIndicator[i])
     }
 
     fun onTick(i: Int): List<Operation> {

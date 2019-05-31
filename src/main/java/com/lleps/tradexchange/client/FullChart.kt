@@ -50,19 +50,38 @@ class FullChart : BorderPane() {
         createPriceChart()
     }
 
+    private fun adjustYRangeByXBounds(chart: XYChart<Number, Number>) {
+        val xAxis = chart.xAxis as NumberAxis
+        val pricesBetweenRange = chart.data
+            .flatMap { it.data }
+            .asSequence()
+            .filter { it.xValue.toInt() >= xAxis.lowerBound && it.xValue.toInt() <= xAxis.upperBound }
+            .map { it.yValue.toDouble() }
+
+        val yAxis = chart.yAxis as NumberAxis
+        val max = pricesBetweenRange.max() ?: 0.0
+        val min = pricesBetweenRange.min() ?: 0.0
+        yAxis.upperBound = max// + (max * 0.05)
+        yAxis.upperBound *= 1.01
+        yAxis.lowerBound = min// - (min * 0.05)
+        yAxis.lowerBound *= 0.99// - (min * 0.05)
+    }
+
     private fun createPriceChart() {
         val xAxis = NumberAxis(0.0, 5.0, 500.0)
         xAxis.minorTickCount = 0
         val yAxis = NumberAxis(0.0, 5.0, 5.0)
         yAxis.label = "price"
         yAxis.side = Side.RIGHT
+
         priceChart = CandleStickChart(xAxis, yAxis)
         xAxis.tickLabelFormatter = TICK_LABEL_FORMATTER
+        xAxis.tickUnitProperty().bind(Bindings.divide(Bindings.subtract(xAxis.upperBoundProperty(), xAxis.lowerBoundProperty()), 20.0))
         priceChart.apply {
             setOnScroll {
-                val difference = (xAxis.upperBound - xAxis.lowerBound) / 50
+                val difference = (xAxis.upperBound - xAxis.lowerBound) / 20
                 xAxis.lowerBound -= difference * if (it.deltaY < 0.0) 1.0 else -1.0
-                //adjustYRangeByXBounds(this)
+                adjustYRangeByXBounds(this)
             }
             var lastX = 0.0
             setOnMouseMoved { lastX = it.x }
@@ -71,7 +90,7 @@ class FullChart : BorderPane() {
                 xAxis.lowerBound += 900 * -delta
                 xAxis.upperBound += 900 * -delta
                 lastX = it.x
-                //adjustYRangeByXBounds(this)
+                adjustYRangeByXBounds(this)
             }
         }
         if (nodeHBox.children.isNotEmpty()) {
@@ -158,7 +177,7 @@ class FullChart : BorderPane() {
             yAxis.label = indicatorName
             chart.createSymbols = false
             chart.isLegendVisible = false
-            chart.prefHeightProperty().bind(Bindings.divide(priceChart.prefHeightProperty(), 5.0))
+            chart.prefHeightProperty().bind(Bindings.divide(priceChart.heightProperty(), 5.0))
             xAxis.lowerBoundProperty().bind((priceChart.xAxis as NumberAxis).lowerBoundProperty())
             xAxis.upperBoundProperty().bind((priceChart.xAxis as NumberAxis).upperBoundProperty())
             xAxis.isTickLabelsVisible = false
@@ -188,7 +207,7 @@ class FullChart : BorderPane() {
         if (minValue == Double.MAX_VALUE) minValue = 0.0
         val xa = (priceChart.xAxis as NumberAxis)
         val ya = (priceChart.yAxis as NumberAxis)
-        xa.tickUnit = (maxTimestamp - minTimestamp) / 20.0
+        //xa.tickUnit = (maxTimestamp - minTimestamp) / 20.0
         ya.tickUnit = (maxValue - minValue) / 10.0
         priceChart.data = allSeries
         xa.lowerBound = minTimestamp.toDouble()

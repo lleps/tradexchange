@@ -111,13 +111,18 @@ public class CandleStickChart extends XYChart<Number, Number> {
                     double high = yAxis.getDisplayPosition(extra.getHigh());
                     double low = yAxis.getDisplayPosition(extra.getLow());
                     // calculate candle width
-                    double candleWidth = 1.0;//7.0;
-                    if (getXAxis() instanceof NumberAxis) {
+                    NumberAxis xAxisNum = (NumberAxis)getXAxis();
+                    double amplitude = xAxisNum.getUpperBound() - xAxisNum.getLowerBound();
+                    long period = (long)getData().get(0).getData().get(1).getXValue() -
+                            (long)getData().get(0).getData().get(0).getXValue();
+                    double candleCount = amplitude / period;
+                    double candleWidth = 500.0 * (1.0 / candleCount);//7.0;
+                    /*if (getXAxis() instanceof NumberAxis) {
                         // use 90% width between ticks
                         NumberAxis xa = (NumberAxis) getXAxis();
                         double unit = xa.getDisplayPosition(xa.getTickUnit());
                         candleWidth = unit * 0.90;
-                    }
+                    }*/
                     // update candle
                     Candle candle = (Candle)itemNode;
                     candle.update(close - y, high - y, low - y, candleWidth);

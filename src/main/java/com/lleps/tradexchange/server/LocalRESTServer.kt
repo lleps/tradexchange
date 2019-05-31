@@ -2,6 +2,7 @@ package com.lleps.tradexchange.server
 
 import com.lleps.tradexchange.client.FullChart
 import com.lleps.tradexchange.client.MainView
+import com.lleps.tradexchange.util.get
 import org.apache.log4j.AppenderSkeleton
 import org.apache.log4j.Logger
 import org.apache.log4j.spi.LoggingEvent

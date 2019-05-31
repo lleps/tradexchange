@@ -109,7 +109,7 @@ Pero eso es lo proximo.
     -fx-padding: 5;
     -demo-bar-fill: red;
     -fx-background-color: -demo-bar-fill;
-    /*-fx-background-color: linear-gradient(derive(-demo-bar-fill,-30%), derive(-demo-bar-fill,-40%)),
+   /* -fx-background-color: linear-gradient(derive(-demo-bar-fill,-30%), derive(-demo-bar-fill,-40%)),
                           linear-gradient(derive(-demo-bar-fill,100%), derive(-demo-bar-fill, 10%)),
                           linear-gradient(derive(-demo-bar-fill,30%), derive(-demo-bar-fill,-10%));*/
     -fx-background-insets: 0,1,2;
