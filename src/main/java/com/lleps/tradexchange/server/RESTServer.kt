@@ -1,5 +1,6 @@
 package com.lleps.tradexchange.server
 
+import com.google.gson.Gson
 import com.lleps.tradexchange.RESTInterface
 import com.lleps.tradexchange.client.FullChart
 import com.lleps.tradexchange.client.MainView
@@ -13,7 +14,7 @@ import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import kotlin.concurrent.thread
 
-/** Server main class. */
+/** Server main class. Makes backtesting, handles http requests, etc. */
 @RestController
 class RESTServer {
     companion object {
@@ -23,24 +24,26 @@ class RESTServer {
     private enum class Mode { BACKTEST, LIVE }
 
     // Server state
-    private val instances = listOf("default")
-    private val log = StringBuilder()
-    private var candles: List<FullChart.Candle> = emptyList()
-    private var operations: List<FullChart.Operation> = emptyList()
-    private var priceIndicators: Map<String, Map<Long, Double>> = emptyMap()
-    private var extraIndicators: Map<String, Map<String, Map<Long, Double>>> = emptyMap()
-    private var trades: List<MainView.TradeEntry> = emptyList()
-    private var input = mapOf(
-        "pair" to "USDT_ETH",
-        "period" to "300",
-        "days" to "7-0",
-        "initialMoney" to "1000.0",
-        "initialCoins" to "0.0",
-        "plotChart" to "3"
-    )
+    private var instanceState = emptyMap<String, RESTInterface.InstanceState>()
+    private val instanceChartData = mutableMapOf<String, RESTInterface.InstanceChartData>()
 
     init {
+        // fill some default instances
+        // should instead load from some db.
+        var input = mapOf(
+            "pair" to "USDT_ETH",
+            "period" to "300",
+            "days" to "7-0",
+            "initialMoney" to "1000.0",
+            "initialCoins" to "0.0",
+            "plotChart" to "3"
+        )
         Strategy.requiredInput.forEach { key, value -> input = input + (key to value.toString()) }
+        instanceState = mapOf(
+            "default" to RESTInterface.InstanceState(input),
+            "default-1" to RESTInterface.InstanceState(input)
+        )
+
         /* // TODO: Fix logger
         Logger.getRootLogger().addAppender(object : AppenderSkeleton() {
             override fun append(event: LoggingEvent) { log.append(event.message.toString() + "\n") }
@@ -49,35 +52,39 @@ class RESTServer {
         })*/
     }
     
-
     @RequestMapping("/instances")
-    fun getInstances(): List<String> = instances
+    fun getInstances(): List<String> = instanceState.keys.toList()
 
     @RequestMapping("/instanceState/{instance}")
     fun getInstanceState(@PathVariable instance: String): RESTInterface.InstanceState {
-        return RESTInterface.InstanceState(input, log.toString(), trades)
+        return instanceState[instance]?.copy() ?: RESTInterface.InstanceState()
     }
 
     @RequestMapping("/instanceChartData/{instance}")
     fun getInstanceChartData(@PathVariable instance: String): RESTInterface.InstanceChartData {
-        return RESTInterface.InstanceChartData(candles, operations, priceIndicators, extraIndicators)
+        LOGGER.info(Gson().toJson(instanceChartData[instance]?.copy()!!))
+        return instanceChartData[instance]?.copy() ?: RESTInterface.InstanceChartData()
     }
 
     @PostMapping("/updateInput/{instance}")
     fun updateInput(@PathVariable instance: String, @RequestBody input: Map<String, String>) {
-        onInputChanged(input)
+        onInputChanged(instance, input)
     }
 
-    private fun onInputChanged(input: Map<String, String>) {
+    private fun onInputChanged(instance: String, input: Map<String, String>) {
         LOGGER.info("Input: $input")
+        val state = instanceState.getValue(instance)
+        state.input = input
         val trades = mutableListOf<MainView.TradeEntry>()
-        startStrategyRunThread(input,
+        startStrategyRunThread(instance,
+            input = input,
             mode = Mode.BACKTEST,
             onTrade = { buy, sell, amount -> trades.add(MainView.TradeEntry(1, buy, sell, amount)) },
-            onFinish = { this.trades = trades })
+            onFinish = { state.trades = trades })
     }
 
     private fun startStrategyRunThread(
+        instance: String,
         input: Map<String, String>,
         mode: Mode,
         onTrade: (buy: Double, sell: Double, amount: Double) -> Unit,
@@ -85,7 +92,7 @@ class RESTServer {
     ) {
         thread(start = true, isDaemon = true) {
             try {
-                runStrategy(mode, input, onTrade, onFinish)
+                runStrategy(instance, mode, input, onTrade, onFinish)
             } catch (e: Exception) {
                 LOGGER.info("error: $e", e)
                 onFinish()
@@ -94,6 +101,7 @@ class RESTServer {
     }
 
     private fun runStrategy(
+        instance: String,
         mode: Mode,
         input: Map<String, String>,
         onTrade: (buy: Double, sell: Double, amount: Double) -> Unit,
@@ -200,10 +208,11 @@ class RESTServer {
                 LOGGER.info(" ______________________________________________________ ")
 
                 // Update view
-                this.candles = if (plotChart >= 1) candles else emptyList()
-                this.operations = if (plotChart >= 1) chartOperations else emptyList()
-                this.priceIndicators = if (plotChart >= 1) priceIndicators else emptyMap()
-                this.extraIndicators = if (plotChart >= 1) extraIndicators else emptyMap()
+                val chartData = instanceChartData.getOrPut(instance) { RESTInterface.InstanceChartData() }
+                chartData.candles = if (plotChart >= 1) candles else emptyList()
+                chartData.operations = if (plotChart >= 1) chartOperations else emptyList()
+                chartData.priceIndicators = if (plotChart >= 1) priceIndicators else emptyMap()
+                chartData.extraIndicators = if (plotChart >= 1) extraIndicators else emptyMap()
                 onFinish()
             }
             Mode.LIVE -> TODO("Implement live mode")

@@ -7,17 +7,17 @@ import com.lleps.tradexchange.client.MainView
 interface RESTInterface {
     /** Encapsulates main instance state. */
     data class InstanceState(
-        val input: Map<String, String> = emptyMap(),
-        val output: String = "",
-        val trades: List<MainView.TradeEntry> = emptyList()
+        var input: Map<String, String> = emptyMap(),
+        var output: String = "",
+        var trades: List<MainView.TradeEntry> = emptyList()
     )
 
     /** Chart data (separated since it's too big to bundle with regular state). */
     data class InstanceChartData(
-        val candles: List<FullChart.Candle> = emptyList(),
-        val operations: List<FullChart.Operation> = emptyList(),
-        val priceIndicators: Map<String, Map<Long, Double>> = emptyMap(),
-        val extraIndicators: Map<String, Map<String, Map<Long, Double>>> = emptyMap()
+        var candles: List<FullChart.Candle> = emptyList(),
+        var operations: List<FullChart.Operation> = emptyList(),
+        var priceIndicators: Map<String, Map<Long, Double>> = emptyMap(),
+        var extraIndicators: Map<String, Map<String, Map<Long, Double>>> = emptyMap()
     )
 
     fun getInstances(onResult: (List<String>, Throwable?) -> Unit)

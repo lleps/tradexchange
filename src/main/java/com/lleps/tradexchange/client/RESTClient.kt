@@ -1,14 +1,19 @@
 package com.lleps.tradexchange.client
 
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import com.fasterxml.jackson.core.type.TypeReference
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.lleps.tradexchange.RESTInterface
 import com.mashape.unirest.http.Unirest
-import java.util.ArrayList
+import org.slf4j.LoggerFactory
+import java.util.*
 import java.util.concurrent.Executors
 
 class RESTClient(private val host: String = "http://localhost:8080") : RESTInterface {
-    private val gson = Gson()
+    companion object {
+        private val LOGGER = LoggerFactory.getLogger(RESTClient::class.java)
+    }
+
+    private val jacksonMapper = ObjectMapper()
     private val executor = Executors.newSingleThreadExecutor()
 
     /** Execute [request] in parallel, handling exceptions and default value. */
@@ -18,6 +23,7 @@ class RESTClient(private val host: String = "http://localhost:8080") : RESTInter
             val result = try {
                 request()
             } catch (e: Throwable) {
+                LOGGER.error("error in makeRequest", e)
                 throwable = e
                 errorValue
             }
@@ -30,8 +36,8 @@ class RESTClient(private val host: String = "http://localhost:8080") : RESTInter
             request = {
                 val response = Unirest.get("$host/instances").asString()
                 if (response.status != 200) error(response.statusText)
-                val listType = object : TypeToken<ArrayList<String>>() {}.type
-                gson.fromJson(response.body, listType)
+                val typeRef = object : TypeReference<ArrayList<String>>() {}
+                jacksonMapper.readValue(response.body, typeRef)
             },
             errorValue = emptyList(),
             resultCallback = onResult
@@ -43,7 +49,7 @@ class RESTClient(private val host: String = "http://localhost:8080") : RESTInter
             request = {
                 val response = Unirest.get("$host/instanceState/$instance").asString()
                 if (response.status != 200) error(response.statusText)
-                gson.fromJson(response.body, RESTInterface.InstanceState::class.java)
+                jacksonMapper.readValue(response.body, RESTInterface.InstanceState::class.java)
             },
             errorValue = RESTInterface.InstanceState(),
             resultCallback = onResult
@@ -55,7 +61,9 @@ class RESTClient(private val host: String = "http://localhost:8080") : RESTInter
             request = {
                 val response = Unirest.get("$host/instanceChartData/$instance").asString()
                 if (response.status != 200) error(response.statusText)
-                gson.fromJson(response.body, RESTInterface.InstanceChartData::class.java)
+                // Gson doesn't deserialize this properly, creates map<string,double> instead of map<long,double>
+                // So use jackson here.
+                jacksonMapper.readValue(response.body, RESTInterface.InstanceChartData::class.java)
             },
             errorValue = RESTInterface.InstanceChartData(),
             resultCallback = onResult
@@ -68,7 +76,7 @@ class RESTClient(private val host: String = "http://localhost:8080") : RESTInter
                 val response = Unirest.post("$host/updateInput/$instance")
                     .header("accept", "application/json")
                     .header("Content-Type", "application/json")
-                    .body(gson.toJson(input))
+                    .body(jacksonMapper.writeValueAsString(input))
                     .asString()
                 if (response.status != 200) error(response.statusText)
                 Unit
