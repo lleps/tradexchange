@@ -1,4 +1,4 @@
-import com.lleps.tradexchange.PoloniexLiveExchange
+import com.lleps.tradexchange.server.PoloniexLiveExchange
 
 class PoloniexLiveExchangeTest {
     companion object {

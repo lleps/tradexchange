@@ -96,7 +96,7 @@
                     </descriptorRefs>
                     <archive>
                         <manifest>
-                            <mainClass>com.lleps.tradexchange.App</mainClass>
+                            <mainClass>com.lleps.tradexchange.view.Client</mainClass>
                         </manifest>
                     </archive>
                 </configuration>

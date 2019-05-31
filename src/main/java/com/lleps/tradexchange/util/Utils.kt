@@ -1,4 +1,4 @@
-package com.lleps.tradexchange
+package com.lleps.tradexchange.util
 
 import javafx.animation.KeyFrame
 import javafx.animation.Timeline

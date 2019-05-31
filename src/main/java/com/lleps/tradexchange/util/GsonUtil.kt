@@ -1,4 +1,4 @@
-package com.lleps.tradexchange
+package com.lleps.tradexchange.util
 
 import com.google.gson.GsonBuilder
 import java.io.IOException

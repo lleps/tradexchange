@@ -1,6 +1,7 @@
-package com.lleps.tradexchange
+package com.lleps.tradexchange.client
 
-import com.lleps.tradexchange.view.MainView
+import com.lleps.tradexchange.server.LocalRESTServer
+import com.lleps.tradexchange.server.RESTServer
 import javafx.application.Application
 import javafx.scene.Scene
 import javafx.scene.image.Image
@@ -8,9 +9,9 @@ import javafx.stage.Stage
 import org.slf4j.LoggerFactory
 import kotlin.concurrent.thread
 
-class App : Application() {
+class Client : Application() {
     private lateinit var view: MainView
-    private val server: RESTInterface = LocalRESTServer()
+    private val server: RESTServer = LocalRESTServer()
     private val instance = "default"
 
     override fun start(stage: Stage) {
@@ -48,11 +49,11 @@ class App : Application() {
     }
 
     companion object {
-        private val LOGGER = LoggerFactory.getLogger(App::class.java)
+        private val LOGGER = LoggerFactory.getLogger(Client::class.java)
 
         @JvmStatic
         fun main(args: Array<String>) {
-            launch(App::class.java)
+            launch(Client::class.java)
         }
     }
 }

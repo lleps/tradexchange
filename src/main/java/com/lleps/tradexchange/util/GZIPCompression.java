@@ -1,4 +1,4 @@
-package com.lleps.tradexchange;
+package com.lleps.tradexchange.util;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;

@@ -1,7 +1,7 @@
-package com.lleps.tradexchange.view
+package com.lleps.tradexchange.client
 
-import com.lleps.tradexchange.PoloniexBacktestExchange
-import com.lleps.tradexchange.hackTooltipStartTiming
+import com.lleps.tradexchange.server.PoloniexBacktestExchange
+import com.lleps.tradexchange.util.hackTooltipStartTiming
 import javafx.application.Application
 import javafx.beans.binding.Bindings
 import javafx.collections.FXCollections
@@ -203,8 +203,8 @@ class FullChart : BorderPane() {
             val chart = FullChart()
             val poloniex = PoloniexBacktestExchange(
                 pair = "USDT_ETH",
-                period = 300*6,
-                fromEpoch = Instant.now().minusSeconds(3600*24*5).epochSecond,
+                period = 300 * 6,
+                fromEpoch = Instant.now().minusSeconds(3600 * 24 * 5).epochSecond,
                 warmUpTicks = 100
             )
             chart.priceData = poloniex.warmUpHistory

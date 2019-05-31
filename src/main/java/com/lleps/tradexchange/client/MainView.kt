@@ -1,4 +1,4 @@
-package com.lleps.tradexchange.view
+package com.lleps.tradexchange.client
 
 import javafx.application.Platform
 import javafx.beans.property.SimpleObjectProperty

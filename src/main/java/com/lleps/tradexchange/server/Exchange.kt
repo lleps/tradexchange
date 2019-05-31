@@ -1,4 +1,4 @@
-package com.lleps.tradexchange
+package com.lleps.tradexchange.server
 
 import org.ta4j.core.Tick
 

@@ -1,7 +1,7 @@
-package com.lleps.tradexchange
+package com.lleps.tradexchange.server
 
-import com.lleps.tradexchange.view.FullChart
-import com.lleps.tradexchange.view.MainView
+import com.lleps.tradexchange.client.FullChart
+import com.lleps.tradexchange.client.MainView
 import org.apache.log4j.AppenderSkeleton
 import org.apache.log4j.Logger
 import org.apache.log4j.spi.LoggingEvent
@@ -14,7 +14,7 @@ import java.time.ZonedDateTime
 import kotlin.concurrent.thread
 
 /** Implements everything locally, without any network protocol */
-class LocalRESTServer : RESTInterface {
+class LocalRESTServer : RESTServer {
     companion object {
         private val LOGGER = LoggerFactory.getLogger(LocalRESTServer::class.java)
     }
@@ -60,12 +60,12 @@ class LocalRESTServer : RESTInterface {
         onResult(instances, null)
     }
 
-    override fun getInstanceState(instance: String, onResult: (RESTInterface.InstanceState, Throwable?) -> Unit) {
-        onResult(RESTInterface.InstanceState(input, log.toString(), trades), null)
+    override fun getInstanceState(instance: String, onResult: (RESTServer.InstanceState, Throwable?) -> Unit) {
+        onResult(RESTServer.InstanceState(input, log.toString(), trades), null)
     }
 
-    override fun getInstanceChartData(instance: String, onResult: (RESTInterface.InstanceChartData, Throwable?) -> Unit) {
-        onResult(RESTInterface.InstanceChartData(candles, operations, priceIndicators, extraIndicators), null)
+    override fun getInstanceChartData(instance: String, onResult: (RESTServer.InstanceChartData, Throwable?) -> Unit) {
+        onResult(RESTServer.InstanceChartData(candles, operations, priceIndicators, extraIndicators), null)
     }
 
     override fun updateInput(instance: String, input: Map<String, String>, onResult: (Throwable?) -> Unit) {

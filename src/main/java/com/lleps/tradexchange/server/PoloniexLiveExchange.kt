@@ -1,9 +1,6 @@
-package com.lleps.tradexchange
+package com.lleps.tradexchange.server
 
 import com.cf.client.poloniex.PoloniexExchangeService
-import com.cf.data.model.poloniex.PoloniexOpenOrder
-import com.cf.data.model.poloniex.PoloniexTicker
-import com.cf.data.model.poloniex.PoloniexTradeHistory
 import org.slf4j.LoggerFactory
 import org.ta4j.core.BaseTick
 import org.ta4j.core.Decimal

@@ -1,10 +1,10 @@
-package com.lleps.tradexchange
+package com.lleps.tradexchange.server
 
-import com.lleps.tradexchange.view.FullChart
-import com.lleps.tradexchange.view.MainView
+import com.lleps.tradexchange.client.FullChart
+import com.lleps.tradexchange.client.MainView
 
 /** Implements the logic of the backend. */
-interface RESTInterface {
+interface RESTServer {
     /** Encapsulates main instance state. */
     class InstanceState(
         val input: Map<String, String> = emptyMap(),

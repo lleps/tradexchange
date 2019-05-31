@@ -1,4 +1,4 @@
-package com.lleps.tradexchange
+package com.lleps.tradexchange.server
 
 import com.lleps.tradexchange.indicator.CompositeIndicator
 import com.lleps.tradexchange.indicator.NormalizationIndicator
