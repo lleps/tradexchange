@@ -105,4 +105,16 @@ class RESTClient(private val host: String = "http://localhost:8080") : RESTInter
             resultCallback = onResult
         )
     }
+
+    override fun deleteInstance(instance: String, onResult: (Unit, Throwable?) -> Unit) {
+        makeRequest(
+            request = {
+                val response = Unirest.delete("$host/deleteInstance/$instance").asString()
+                checkResponse(response)
+                Unit
+            },
+            errorValue = Unit,
+            resultCallback = onResult
+        )
+    }
 }

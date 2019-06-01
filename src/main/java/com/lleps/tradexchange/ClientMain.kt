@@ -16,6 +16,10 @@ import javafx.stage.Modality
 import javafx.stage.WindowEvent
 import java.io.PrintWriter
 import java.io.StringWriter
+import javafx.scene.control.ButtonType
+import javafx.scene.control.Alert
+
+
 
 class ClientMain : Application() {
     private lateinit var tabPane: TabPane
@@ -47,7 +51,7 @@ class ClientMain : Application() {
                                     showError("createInstance", throwable)
                                     return@createInstance
                                 }
-                                registerTab(response)
+                                registerTab(response, select = true)
                             }
                         }
                     }
@@ -57,7 +61,7 @@ class ClientMain : Application() {
 
         // Tab pane
         tabPane = TabPane()
-        tabPane.tabClosingPolicy = TabPane.TabClosingPolicy.UNAVAILABLE
+        tabPane.tabClosingPolicy = TabPane.TabClosingPolicy.SELECTED_TAB
         tabPane.styleClass.add(TabPane.STYLE_CLASS_FLOATING)
 
         // Anchor the controls
@@ -91,13 +95,35 @@ class ClientMain : Application() {
         stage.show()
     }
 
-    private fun registerTab(instance: String) {
+    private fun registerTab(instance: String, select: Boolean = false) {
         Platform.runLater {
             val view = MainView()
             val tab = Tab(instance, view.initJavaFxContent())
+            tab.setOnCloseRequest { e ->
+                e.consume()
+                val alert = Alert(Alert.AlertType.CONFIRMATION, "")
+                alert.initModality(Modality.APPLICATION_MODAL)
+                alert.dialogPane.contentText = "Confirm delete $instance?"
+                alert.dialogPane.headerText = null
+                alert.showAndWait()
+                    .filter { response -> response == ButtonType.OK }
+                    .ifPresent {
+                        Platform.runLater {
+                            connection.deleteInstance(instance) { _, throwable ->
+                                if (throwable != null) showError("deleteInstance", throwable)
+                                else Platform.runLater {
+                                    tabPane.tabs.remove(tab)
+                                    tabs.remove(instance)
+                                    views.remove(instance)
+                                }
+                            }
+                        }
+                    }
+            }
             tabs[instance] = tab
             views[instance] = view
             tabPane.tabs.add(tab)
+            if (select) tabPane.selectionModel.select(tab)
             view.onExecute {
                 connection.updateInput(instance, it) { _, throwable ->
                     if (throwable != null) showError("updateInput", throwable)

@@ -49,7 +49,7 @@ class MainView {
         val tabPane = TabPane(tabOutput, tabTrades)
         tabPane.tabClosingPolicy = TabPane.TabClosingPolicy.UNAVAILABLE
 
-        outputPane.prefWidth = 300.0
+        outputPane.prefWidth = 400.0
         controlPane.children.add(inputPane)
         controlPane.children.add(executeButton)
         controlPane.children.add(tabPane)

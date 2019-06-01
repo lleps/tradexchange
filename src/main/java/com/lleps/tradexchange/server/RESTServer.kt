@@ -74,6 +74,12 @@ class RESTServer {
         instanceState = instanceState + (instance to InstanceState(defaultInput))
     }
 
+    @DeleteMapping("/deleteInstance/{instance}")
+    fun deleteInstance(@PathVariable instance: String) {
+        if (!instanceState.containsKey(instance)) error("instance with name '$instance' does not exists.")
+        instanceState = instanceState - instance
+    }
+
     private fun onInputChanged(instance: String, input: Map<String, String>) {
         LOGGER.info("Input: $input")
         val state = instanceState.getValue(instance)

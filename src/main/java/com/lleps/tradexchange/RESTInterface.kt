@@ -7,6 +7,7 @@ interface RESTInterface {
     fun getInstanceChartData(instance: String, onResult: (InstanceChartData, Throwable?) -> Unit)
     fun updateInput(instance: String, input: Map<String, String>, onResult: (Unit, Throwable?) -> Unit)
     fun createInstance(instance: String, onResult: (Unit, Throwable?) -> Unit)
+    fun deleteInstance(instance: String, onResult: (Unit, Throwable?) -> Unit)
 }
 
 // Shared data
