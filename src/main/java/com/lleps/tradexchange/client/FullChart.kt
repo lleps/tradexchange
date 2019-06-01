@@ -8,13 +8,17 @@ import com.lleps.tradexchange.util.hackTooltipStartTiming
 import javafx.application.Application
 import javafx.beans.binding.Bindings
 import javafx.collections.FXCollections
+import javafx.geometry.Pos
 import javafx.geometry.Side
 import javafx.scene.Scene
 import javafx.scene.chart.LineChart
 import javafx.scene.chart.NumberAxis
 import javafx.scene.chart.XYChart
+import javafx.scene.control.Button
 import javafx.scene.control.Tooltip
+import javafx.scene.layout.AnchorPane
 import javafx.scene.layout.BorderPane
+import javafx.scene.layout.HBox
 import javafx.scene.layout.VBox
 import javafx.scene.paint.Paint
 import javafx.scene.shape.Polygon
@@ -22,6 +26,7 @@ import javafx.stage.Stage
 import javafx.util.StringConverter
 import java.time.Instant
 import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
 class FullChart : BorderPane() {
@@ -41,10 +46,14 @@ class FullChart : BorderPane() {
 
     private val nodeHBox = VBox(-10.0)
     private lateinit var priceChart: CandleStickChart
+    private lateinit var chartNavToolbar: HBox
     private val extraCharts = mutableListOf<LineChart<Number, Number>>()
+    private var minTimestamp = 0L
+    private var maxTimestamp = 0L
 
     init {
         center = nodeHBox
+        createChartNavToolbar()
         createPriceChart()
     }
 
@@ -60,10 +69,62 @@ class FullChart : BorderPane() {
         val yAxis = chart.yAxis as NumberAxis
         val max = pricesBetweenRange.max() ?: 0.0
         val min = pricesBetweenRange.min() ?: 0.0
-        yAxis.upperBound = max// + (max * 0.05)
-        yAxis.upperBound *= 1.01
-        yAxis.lowerBound = min// - (min * 0.05)
-        yAxis.lowerBound *= 0.99// - (min * 0.05)
+        val amplitude = max-min
+        yAxis.upperBound = max + amplitude*0.1
+        yAxis.lowerBound = min - amplitude*0.1
+    }
+
+    private fun createChartNavToolbar() {
+        chartNavToolbar = HBox(10.0)
+        val timeFrames = mapOf(
+            "12H" to 3600*12,
+            "1D" to 3600*24,
+            "7D" to 3600*24*7,
+            "14D" to 3600*24*14,
+            "30D" to 3600*24*30
+        )
+        for ((timeFrameStr, timeFrameSeconds) in timeFrames) {
+            chartNavToolbar.children.add(Button(timeFrameStr).apply {
+                style = "-fx-background-color: transparent;"
+                setOnAction {
+                    val xAxis = priceChart.xAxis as NumberAxis
+                    xAxis.upperBound = maxTimestamp.toDouble()
+                    xAxis.lowerBound = xAxis.upperBound - timeFrameSeconds
+                    adjustYRangeByXBounds(priceChart)
+                }
+            })
+        }
+        chartNavToolbar.children.add(Button("ALL").apply {
+            style = "-fx-background-color: transparent;"
+            setOnAction {
+                val xAxis = priceChart.xAxis as NumberAxis
+                xAxis.upperBound = maxTimestamp.toDouble()
+                xAxis.lowerBound = minTimestamp.toDouble()
+                adjustYRangeByXBounds(priceChart)
+            }
+        })
+        chartNavToolbar.children.add(Button("<").apply {
+            style = "-fx-background-color: transparent;"
+            setOnAction {
+                val xAxis = priceChart.xAxis as NumberAxis
+                val currFrame = xAxis.upperBound - xAxis.lowerBound
+                xAxis.upperBound -= currFrame
+                xAxis.lowerBound -= currFrame
+                adjustYRangeByXBounds(priceChart)
+            }
+        })
+        chartNavToolbar.children.add(Button(">").apply {
+            style = "-fx-background-color: transparent;"
+            setOnAction {
+                val xAxis = priceChart.xAxis as NumberAxis
+                val currFrame = xAxis.upperBound - xAxis.lowerBound
+                xAxis.upperBound += currFrame
+                xAxis.lowerBound += currFrame
+                adjustYRangeByXBounds(priceChart)
+            }
+        })
+        chartNavToolbar.alignment = Pos.CENTER
+        chartNavToolbar.style = "-fx-background-color: transparent;"
     }
 
     private fun createPriceChart() {
@@ -92,10 +153,19 @@ class FullChart : BorderPane() {
                 adjustYRangeByXBounds(this)
             }
         }
+        val anchor = AnchorPane()
+        anchor.children.addAll(priceChart, chartNavToolbar)
+        AnchorPane.setTopAnchor(chartNavToolbar, 18.0)
+        AnchorPane.setRightAnchor(chartNavToolbar, 100.0)
+        AnchorPane.setLeftAnchor(chartNavToolbar, 100.0)
+        AnchorPane.setTopAnchor(priceChart, 1.0)
+        AnchorPane.setRightAnchor(priceChart, 1.0)
+        AnchorPane.setLeftAnchor(priceChart, 1.0)
+        AnchorPane.setBottomAnchor(priceChart, 1.0)
         if (nodeHBox.children.isNotEmpty()) {
-            nodeHBox.children[0] = priceChart
+            nodeHBox.children[0] = anchor
         } else {
-            nodeHBox.children.add(priceChart)
+            nodeHBox.children.add(anchor)
         }
     }
 
@@ -105,8 +175,8 @@ class FullChart : BorderPane() {
     var extraIndicators = emptyMap<String, Map<String, Map<Long, Double>>>()
 
     fun fill() {
-        var minTimestamp = Long.MAX_VALUE
-        var maxTimestamp = 1L
+        minTimestamp = Long.MAX_VALUE
+        maxTimestamp = 1L
         var minValue = Double.MAX_VALUE
         var maxValue = 0.0
         val allSeries = FXCollections.observableArrayList<XYChart.Series<Number, Number>>()

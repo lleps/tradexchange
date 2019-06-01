@@ -12,11 +12,7 @@ object Main {
         if (mode == "server") {
             ServerMain.main(arrayOf())
         } else if (mode == "client") {
-            if (args.size < 2) {
-                println("client <ip>")
-                return
-            }
-            ClientMain.main(arrayOf(args[1]))
+            ClientMain.main(arrayOf())
         }
     }
 }
