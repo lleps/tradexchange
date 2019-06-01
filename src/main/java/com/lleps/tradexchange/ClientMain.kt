@@ -27,7 +27,7 @@ class ClientMain : Application() {
     private val views = mutableMapOf<String, MainView>()
     private lateinit var connection: RESTClient
     private val gotInput = mutableMapOf<String, Unit>() // to fetch input only once per instance
-
+    private var waitingToAcceptError = false // if true, the background thread shouldn't try to update
     class ClientData(val host: String = "http://localhost:8080")
 
     private var clientData = ClientData()
@@ -48,6 +48,7 @@ class ClientMain : Application() {
                 textInput.dialogPane.contentText = ""
                 textInput.showAndWait()
                     .ifPresent { response ->
+                        waitingToAcceptError = false
                         clientData = ClientData(host = response)
                         clientData.saveTo("tradexchange_data.json")
                         connection.host = response
@@ -165,6 +166,7 @@ class ClientMain : Application() {
     }
 
     private fun showError(string: String, throwable: Throwable? = null) {
+        waitingToAcceptError = true
         Platform.runLater {
             val dialog = Dialog<ButtonType>()
             dialog.title = "Error"
@@ -196,6 +198,10 @@ class ClientMain : Application() {
                 root.add(textArea, 0, 1)
                 dialogPane.expandableContent = root
             }
+            dialog.setOnHidden {
+                waitingToAcceptError = false
+                println("error done!")
+            }
             dialog.showAndWait()
         }
     }
@@ -206,6 +212,8 @@ class ClientMain : Application() {
             var iteration = 0
             var lastInstance = ""
             while (true) {
+                if (waitingToAcceptError) continue
+
                 val instance = tabs.entries.firstOrNull { it.value.isSelected }?.key
                 if (instance != null && views.containsKey(instance)) {
                     if (instance != lastInstance) {

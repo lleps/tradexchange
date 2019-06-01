@@ -1,6 +1,8 @@
 package com.lleps.tradexchange.server
 
-import com.google.gson.Gson
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.AppenderBase
 import com.lleps.tradexchange.*
 import com.lleps.tradexchange.util.get
 import org.slf4j.LoggerFactory
@@ -42,12 +44,21 @@ class RESTServer {
             "default-1" to InstanceState(defaultInput)
         )
 
-        /* // TODO: Fix logger
-        Logger.getRootLogger().addAppender(object : AppenderSkeleton() {
-            override fun append(event: LoggingEvent) { log.append(event.message.toString() + "\n") }
-            override fun close() {}
-            override fun requiresLayout() = false
-        })*/
+        // TODO: server errors and warnings should be logged to ALL instances!
+        val appender = object : AppenderBase<ILoggingEvent>() {
+            override fun append(e: ILoggingEvent) {
+                // to which? hmm. nah, its bad dud.
+                // maybe use the interface.
+                // but, since its devoriented, i want
+                // to see raw output. not fancy stuff...
+                // ok. get instance programatically.
+                val message = e.message
+                println("FROM APPENDER: $message")
+            }
+
+        }
+        val rootAppLogger = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger
+        rootAppLogger.addAppender(appender)
     }
     
     @GetMapping("/instances")
@@ -81,7 +92,7 @@ class RESTServer {
     }
 
     private fun onInputChanged(instance: String, input: Map<String, String>) {
-        LOGGER.info("Input: $input")
+        LOGGER.info("$instance: Input: $input")
         val state = instanceState.getValue(instance)
         state.input = input
         val trades = mutableListOf<TradeEntry>()
@@ -103,7 +114,7 @@ class RESTServer {
             try {
                 runStrategy(instance, mode, input, onTrade, onFinish)
             } catch (e: Exception) {
-                LOGGER.info("error: $e", e)
+                LOGGER.info("$instance: error: $e", e)
                 onFinish()
             }
         }
@@ -121,10 +132,17 @@ class RESTServer {
         val daysLimit = input["days"]?.split("-")?.get(1)?.toInt() ?: error("days")
         val period = input["period"]?.toLong() ?: error("period")
         val plotChart = input["plotChart"]?.toInt() ?: error("plotIndicators")
+        val state = instanceState.getValue(instance)
+        val strategyOutput = object : Strategy.OutputWriter {
+            override fun write(string: String) {
+                LOGGER.info("$instance: $string")
+                state.output += "$string\n"
+            }
+        }
         when (mode) {
             Mode.BACKTEST -> {
                 // Set up
-                LOGGER.info("Starting backtesting $days-day for $pair... (period: ${period/60} min)")
+                strategyOutput.write("$instance: Starting backtesting $days-day for $pair... (period: ${period/60} min)")
                 val initialMoney = 1000.0
                 val initialCoins = 0.0
                 val chartOperations = mutableListOf<Operation>()
@@ -168,6 +186,7 @@ class RESTServer {
                 // Execute strategy
                 val timeSeries = BaseTimeSeries(allTicks)
                 val strategy = Strategy(
+                    output = strategyOutput,
                     series = timeSeries,
                     period = period,
                     backtest = true,
@@ -203,18 +222,18 @@ class RESTServer {
                 // Print resume
                 val firstPrice = ClosePriceIndicator(timeSeries)[exchange.warmUpHistory.size]
                 val latestPrice = ClosePriceIndicator(timeSeries)[timeSeries.endIndex]
-                LOGGER.info(" ______________________________________________________ ")
-                LOGGER.info("                  RESULTS                               ")
-                LOGGER.info("Initial balance        %.03f'c $%.03f"
+                strategyOutput.write("  ______________________________________________________ ")
+                strategyOutput.write("                   RESULTS                               ")
+                strategyOutput.write(" Initial balance        %.03f'c $%.03f"
                     .format(initialCoins, initialMoney))
-                LOGGER.info("Final balance          %.03f'c $%.03f (net %.03f'c \$%.03f)"
+                strategyOutput.write(" Final balance          %.03f'c $%.03f (net %.03f'c \$%.03f)"
                     .format(exchange.coinBalance, exchange.moneyBalance,
                         exchange.coinBalance - initialCoins,
                         exchange.moneyBalance - initialMoney))
-                LOGGER.info("Coin start/end value   $%.03f / $%.03f (net $%.03f)"
+                strategyOutput.write(" Coin start/end value   $%.03f / $%.03f (net $%.03f)"
                     .format(firstPrice, latestPrice, latestPrice - firstPrice))
-                LOGGER.info("Trades: ${strategy.tradeCount}")
-                LOGGER.info(" ______________________________________________________ ")
+                strategyOutput.write(" Trades: ${strategy.tradeCount}")
+                strategyOutput.write("  ______________________________________________________ ")
 
                 // Update view
                 val chartData = instanceChartData.getOrPut(instance) { InstanceChartData() }

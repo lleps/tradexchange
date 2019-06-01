@@ -17,12 +17,18 @@ import org.ta4j.core.indicators.volume.OnBalanceVolumeIndicator
 import java.util.*
 
 class Strategy(
+    private val output: OutputWriter,
     private val series: TimeSeries,
     private val period: Long,
     private val backtest: Boolean,
     private val epochStopBuy: Long,
     private val exchange: Exchange,
     private val input: Map<String, String>) {
+
+    /** Used for client output */
+    interface OutputWriter {
+        fun write(string: String)
+    }
 
     /** A strategy can output some chart data */
     interface ChartWriter {
@@ -84,6 +90,7 @@ class Strategy(
             "sellBarrier2" to 3.0
         )
     }
+
     private val tradeExpiry = input.getValue("tradeExpiry").toInt() // give up if can't meet the margin
     private val marginToSell = input.getValue("marginToSell").toFloat()
     private val buyCooldown = input.getValue("buyCooldown").toInt() // 4h. During cooldown won't buy anything
@@ -170,7 +177,7 @@ class Strategy(
                 val tradeStrLog =
                     "Trade %.03f'c    buy $%.03f    sell $%.03f    diff $%.03f    won $%.03f"
                         .format(trade.amount, trade.buyPrice, close[i], diff, diff*trade.amount)
-                LOGGER.info(tradeStrLog)
+                output.write(tradeStrLog)
                 val tooltip =
                     ("Close #%d: won $%.03f (diff $%.03f)\n" +
                     "Buy $%.03f   Sell $%.03f\n" +
