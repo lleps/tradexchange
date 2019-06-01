@@ -4,19 +4,18 @@ import com.lleps.tradexchange.client.MainView
 import com.lleps.tradexchange.client.RESTClient
 import javafx.application.Application
 import javafx.application.Platform
-import javafx.geometry.Pos
+import javafx.event.EventHandler
 import javafx.scene.Scene
 import javafx.scene.control.*
 import javafx.scene.image.Image
 import javafx.scene.layout.*
 import javafx.stage.Stage
 import org.slf4j.LoggerFactory
-import java.awt.BorderLayout
 import kotlin.concurrent.thread
 import javafx.stage.Modality
+import javafx.stage.WindowEvent
 import java.io.PrintWriter
 import java.io.StringWriter
-import java.lang.Exception
 
 class ClientMain : Application() {
     private lateinit var tabPane: TabPane
@@ -74,9 +73,12 @@ class ClientMain : Application() {
         // Create scene
         val root = BorderPane(anchor)
         root.stylesheets.add("JMetroBase.css")
+        root.stylesheets.add("JMetroLightTheme.css")
         stage.scene = Scene(root)
         stage.icons.add(Image("money-icon.png"))
         stage.title = "Tradexchange"
+        stage.onCloseRequest = EventHandler<WindowEvent> { Platform.exit(); System.exit(0) }
+        stage.isMaximized = true
 
         // Fetch data
         connection.getInstances { instances, throwable ->
@@ -144,23 +146,30 @@ class ClientMain : Application() {
     private fun initUpdaterThread() {
         thread(start = true, name = "backgroundUpdateThread", isDaemon = true) {
             var iteration = 0
+            var lastInstance = ""
             while (true) {
                 val instance = tabs.entries.firstOrNull { it.value.isSelected }?.key
                 if (instance != null && views.containsKey(instance)) {
-                    val view = views.getValue(instance)
-                    connection.getInstanceState(instance) { data, throwable ->
-                        if (throwable != null) {
-                            showError("getInstanceState", throwable)
-                            return@getInstanceState
-                        }
-                        if (!gotInput.containsKey(instance)) {
-                            gotInput[instance] = Unit
-                            view.setInput(data.input)
-                        }
-                        view.setOutput(data.output)
-                        view.setTrades(data.trades)
+                    if (instance != lastInstance) {
+                        iteration = 0
+                        lastInstance = instance
                     }
-                    if (iteration++ % 3 == 0) {
+                    val view = views.getValue(instance)
+                    if (iteration % (1*4) == 0) {
+                        connection.getInstanceState(instance) { data, throwable ->
+                            if (throwable != null) {
+                                showError("getInstanceState", throwable)
+                                return@getInstanceState
+                            }
+                            if (!gotInput.containsKey(instance)) {
+                                gotInput[instance] = Unit
+                                view.setInput(data.input)
+                            }
+                            view.setOutput(data.output)
+                            view.setTrades(data.trades)
+                        }
+                    }
+                    if (iteration % (3*4) == 0) {
                         connection.getInstanceChartData(instance) { data, throwable ->
                             if (throwable != null) {
                                 showError("getInstanceChartData", throwable)
@@ -169,8 +178,9 @@ class ClientMain : Application() {
                             view.setChart(data.candles, data.operations, data.priceIndicators, data.extraIndicators)
                         }
                     }
+                    iteration++
                 }
-                Thread.sleep(1000)
+                Thread.sleep(250)
             }
         }
     }

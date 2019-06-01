@@ -110,9 +110,9 @@ Pane, AnchorPane, BorderPane, DialogPane, FlowPane, GridPane, HBox, StackPane, T
 
 /****************************** Button ****************************************/
 
-.button {
+/*.button {
     -fx-skin: "impl.jfxtras.styles.jmetro8.FluentButtonSkin";
-}
+}*/
 
 .button:default
 {
@@ -130,9 +130,9 @@ Pane, AnchorPane, BorderPane, DialogPane, FlowPane, GridPane, HBox, StackPane, T
 
 /**************************** Toggle Button ***********************************/
 
-.toggle-button {
+/*.toggle-button {
     -fx-skin: "impl.jfxtras.styles.jmetro8.FluentToggleButtonSkin";
-}
+}*/
 
 .toggle-button:selected {
     -fx-background-color: accent_color;
@@ -758,9 +758,9 @@ Pane, AnchorPane, BorderPane, DialogPane, FlowPane, GridPane, HBox, StackPane, T
  *                                                                             *
  ******************************************************************************/
 
-.text-field{
+/*.text-field{
     -fx-skin: "impl.jfxtras.styles.jmetro8.TextFieldSkin";
-}
+}*/
 
 .text-field > .right-button > .right-button-graphic {
     -fx-shape: "M221.738,305.873l6.135,6.16l-2.875,2.863l-6.135-6.159l-6.263,6.237l-2.864-2.875l6.263-6.238l-6.177-6.202l2.875-2.863l6.177,6.201l6.244-6.22l2.864,2.876L221.738,305.873z";
@@ -853,9 +853,9 @@ Pane, AnchorPane, BorderPane, DialogPane, FlowPane, GridPane, HBox, StackPane, T
  *                                                                             *
  ******************************************************************************/
 
-.password-field {
+/*.password-field {
     -fx-skin: "impl.jfxtras.styles.jmetro8.PasswordFieldSkin";
-}
+}*/
 
 .password-field > .right-button {
     -fx-padding: 0 0.166667em 0 0.166667em;
@@ -921,9 +921,9 @@ Pane, AnchorPane, BorderPane, DialogPane, FlowPane, GridPane, HBox, StackPane, T
     dot_color: accent_color;
 }
 
-.progress-bar {
+/*.progress-bar {
     -fx-skin: "impl.jfxtras.styles.jmetro8.ProgressBarSkin";
-}
+}*/
 
 .progress-bar > .bar {
     -fx-background-color: bar_color;
@@ -959,9 +959,9 @@ Pane, AnchorPane, BorderPane, DialogPane, FlowPane, GridPane, HBox, StackPane, T
  *                                                                             *
  ******************************************************************************/
 
-.slider {
+/*.slider {
     -fx-skin: "impl.jfxtras.styles.jmetro8.SliderSkin";
-}
+}*/
 
 .slider {
     -show-value-on-interaction: true;
@@ -1029,9 +1029,9 @@ Pane, AnchorPane, BorderPane, DialogPane, FlowPane, GridPane, HBox, StackPane, T
  *                                                                             *
  ******************************************************************************/
 
-.toggle-switch {
+/*.toggle-switch {
     -fx-skin: "impl.jfxtras.styles.jmetro8.ToggleSwitchSkin";
-}
+}*/
 
 .toggle-switch {
     -thumb-move-animation-time: 100;
@@ -1126,7 +1126,7 @@ Pane, AnchorPane, BorderPane, DialogPane, FlowPane, GridPane, HBox, StackPane, T
  ******************************************************************************/
 
 .ListSpinner {
-    -fx-skin: "impl.jfxtras.labs.internal.scene.control.skin.ListSpinnerCaspianSkin";
+    /*-fx-skin: "impl.jfxtras.labs.internal.scene.control.skin.ListSpinnerCaspianSkin";*/
     -fx-background-color: #f0f0f0;
     -fx-background-insets: 0 0 0 0;
     -fx-background-radius: 0;
