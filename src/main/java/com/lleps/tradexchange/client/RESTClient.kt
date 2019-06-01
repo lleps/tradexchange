@@ -2,6 +2,8 @@ package com.lleps.tradexchange.client
 
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.lleps.tradexchange.InstanceChartData
+import com.lleps.tradexchange.InstanceState
 import com.lleps.tradexchange.RESTInterface
 import com.mashape.unirest.http.HttpResponse
 import com.mashape.unirest.http.Unirest
@@ -50,28 +52,28 @@ class RESTClient(private val host: String = "http://localhost:8080") : RESTInter
         )
     }
 
-    override fun getInstanceState(instance: String, onResult: (RESTInterface.InstanceState, Throwable?) -> Unit) {
-        makeRequest<RESTInterface.InstanceState>(
+    override fun getInstanceState(instance: String, onResult: (InstanceState, Throwable?) -> Unit) {
+        makeRequest<InstanceState>(
             request = {
                 val response = Unirest.get("$host/instanceState/$instance").asString()
                 checkResponse(response)
-                jacksonMapper.readValue(response.body, RESTInterface.InstanceState::class.java)
+                jacksonMapper.readValue(response.body, InstanceState::class.java)
             },
-            errorValue = RESTInterface.InstanceState(),
+            errorValue = InstanceState(),
             resultCallback = onResult
         )
     }
 
-    override fun getInstanceChartData(instance: String, onResult: (RESTInterface.InstanceChartData, Throwable?) -> Unit) {
-        makeRequest<RESTInterface.InstanceChartData>(
+    override fun getInstanceChartData(instance: String, onResult: (InstanceChartData, Throwable?) -> Unit) {
+        makeRequest<InstanceChartData>(
             request = {
                 val response = Unirest.get("$host/instanceChartData/$instance").asString()
                 checkResponse(response)
                 // Gson doesn't deserialize this properly, creates map<string,double> instead of map<long,double>
                 // So use jackson here.
-                jacksonMapper.readValue(response.body, RESTInterface.InstanceChartData::class.java)
+                jacksonMapper.readValue(response.body, InstanceChartData::class.java)
             },
-            errorValue = RESTInterface.InstanceChartData(),
+            errorValue = InstanceChartData(),
             resultCallback = onResult
         )
     }

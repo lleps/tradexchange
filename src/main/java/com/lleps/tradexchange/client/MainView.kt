@@ -1,5 +1,8 @@
 package com.lleps.tradexchange.client
 
+import com.lleps.tradexchange.Candle
+import com.lleps.tradexchange.Operation
+import com.lleps.tradexchange.TradeEntry
 import javafx.application.Platform
 import javafx.beans.property.SimpleObjectProperty
 import javafx.collections.FXCollections
@@ -17,8 +20,6 @@ import javafx.scene.paint.Color
  * through setters passing bulk data.
  */
 class MainView {
-    data class TradeEntry(val id: Int = 0, val buy: Double = 0.0, val sell: Double = 0.0, val amount: Double = 0.0)
-
     private lateinit var chart: FullChart
     private lateinit var outputPane: TextArea
     private lateinit var executeButton: Button
@@ -95,18 +96,14 @@ class MainView {
     }
 
     fun setChart(
-        candles: List<FullChart.Candle>,
-        operations: List<FullChart.Operation>,
+        candles: List<Candle>,
+        operations: List<Operation>,
         priceIndicators: Map<String, Map<Long, Double>>,
         extraIndicators: Map<String, Map<String, Map<Long, Double>>>) {
         if (chart.priceData == candles &&
             chart.operations == operations &&
             chart.priceIndicators == priceIndicators &&
             chart.extraIndicators == extraIndicators) return
-        println("priceData: ${chart.priceData == candles}")
-        println("operations: ${chart.operations == operations}")
-        println("priceIndicators: ${chart.priceIndicators == priceIndicators}")
-        println("extraIndicators: ${chart.extraIndicators == extraIndicators}")
         chart.priceData = candles
         chart.operations = operations
         chart.priceIndicators = priceIndicators

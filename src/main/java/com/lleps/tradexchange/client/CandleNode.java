@@ -37,7 +37,7 @@ import javafx.scene.layout.Region;
 import javafx.scene.shape.Line;
 
 /** Candle node used for drawing a candle */
-public class Candle extends Group {
+public class CandleNode extends Group {
     private Line highLowLine = new Line();
     private Region bar = new Region();
     private String seriesStyleClass;
@@ -45,7 +45,7 @@ public class Candle extends Group {
     private boolean openAboveClose = true;
     private Tooltip tooltip = new Tooltip();
 
-    Candle(String seriesStyleClass, String dataStyleClass) {
+    CandleNode(String seriesStyleClass, String dataStyleClass) {
         setAutoSizeChildren(false);
         getChildren().addAll(highLowLine, bar);
         this.seriesStyleClass = seriesStyleClass;

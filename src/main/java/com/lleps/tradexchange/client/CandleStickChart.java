@@ -106,7 +106,7 @@ public class CandleStickChart extends XYChart<Number, Number> {
                 CandleStickExtraValues extra =
                         (CandleStickExtraValues)item.getExtraValue();
 
-                if (itemNode instanceof Candle && extra != null) {
+                if (itemNode instanceof CandleNode && extra != null) {
                     double close = yAxis.getDisplayPosition(extra.getClose());
                     double high = yAxis.getDisplayPosition(extra.getHigh());
                     double low = yAxis.getDisplayPosition(extra.getLow());
@@ -124,7 +124,7 @@ public class CandleStickChart extends XYChart<Number, Number> {
                         candleWidth = unit * 0.90;
                     }*/
                     // update candle
-                    Candle candle = (Candle)itemNode;
+                    CandleNode candle = (CandleNode)itemNode;
                     candle.update(close - y, high - y, low - y, candleWidth);
                     candle.updateTooltip(item.getYValue().doubleValue(),
                             extra.getClose(), extra.getHigh(),
@@ -259,11 +259,11 @@ public class CandleStickChart extends XYChart<Number, Number> {
                               int itemIndex) {
         Node candle = item.getNode();
         // check if candle has already been created
-        if (candle instanceof Candle) {
-            ((Candle)candle).setSeriesAndDataStyleClasses("series" + seriesIndex,
+        if (candle instanceof CandleNode) {
+            ((CandleNode)candle).setSeriesAndDataStyleClasses("series" + seriesIndex,
                     "data" + itemIndex);
         } else {
-            candle = new Candle("series" + seriesIndex, "data" + itemIndex);
+            candle = new CandleNode("series" + seriesIndex, "data" + itemIndex);
             item.setNode(candle);
         }
         return candle;

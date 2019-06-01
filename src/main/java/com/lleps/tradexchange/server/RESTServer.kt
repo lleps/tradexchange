@@ -1,9 +1,7 @@
 package com.lleps.tradexchange.server
 
 import com.google.gson.Gson
-import com.lleps.tradexchange.RESTInterface
-import com.lleps.tradexchange.client.FullChart
-import com.lleps.tradexchange.client.MainView
+import com.lleps.tradexchange.*
 import com.lleps.tradexchange.util.get
 import org.slf4j.LoggerFactory
 import org.springframework.web.bind.annotation.*
@@ -24,8 +22,8 @@ class RESTServer {
     private enum class Mode { BACKTEST, LIVE }
 
     // Server state
-    private var instanceState = emptyMap<String, RESTInterface.InstanceState>()
-    private val instanceChartData = mutableMapOf<String, RESTInterface.InstanceChartData>()
+    private var instanceState = emptyMap<String, InstanceState>()
+    private val instanceChartData = mutableMapOf<String, InstanceChartData>()
 
     init {
         // fill some default instances
@@ -40,8 +38,8 @@ class RESTServer {
         )
         Strategy.requiredInput.forEach { key, value -> input = input + (key to value.toString()) }
         instanceState = mapOf(
-            "default" to RESTInterface.InstanceState(input),
-            "default-1" to RESTInterface.InstanceState(input)
+            "default" to InstanceState(input),
+            "default-1" to InstanceState(input)
         )
 
         /* // TODO: Fix logger
@@ -56,14 +54,14 @@ class RESTServer {
     fun getInstances(): List<String> = instanceState.keys.toList()
 
     @RequestMapping("/instanceState/{instance}")
-    fun getInstanceState(@PathVariable instance: String): RESTInterface.InstanceState {
-        return instanceState[instance]?.copy() ?: RESTInterface.InstanceState()
+    fun getInstanceState(@PathVariable instance: String): InstanceState {
+        return instanceState[instance]?.copy() ?: InstanceState()
     }
 
     @RequestMapping("/instanceChartData/{instance}")
-    fun getInstanceChartData(@PathVariable instance: String): RESTInterface.InstanceChartData {
+    fun getInstanceChartData(@PathVariable instance: String): InstanceChartData {
         LOGGER.info(Gson().toJson(instanceChartData[instance]?.copy()))
-        return instanceChartData[instance]?.copy() ?: RESTInterface.InstanceChartData()
+        return instanceChartData[instance]?.copy() ?: InstanceChartData()
     }
 
     @PostMapping("/updateInput/{instance}")
@@ -75,11 +73,11 @@ class RESTServer {
         LOGGER.info("Input: $input")
         val state = instanceState.getValue(instance)
         state.input = input
-        val trades = mutableListOf<MainView.TradeEntry>()
+        val trades = mutableListOf<TradeEntry>()
         startStrategyRunThread(instance,
             input = input,
             mode = Mode.BACKTEST,
-            onTrade = { buy, sell, amount -> trades.add(MainView.TradeEntry(1, buy, sell, amount)) },
+            onTrade = { buy, sell, amount -> trades.add(TradeEntry(1, buy, sell, amount)) },
             onFinish = { state.trades = trades })
     }
 
@@ -118,8 +116,8 @@ class RESTServer {
                 LOGGER.info("Starting backtesting $days-day for $pair... (period: ${period/60} min)")
                 val initialMoney = 1000.0
                 val initialCoins = 0.0
-                val chartOperations = mutableListOf<FullChart.Operation>()
-                val candles = mutableListOf<FullChart.Candle>()
+                val chartOperations = mutableListOf<Operation>()
+                val candles = mutableListOf<Candle>()
                 val priceIndicators = mutableMapOf<String, MutableMap<Long, Double>>()
                 val extraIndicators = mutableMapOf<String, MutableMap<String, MutableMap<Long, Double>>>()
                 val chartWriter = object : Strategy.ChartWriter {
@@ -171,7 +169,7 @@ class RESTServer {
                     val epoch = tick.beginTime.toEpochSecond()
                     val operations = strategy.onTick(i)
                     strategy.onDrawChart(chartWriter, epoch, i)
-                    candles.add(FullChart.Candle(
+                    candles.add(Candle(
                         epoch,
                         tick.openPrice.toDouble(),
                         tick.closePrice.toDouble(),
@@ -179,10 +177,10 @@ class RESTServer {
                         tick.minPrice.toDouble()))
                     chartOperations.addAll(operations.map { op ->
                         val type = if (op.type == Strategy.OperationType.BUY)
-                            FullChart.OperationType.BUY
+                            OperationType.BUY
                         else
-                            FullChart.OperationType.SELL
-                        FullChart.Operation(epoch, type, tick.closePrice.toDouble(), op.description)
+                            OperationType.SELL
+                        Operation(epoch, type, tick.closePrice.toDouble(), op.description)
                     })
                     for (op in operations) {
                         if (op.type == Strategy.OperationType.SELL) {
@@ -208,7 +206,7 @@ class RESTServer {
                 LOGGER.info(" ______________________________________________________ ")
 
                 // Update view
-                val chartData = instanceChartData.getOrPut(instance) { RESTInterface.InstanceChartData() }
+                val chartData = instanceChartData.getOrPut(instance) { InstanceChartData() }
                 chartData.candles = if (plotChart >= 1) candles else emptyList()
                 chartData.operations = if (plotChart >= 1) chartOperations else emptyList()
                 chartData.priceIndicators = if (plotChart >= 1) priceIndicators else emptyMap()

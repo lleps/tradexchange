@@ -1,5 +1,8 @@
 package com.lleps.tradexchange.client
 
+import com.lleps.tradexchange.Candle
+import com.lleps.tradexchange.Operation
+import com.lleps.tradexchange.OperationType
 import com.lleps.tradexchange.server.PoloniexBacktestExchange
 import com.lleps.tradexchange.util.hackTooltipStartTiming
 import javafx.application.Application
@@ -35,22 +38,6 @@ class FullChart : BorderPane() {
             override fun fromString(string: String): Number = TODO()
         }
     }
-
-    // this classes should be serializable (i.e default constructor)
-    data class Candle(
-        val timestamp: Long = 0L,
-        val open: Double = 0.0,
-        val close: Double = 0.0,
-        val high: Double = 0.0,
-        val low: Double = 0.0
-    )
-    enum class OperationType { BUY, SELL }
-    data class Operation(
-        val timestamp: Long = 0L,
-        val type: OperationType = OperationType.BUY,
-        val price: Double = 0.0,
-        val description: String? = null
-    )
 
     private val nodeHBox = VBox(-10.0)
     private lateinit var priceChart: CandleStickChart
