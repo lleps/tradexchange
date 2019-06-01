@@ -93,4 +93,16 @@ class RESTClient(private val host: String = "http://localhost:8080") : RESTInter
             resultCallback = onResult
         )
     }
+
+    override fun createInstance(instance: String, onResult: (Unit, Throwable?) -> Unit) {
+        makeRequest(
+            request = {
+                val response = Unirest.put("$host/createInstance/$instance").asString()
+                checkResponse(response)
+                Unit
+            },
+            errorValue = Unit,
+            resultCallback = onResult
+        )
+    }
 }

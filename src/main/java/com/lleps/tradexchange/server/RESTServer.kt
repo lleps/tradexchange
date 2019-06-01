@@ -24,22 +24,22 @@ class RESTServer {
     // Server state
     private var instanceState = emptyMap<String, InstanceState>()
     private val instanceChartData = mutableMapOf<String, InstanceChartData>()
+    private var defaultInput = mapOf(
+        "pair" to "USDT_ETH",
+        "period" to "300",
+        "days" to "7-0",
+        "initialMoney" to "1000.0",
+        "initialCoins" to "0.0",
+        "plotChart" to "3"
+    )
 
     init {
         // fill some default instances
         // should instead load from some db.
-        var input = mapOf(
-            "pair" to "USDT_ETH",
-            "period" to "300",
-            "days" to "7-0",
-            "initialMoney" to "1000.0",
-            "initialCoins" to "0.0",
-            "plotChart" to "3"
-        )
-        Strategy.requiredInput.forEach { key, value -> input = input + (key to value.toString()) }
+        Strategy.requiredInput.forEach { key, value -> defaultInput = defaultInput + (key to value.toString()) }
         instanceState = mapOf(
-            "default" to InstanceState(input),
-            "default-1" to InstanceState(input)
+            "default" to InstanceState(defaultInput),
+            "default-1" to InstanceState(defaultInput)
         )
 
         /* // TODO: Fix logger
@@ -50,23 +50,28 @@ class RESTServer {
         })*/
     }
     
-    @RequestMapping("/instances")
+    @GetMapping("/instances")
     fun getInstances(): List<String> = instanceState.keys.toList()
 
-    @RequestMapping("/instanceState/{instance}")
+    @GetMapping("/instanceState/{instance}")
     fun getInstanceState(@PathVariable instance: String): InstanceState {
         return instanceState[instance]?.copy() ?: InstanceState()
     }
 
-    @RequestMapping("/instanceChartData/{instance}")
+    @GetMapping("/instanceChartData/{instance}")
     fun getInstanceChartData(@PathVariable instance: String): InstanceChartData {
-        LOGGER.info(Gson().toJson(instanceChartData[instance]?.copy()))
         return instanceChartData[instance]?.copy() ?: InstanceChartData()
     }
 
     @PostMapping("/updateInput/{instance}")
     fun updateInput(@PathVariable instance: String, @RequestBody input: Map<String, String>) {
         onInputChanged(instance, input)
+    }
+
+    @PutMapping("/createInstance/{instance}")
+    fun createInstance(@PathVariable instance: String) {
+        if (instanceState.containsKey(instance)) error("instance with name '$instance' already exists.")
+        instanceState = instanceState + (instance to InstanceState(defaultInput))
     }
 
     private fun onInputChanged(instance: String, input: Map<String, String>) {
