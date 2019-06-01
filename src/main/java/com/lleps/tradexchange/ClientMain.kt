@@ -72,8 +72,8 @@ class ClientMain : Application() {
 
         // Create scene
         val root = BorderPane(anchor)
-        root.stylesheets.add("JMetroBase.css")
         root.stylesheets.add("JMetroLightTheme.css")
+        root.stylesheets.add("CustomStyles.css")
         stage.scene = Scene(root)
         stage.icons.add(Image("money-icon.png"))
         stage.title = "Tradexchange"

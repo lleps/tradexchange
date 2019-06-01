@@ -164,9 +164,9 @@ class MainView {
                             style = ""
                         } else {
                             val profit = (item.sell-item.buy) * item.amount
-                            val color = if (profit <= 0.0) Color.ORANGERED else Color.GREEN
                             text = "$%.3f".format(profit)
-                            textFill = color
+                            val color = if (profit <= 0.0) "orangered" else "lightgreen"
+                            style = "-fx-background-color:$color"
                         }
                     }
                 } }

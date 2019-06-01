@@ -1,0 +1,14 @@
+/** The last CSS added. To override properties. */
+.table-view .column-header {
+     -fx-font-size: 13px;
+     -fx-padding: 1 1 1 1;
+}
+
+.table-view .table-cell{
+    -fx-font-size: 13px;
+    -fx-padding: 1 1 1 1;
+}
+
+.table-view .column-header .label {
+    -fx-padding: 1 1 1 1;
+}
