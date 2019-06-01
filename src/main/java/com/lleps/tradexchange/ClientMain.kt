@@ -2,6 +2,8 @@ package com.lleps.tradexchange
 
 import com.lleps.tradexchange.client.MainView
 import com.lleps.tradexchange.client.RESTClient
+import com.lleps.tradexchange.util.loadFrom
+import com.lleps.tradexchange.util.saveTo
 import javafx.application.Application
 import javafx.application.Platform
 import javafx.event.EventHandler
@@ -19,20 +21,47 @@ import java.io.StringWriter
 import javafx.scene.control.ButtonType
 import javafx.scene.control.Alert
 
-
-
 class ClientMain : Application() {
     private lateinit var tabPane: TabPane
     private val tabs = mutableMapOf<String, Tab>()
     private val views = mutableMapOf<String, MainView>()
-    private val connection: RESTInterface = RESTClient(args[0])
+    private lateinit var connection: RESTClient
     private val gotInput = mutableMapOf<String, Unit>() // to fetch input only once per instance
 
+    class ClientData(val host: String = "http://localhost:8080")
+
+    private var clientData = ClientData()
+    private lateinit var stage: Stage
+
     override fun start(stage: Stage) {
+        this.stage = stage
+        clientData = loadFrom<ClientData>("tradexchange_data.json") ?: ClientData()
+        connection = RESTClient(clientData.host)
         initUpdaterThread()
 
         // Controls
-        val selectServerButton = Button("Set host")
+        val selectServerButton = Button("Set host").apply {
+            setOnAction {
+                val textInput = TextInputDialog(connection.host)
+                textInput.title = "Set host (http://ip:port)"
+                textInput.headerText = null
+                textInput.dialogPane.contentText = ""
+                textInput.showAndWait()
+                    .ifPresent { response ->
+                        clientData = ClientData(host = response)
+                        clientData.saveTo("tradexchange_data.json")
+                        connection.host = response
+                        Platform.runLater {
+                            stage.title = "Tradexchange (at ${clientData.host})"
+                            tabPane.tabs.clear()
+                            tabs.clear()
+                            views.clear()
+                            gotInput.clear()
+                            fetchInstances()
+                        }
+                    }
+            }
+        }
         val createInstanceButton = Button("Add instance").apply {
             setOnAction {
                 val textInput = TextInputDialog("new-instance")
@@ -80,10 +109,14 @@ class ClientMain : Application() {
         root.stylesheets.add("CustomStyles.css")
         stage.scene = Scene(root)
         stage.icons.add(Image("money-icon.png"))
-        stage.title = "Tradexchange"
+        stage.title = "Tradexchange (at ${clientData.host})"
         stage.onCloseRequest = EventHandler<WindowEvent> { Platform.exit(); System.exit(0) }
         stage.isMaximized = true
+        fetchInstances()
+        stage.show()
+    }
 
+    private fun fetchInstances() {
         // Fetch data
         connection.getInstances { instances, throwable ->
             if (throwable != null) {
@@ -92,7 +125,6 @@ class ClientMain : Application() {
             }
             for (instance in instances) registerTab(instance)
         }
-        stage.show()
     }
 
     private fun registerTab(instance: String, select: Boolean = false) {

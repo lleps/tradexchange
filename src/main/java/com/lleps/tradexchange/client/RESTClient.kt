@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory
 import java.util.*
 import java.util.concurrent.Executors
 
-class RESTClient(private val host: String = "http://localhost:8080") : RESTInterface {
+class RESTClient(var host: String = "http://localhost:8080") : RESTInterface {
     companion object {
         private val LOGGER = LoggerFactory.getLogger(RESTClient::class.java)
     }
