@@ -1,14 +1,16 @@
 package com.lleps.tradexchange.server
 
-import ch.qos.logback.classic.Logger
-import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.core.AppenderBase
 import com.lleps.tradexchange.*
 import com.lleps.tradexchange.util.get
+import com.lleps.tradexchange.util.loadFrom
+import com.lleps.tradexchange.util.saveTo
 import org.slf4j.LoggerFactory
 import org.springframework.web.bind.annotation.*
 import org.ta4j.core.BaseTimeSeries
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.Paths
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.time.ZonedDateTime
@@ -24,9 +26,12 @@ class RESTServer {
     private enum class Mode { BACKTEST, LIVE }
 
     // Server state
-    private var instanceState = emptyMap<String, InstanceState>()
+    private data class InstancesWrapper(var list: List<String> = emptyList())
+    private val loadedInstances = mutableMapOf<String, Unit>()
+    private val instances: InstancesWrapper
+    private val instanceState = mutableMapOf<String, InstanceState>()
     private val instanceChartData = mutableMapOf<String, InstanceChartData>()
-    private var defaultInput = mapOf(
+    private val defaultInput = mutableMapOf(
         "pair" to "USDT_ETH",
         "period" to "300",
         "days" to "7-0",
@@ -36,63 +41,57 @@ class RESTServer {
     )
 
     init {
-        // fill some default instances
-        // should instead load from some db.
-        Strategy.requiredInput.forEach { key, value -> defaultInput = defaultInput + (key to value.toString()) }
-        instanceState = mapOf(
-            "default" to InstanceState(defaultInput),
-            "default-1" to InstanceState(defaultInput)
-        )
-
-        // TODO: server errors and warnings should be logged to ALL instances!
-        val appender = object : AppenderBase<ILoggingEvent>() {
-            override fun append(e: ILoggingEvent) {
-                // to which? hmm. nah, its bad dud.
-                // maybe use the interface.
-                // but, since its devoriented, i want
-                // to see raw output. not fancy stuff...
-                // ok. get instance programatically.
-                val message = e.message
-                println("FROM APPENDER: $message")
-            }
-
-        }
-        val rootAppLogger = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger
-        rootAppLogger.addAppender(appender)
+        File("data").mkdir()
+        File("data/instances").mkdir()
+        Strategy.requiredInput.forEach { key, value -> defaultInput[key] = value.toString() }
+        instances = loadInstanceList()
     }
-    
+
     @GetMapping("/instances")
-    fun getInstances(): List<String> = instanceState.keys.toList()
+    fun getInstances(): List<String> = instances.list.toList()
 
     @GetMapping("/instanceState/{instance}")
     fun getInstanceState(@PathVariable instance: String): InstanceState {
-        return instanceState[instance]?.copy() ?: InstanceState()
+        loadInstanceIfNecessary(instance)
+        return instanceState.getValue(instance).copy()
     }
 
     @GetMapping("/instanceChartData/{instance}")
     fun getInstanceChartData(@PathVariable instance: String): InstanceChartData {
-        return instanceChartData[instance]?.copy() ?: InstanceChartData()
+        loadInstanceIfNecessary(instance)
+        return instanceChartData.getValue(instance).copy()
     }
 
     @PostMapping("/updateInput/{instance}")
     fun updateInput(@PathVariable instance: String, @RequestBody input: Map<String, String>) {
+        loadInstanceIfNecessary(instance)
         onInputChanged(instance, input)
     }
 
     @PutMapping("/createInstance/{instance}")
     fun createInstance(@PathVariable instance: String) {
         if (instanceState.containsKey(instance)) error("instance with name '$instance' already exists.")
-        instanceState = instanceState + (instance to InstanceState(defaultInput))
+        instanceState[instance] = InstanceState(defaultInput)
+        instanceChartData[instance] = InstanceChartData()
+        instances.list = instances.list + instance
+        loadedInstances[instance] = Unit
+        saveInstance(instance)
+        saveInstanceList()
     }
 
     @DeleteMapping("/deleteInstance/{instance}")
     fun deleteInstance(@PathVariable instance: String) {
         if (!instanceState.containsKey(instance)) error("instance with name '$instance' does not exists.")
-        instanceState = instanceState - instance
+        instanceState.remove(instance)
+        instanceChartData.remove(instance)
+        instances.list = instances.list - instance
+        loadedInstances.remove(instance)
+        deleteInstanceFiles(instance)
+        saveInstanceList()
     }
 
     private fun onInputChanged(instance: String, input: Map<String, String>) {
-        LOGGER.info("$instance: Input: $input")
+        LOGGER.info("Input: $input")
         val state = instanceState.getValue(instance)
         state.input = input
         val trades = mutableListOf<TradeEntry>()
@@ -242,8 +241,41 @@ class RESTServer {
                 chartData.priceIndicators = if (plotChart >= 1) priceIndicators else emptyMap()
                 chartData.extraIndicators = if (plotChart >= 1) extraIndicators else emptyMap()
                 onFinish()
+                saveInstance(instance)
             }
             Mode.LIVE -> TODO("Implement live mode")
         }
+    }
+
+
+    // Persistence
+    private fun loadInstanceList(): InstancesWrapper {
+        return loadFrom<InstancesWrapper>("data/instances/list.json") ?: InstancesWrapper()
+    }
+
+    private fun saveInstanceList() {
+        instances.saveTo("data/instances/list.json")
+    }
+
+    private fun loadInstanceIfNecessary(instance: String) {
+        if (!loadedInstances.containsKey(instance)) {
+            val state = loadFrom<InstanceState>("data/instances/state-$instance.json") ?: error("instance: $instance")
+            val chartData = loadFrom<InstanceChartData>("data/instances/chartData-$instance.json") ?: error("instance: $instance")
+            instanceState[instance] = state
+            instanceChartData[instance] = chartData
+            loadedInstances[instance] = Unit
+        }
+    }
+
+    private fun saveInstance(instance: String) {
+        val state = instanceState.getValue(instance)
+        val chartData = instanceChartData.getValue(instance)
+        state.saveTo("data/instances/state-$instance.json")
+        chartData.saveTo("data/instances/chartData-$instance.json")
+    }
+
+    private fun deleteInstanceFiles(instance: String) {
+        Files.delete(Paths.get("data/instances/state-$instance.json"))
+        Files.delete(Paths.get("data/instances/chartData-$instance.json"))
     }
 }

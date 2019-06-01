@@ -35,7 +35,8 @@ class PoloniexBacktestExchange(
     init {
         val from = fromEpoch - (warmUpTicks * period)
         File("data").mkdir()
-        val file = "data/cache-pol-$pair-$period-${from/3600}.json"
+        File("data/cache").mkdir()
+        val file = "data/cache/pol-$pair-$period-${from/3600}.json"
         LOGGER.info("Trying to load data from '$file'...")
         val cached = loadFrom<ChartDataWrapper>(file)
         if (cached == null) {

@@ -48,7 +48,6 @@ class ClientMain : Application() {
                 textInput.dialogPane.contentText = ""
                 textInput.showAndWait()
                     .ifPresent { response ->
-                        waitingToAcceptError = false
                         clientData = ClientData(host = response)
                         clientData.saveTo("tradexchange_data.json")
                         connection.host = response
@@ -198,11 +197,8 @@ class ClientMain : Application() {
                 root.add(textArea, 0, 1)
                 dialogPane.expandableContent = root
             }
-            dialog.setOnHidden {
-                waitingToAcceptError = false
-                println("error done!")
-            }
             dialog.showAndWait()
+            waitingToAcceptError = false
         }
     }
 
