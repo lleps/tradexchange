@@ -39,7 +39,8 @@ class Strategy(
     class Operation(val type: OperationType,
                     val amount: Double,
                     val description: String? = null,
-                    val buyPrice: Double = 0.0/* used only for Type.SELL to know the trade profit */)
+                    val buyPrice: Double = 0.0/* used only for Type.SELL to know the trade profit */,
+                    val code: Int = 0)
 
     var tradeCount = 0
         private set
@@ -94,6 +95,7 @@ class Strategy(
     private val openTradesCount = input.getValue("strategy.openTradesCount").toInt()
 
     var sellOnly = false
+    private var buyNumber = 1
 
     private fun shouldOpen(i: Int, epoch: Long): Boolean {
         return rsi[i] < 40f //&& rsi[i] < 60f
@@ -152,7 +154,7 @@ class Strategy(
                 if (shouldOpen(i, epoch)) {
                     val amountOfMoney = (exchange.moneyBalance) / (openTradesCount - openTrades.size).toDouble()
                     val amountOfCoins = amountOfMoney / close[i]
-                    val trade = OpenTrade(close[i], amountOfCoins, epoch, Random().nextInt(2000))
+                    val trade = OpenTrade(close[i], amountOfCoins, epoch, buyNumber++)
                     exchange.buy(amountOfCoins, close[i]) // TODO: the runner should do this
                     boughtSomething = true
                     openTrades = openTrades + trade
@@ -187,7 +189,7 @@ class Strategy(
                     (epoch - trade.epoch) / 60,
                     (epoch - trade.epoch) / period
                 )
-                operations = operations + Operation(OperationType.SELL, trade.amount, tooltip, trade.buyPrice)
+                operations = operations + Operation(OperationType.SELL, trade.amount, tooltip, trade.buyPrice, trade.code)
                 openTrades = openTrades - trade
                 tradeCount++
             }

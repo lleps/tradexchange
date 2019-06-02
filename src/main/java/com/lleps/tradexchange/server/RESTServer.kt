@@ -105,7 +105,7 @@ class RESTServer {
         startStrategyRunThread(instance,
             input = input,
             mode = Mode.BACKTEST,
-            onTrade = { buy, sell, amount -> trades.add(TradeEntry(1, buy, sell, amount)) },
+            onTrade = { buy, sell, amount, code -> trades.add(TradeEntry(code, buy, sell, amount)) },
             onFinish = {
                 state.trades = trades
                 if (trades.isNotEmpty()) {
@@ -119,7 +119,7 @@ class RESTServer {
         instance: String,
         input: Map<String, String>,
         mode: Mode,
-        onTrade: (buy: Double, sell: Double, amount: Double) -> Unit,
+        onTrade: (buy: Double, sell: Double, amount: Double, code: Int) -> Unit,
         onFinish: () -> Unit
     ) {
         val strategyOutput = object : Strategy.OutputWriter {
@@ -153,7 +153,7 @@ class RESTServer {
         mode: Mode,
         input: Map<String, String>,
         strategyOutput: Strategy.OutputWriter,
-        onTrade: (buy: Double, sell: Double, amount: Double) -> Unit,
+        onTrade: (buy: Double, sell: Double, amount: Double, code: Int) -> Unit,
         onFinish: () -> Unit
     ) {
         // main data
@@ -265,7 +265,7 @@ class RESTServer {
                     })
                     for (op in operations) {
                         if (op.type == Strategy.OperationType.SELL) {
-                            onTrade(op.buyPrice, tick.closePrice.toDouble(), op.amount)
+                            onTrade(op.buyPrice, tick.closePrice.toDouble(), op.amount, op.code)
                         }
                     }
                 }
@@ -291,15 +291,6 @@ class RESTServer {
                 val bhCoinPercent = bhDifference * 100.0 / firstPrice
                 val tradeDifference = exchange.moneyBalance - initialMoney
                 val tradePercent = tradeDifference * 100.0 / initialMoney
-                // porcentaje q subio.
-                // valua 500$ vale $1000, subio 100% (500 es 100%, 100-50=50)
-                // initialPrice - 100%
-                // lo q subio   - x
-                // loqsubio*100/initial
-                // ejemplo:
-                // initialPrice= 200$
-                // loQsubio=50$
-
                 val stateString = "(%.1f%s vs %.1f%s)".format(tradePercent, "%", bhCoinPercent, "%")
                 state.statusText = stateString
                 state.statusPositiveness = if (tradePercent > 0) 1 else -1
