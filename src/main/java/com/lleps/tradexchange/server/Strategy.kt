@@ -75,28 +75,24 @@ class Strategy(
     private val obvIndicator = OnBalanceVolumeIndicator(series)
     private val obvIndicatorNormal = NormalizationIndicator(obvIndicator, 80)
 
-    private val openTradesCount = input.getValue("openTradesCount").toInt()
-
     // Strategy config
     companion object {
-        private val LOGGER = LoggerFactory.getLogger(Strategy::class.java)
         val requiredInput = mapOf(
-            "openTradesCount" to 5,
-            "tradeExpiry" to 12*5,
-            "marginToSell" to 1,
-            "buyCooldown" to 5,
-            "topLoss" to -10,
-            "sellBarrier1" to 1.0,
-            "sellBarrier2" to 3.0
+            "strategy.openTradesCount" to 5,
+            "strategy.tradeExpiry" to 12*5,
+            "strategy.buyCooldown" to 5,
+            "strategy.topLoss" to -10,
+            "strategy.sellBarrier1" to 1.0,
+            "strategy.sellBarrier2" to 3.0
         )
     }
 
-    private val tradeExpiry = input.getValue("tradeExpiry").toInt() // give up if can't meet the margin
-    private val marginToSell = input.getValue("marginToSell").toFloat()
-    private val buyCooldown = input.getValue("buyCooldown").toInt() // 4h. During cooldown won't buy anything
-    private val topLoss = input.getValue("topLoss").toFloat()
-    private val sellBarrier1 = input.getValue("sellBarrier1").toFloat()
-    private val sellBarrier2 = input.getValue("sellBarrier2").toFloat()
+    private val tradeExpiry = input.getValue("strategy.tradeExpiry").toInt() // give up if can't meet the margin
+    private val buyCooldown = input.getValue("strategy.buyCooldown").toInt() // 4h. During cooldown won't buy anything
+    private val topLoss = input.getValue("strategy.topLoss").toFloat()
+    private val sellBarrier1 = input.getValue("strategy.sellBarrier1").toFloat()
+    private val sellBarrier2 = input.getValue("strategy.sellBarrier2").toFloat()
+    private val openTradesCount = input.getValue("strategy.openTradesCount").toInt()
 
     private fun shouldOpen(i: Int, epoch: Long): Boolean {
         return rsi[i] < 40f //&& rsi[i] < 60f

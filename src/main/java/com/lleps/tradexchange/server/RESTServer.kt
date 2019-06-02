@@ -16,14 +16,14 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import java.time.*
 import kotlin.concurrent.thread
+import java.io.PrintWriter
+import java.io.StringWriter
+
+
 
 /** Server main class. Makes backtesting, handles http requests, etc. */
 @RestController
 class RESTServer {
-    companion object {
-        private val LOGGER = LoggerFactory.getLogger(RESTServer::class.java)
-    }
-
     private enum class Mode { BACKTEST, LIVE }
 
     // Server state
@@ -35,12 +35,15 @@ class RESTServer {
     private val defaultInput = mutableMapOf(
         "pair" to "USDT_ETH",
         "period" to "300",
-        "backtestCsv" to "file.csv",
-        "warmupTicks" to "20",
-        "days" to "7-0",
         "initialMoney" to "1000.0",
         "initialCoins" to "0.0",
-        "plotChart" to "3"
+        "warmupTicks" to "20",
+        "plotChart" to "3",
+        "bt.source" to "csv",
+        "bt.csv.file" to "file.csv",
+        "bt.csv.startDate" to "2000-1-1",
+        "bt.csv.endDate" to "2030-1-1",
+        "bt.poloniex.dayRange" to "7-0"
     )
 
     init {
@@ -112,11 +115,22 @@ class RESTServer {
         onTrade: (buy: Double, sell: Double, amount: Double) -> Unit,
         onFinish: () -> Unit
     ) {
+        val strategyOutput = object : Strategy.OutputWriter {
+            override fun write(string: String) {
+                LOGGER.info("$instance: $string")
+                val state = instanceState.getValue(instance)
+                state.output += "$string\n"
+            }
+        }
         thread(start = true, isDaemon = true) {
             try {
-                runStrategy(instance, mode, input, onTrade, onFinish)
+                runStrategy(instance, mode, input, strategyOutput, onTrade, onFinish)
             } catch (e: Exception) {
                 LOGGER.info("$instance: error: $e", e)
+                strategyOutput.write("error running strategy: $e")
+                val sw = StringWriter()
+                e.printStackTrace(PrintWriter(sw))
+                strategyOutput.write(sw.toString())
                 onFinish()
             }
         }
@@ -126,30 +140,29 @@ class RESTServer {
         instance: String,
         mode: Mode,
         input: Map<String, String>,
+        strategyOutput: Strategy.OutputWriter,
         onTrade: (buy: Double, sell: Double, amount: Double) -> Unit,
         onFinish: () -> Unit
     ) {
+        // main data
         val pair = input["pair"] ?: error("pair")
-        val days = input["days"]?.split("-")?.get(0)?.toInt() ?: error("days")
-        val daysLimit = input["days"]?.split("-")?.get(1)?.toInt() ?: error("days")
         val period = input["period"]?.toLong() ?: error("period")
+        val warmupTicks = input.getValue("warmupTicks").toInt()
         val plotChart = input["plotChart"]?.toInt() ?: error("plotIndicators")
         val initialMoney = input.getValue("initialMoney").toDouble()
         val initialCoins = input.getValue("initialCoins").toDouble()
-        val backtestCsv = input.getValue("backtestCsv")
-        val warmupTicks = input.getValue("warmupTicks").toInt()
-        val state = instanceState.getValue(instance)
-        val strategyOutput = object : Strategy.OutputWriter {
-            override fun write(string: String) {
-                LOGGER.info("$instance: $string")
-                state.output += "$string\n"
-            }
-        }
+
+        // bt data
+        val btSource = input.getValue("bt.source")
+        val btCsvFile = input.getValue("bt.csv.file")
+        val btCsvDateStart = input.getValue("bt.csv.startDate")
+        val btCsvDateEnd = input.getValue("bt.csv.endDate")
+        val btPolDays0 = input.getValue("bt.poloniex.dayRange").split("-")[0].toInt()
+        val btPolDays1 = input.getValue("bt.poloniex.dayRange").split("-")[1].toInt()
         when (mode) {
             Mode.BACKTEST -> {
                 // Set up
-                strategyOutput.write("Starting backtesting $days-day for $pair... (period: ${period/60} min)")
-
+                strategyOutput.write("Starting backtesting $btPolDays0-day for $pair... (period: ${period/60} min)")
                 val chartOperations = mutableListOf<Operation>()
                 val candles = mutableListOf<Candle>()
                 val priceIndicators = mutableMapOf<String, MutableMap<Long, Double>>()
@@ -171,19 +184,23 @@ class RESTServer {
                     }
                 }
 
-                // Fetch all ticks
+                // Build backtest ticks
                 val exchange = PoloniexBacktestExchange(
                     pair = pair,
                     period = period,
-                    fromEpoch = ZonedDateTime.now(ZoneOffset.UTC).minusDays(days.toLong()).toEpochSecond(),
+                    fromEpoch = ZonedDateTime.now(ZoneOffset.UTC).minusDays(btPolDays0.toLong()).toEpochSecond(),
                     warmUpTicks = warmupTicks,
                     initialMoney = initialMoney,
                     initialCoins = initialCoins)
                 val allTicks = mutableListOf<Tick>()
-                if (backtestCsv != "") {
-                    strategyOutput.write("Parse ticks from $backtestCsv at period ${period.toInt()}")
+                if (btSource == "csv") {
+                    strategyOutput.write("Parse ticks from $btCsvFile at period ${period.toInt()}")
                     try {
-                        val ticks = parseCandlesFromCSV(backtestCsv, period.toInt())
+                        val ticks = parseCandlesFromCSV(
+                            file = btCsvFile,
+                            periodSeconds = period.toInt(),
+                            startDate = LocalDate.parse(btCsvDateStart).atStartOfDay(),
+                            endDate = LocalDate.parse(btCsvDateEnd).atStartOfDay())
                         allTicks.addAll(ticks)
                         strategyOutput.write("Parsed ${allTicks.size} ticks from CSV.")
                         println(ticks)
@@ -191,17 +208,17 @@ class RESTServer {
                         strategyOutput.write("exception reading csv: $e")
                         return
                     }
-                } else {
+                } else if (btSource == "poloniex") {
                     strategyOutput.write("Using data from poloniex server...")
                     allTicks.addAll(exchange.warmUpHistory.toTypedArray())
-                    val tickLimitEpoch = LocalDateTime.now().minusDays(daysLimit.toLong()).toEpochSecond(ZoneOffset.UTC)
+                    val tickLimitEpoch = LocalDateTime.now().minusDays(btPolDays1.toLong()).toEpochSecond(ZoneOffset.UTC)
                     while (true) {
                         // ignore daysLimit.
                         val tick = exchange.fetchTick() ?: break
                         if (tick.beginTime.toEpochSecond() >= tickLimitEpoch) break
                         allTicks += tick
                     }
-                }
+                } else error("invalid bt.source. Valid: 'csv' or 'poloniex'")
 
                 // Execute strategy
                 val timeSeries = BaseTimeSeries(allTicks)
@@ -214,7 +231,6 @@ class RESTServer {
                     exchange = exchange,
                     input = input
                 )
-
                 for (i in warmupTicks..timeSeries.endIndex) {
                     val tick = timeSeries.getTick(i)
                     val epoch = tick.beginTime.toEpochSecond()
@@ -269,25 +285,7 @@ class RESTServer {
         }
     }
 
-    private fun parseCandlesFromCSV(file: String, periodSeconds: Int): List<Tick> {
-        val lines = Files.readAllLines(Paths.get(file))
-        lines.removeAt(0)
-        val result = mutableListOf<Tick>()
-        for (line in lines) {
-            val parts = line.split(",")
-            val tick = BaseTick(
-                Duration.ofSeconds(periodSeconds.toLong()),
-                ZonedDateTime.ofInstant(Instant.ofEpochMilli(parts[0].toLong()), ZoneOffset.UTC),
-                Decimal.valueOf(parts[1].toDouble()), // open
-                Decimal.valueOf(parts[3].toDouble()), // high
-                Decimal.valueOf(parts[4].toDouble()), // low
-                Decimal.valueOf(parts[2].toDouble()), // close
-                Decimal.valueOf(parts[5].toDouble()) // volume
-            )
-            result.add(tick)
-        }
-        return result
-    }
+
 
     // Persistence
     private fun loadInstanceList(): InstancesWrapper {
@@ -318,5 +316,55 @@ class RESTServer {
     private fun deleteInstanceFiles(instance: String) {
         Files.delete(Paths.get("data/instances/state-$instance.json"))
         Files.delete(Paths.get("data/instances/chartData-$instance.json"))
+    }
+
+    companion object {
+        private val LOGGER = LoggerFactory.getLogger(RESTServer::class.java)
+
+        @JvmStatic
+        fun main(args: Array<String>) {
+            val candles = parseCandlesFromCSV(
+                file = "../Bitfinex-historical-data/BTCUSD/Candles_1m/2018/merged.csv",
+                periodSeconds = 60,
+                startDate = LocalDateTime.of(2018, 5, 1, 0, 0),
+                endDate = LocalDateTime.of(2018, 10, 2, 0, 0)
+            )
+            println("candles size: ${candles.size}")
+            println(candles.map { it.endTime })
+        }
+
+        private fun parseCandlesFromCSV(
+            file: String,
+            periodSeconds: Int,
+            startDate: LocalDateTime? = null,
+            endDate: LocalDateTime? = null
+        ): List<Tick> {
+            val startEpochMilli = (startDate?.toEpochSecond(ZoneOffset.UTC) ?: 0) * 1000
+            val endEpochMilli = (endDate?.toEpochSecond(ZoneOffset.UTC) ?: 0) * 1000
+            val result = ArrayList<Tick>(20000)
+            val duration = Duration.ofSeconds(periodSeconds.toLong())
+            var firstLine = true
+            for (line in Files.lines(Paths.get(file))) {
+                if (firstLine) { firstLine = false; continue }
+
+                // parse tick, check for time bounds
+                val parts = line.split(",")
+                val epoch = parts[0].toLong()
+                if (epoch < startEpochMilli) continue
+                else if (endEpochMilli in 1..(epoch - 1)) break
+
+                val tick = BaseTick(
+                    duration,
+                    ZonedDateTime.ofInstant(Instant.ofEpochMilli(epoch), ZoneOffset.UTC),
+                    Decimal.valueOf(parts[1].toDouble()), // open
+                    Decimal.valueOf(parts[3].toDouble()), // high
+                    Decimal.valueOf(parts[4].toDouble()), // low
+                    Decimal.valueOf(parts[2].toDouble()), // close
+                    Decimal.valueOf(parts[5].toDouble()) // volume
+                )
+                result.add(tick)
+            }
+            return result
+        }
     }
 }
