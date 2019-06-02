@@ -6,12 +6,14 @@ import com.lleps.tradexchange.TradeEntry
 import javafx.application.Platform
 import javafx.beans.property.SimpleObjectProperty
 import javafx.collections.FXCollections
+import javafx.geometry.Insets
 import javafx.geometry.Pos
 import javafx.scene.Parent
 import javafx.scene.control.*
 import javafx.scene.control.cell.PropertyValueFactory
-import javafx.scene.layout.AnchorPane
 import javafx.scene.layout.BorderPane
+import javafx.scene.layout.HBox
+import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
 import javafx.scene.paint.Color
 
@@ -27,6 +29,7 @@ class MainView {
     private lateinit var executeButton: Button
     private lateinit var tradeTableContainer: BorderPane
     private lateinit var inputPane: VBox
+    private lateinit var statusLabel: Label
     private val inputUIElements = mutableListOf<Pair<Label, TextField>>()
 
     private var onExecute: (Map<String, String>) -> Unit = {}
@@ -34,12 +37,15 @@ class MainView {
     fun initJavaFxContent(): Parent {
         // Main components
         chart = FullChart()
-        val controlPane = VBox(5.0)
+        val controlPane = VBox(15.0).apply { this.padding = Insets(5.0, 10.0, 1.0, 1.0) }
         val mainPane = BorderPane(chart, null, controlPane, null, null)
         outputPane = TextArea()
 
         // Input
         inputPane = VBox(-3.0)
+
+        // Execute and status label
+        statusLabel = Label("Not initialized")
         executeButton = Button("Execute").apply {
             setOnAction { onExecute(readInput()) }
         }
@@ -53,7 +59,7 @@ class MainView {
 
         outputPane.prefWidth = 400.0
         controlPane.children.add(inputPane)
-        controlPane.children.add(executeButton)
+        controlPane.children.add(HBox(5.0, statusLabel, executeButton).apply { alignment = Pos.CENTER_RIGHT })
         controlPane.children.add(tabPane)
         return mainPane
     }
@@ -74,6 +80,27 @@ class MainView {
         }
     }
 
+    private fun updateInput() {
+        val keyword = "source"
+        var prefix = "none"
+        var currentValue = "none"
+        for ((label, field) in inputUIElements) {
+            if (label.text.endsWith(keyword)) {
+                prefix = label.text.replace(keyword, "")
+                currentValue = field.text
+            } else if (label.text.startsWith(prefix)){
+                val shouldBeVisible = label.text.startsWith("$prefix$currentValue")
+                label.isDisable = !shouldBeVisible
+                field.isDisable = !shouldBeVisible
+            }
+        }
+    }
+
+    fun setStatusLabel(status: String, positive: Boolean) {
+        statusLabel.textFill = if (positive) Color.LIGHTGREEN else Color.RED
+        statusLabel.text = status
+    }
+
     fun setInput(input: Map<String, Any>) {
         Platform.runLater {
             inputPane.children.clear()
@@ -81,9 +108,11 @@ class MainView {
             for ((itemName, itemDefaultValue) in input) {
                 val label = Label(itemName)
                 val field = TextField(itemDefaultValue.toString())
+                field.setOnKeyTyped { Platform.runLater { updateInput() } }
                 inputUIElements += Pair(label, field)
                 inputPane.children.add(BorderPane(null, null, field, null, label))
             }
+            updateInput()
         }
     }
 

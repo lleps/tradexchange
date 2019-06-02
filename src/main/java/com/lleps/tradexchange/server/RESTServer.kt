@@ -18,7 +18,7 @@ import java.time.*
 import kotlin.concurrent.thread
 import java.io.PrintWriter
 import java.io.StringWriter
-
+import java.time.format.DateTimeFormatter
 
 
 /** Server main class. Makes backtesting, handles http requests, etc. */
@@ -38,6 +38,7 @@ class RESTServer {
         "initialMoney" to "1000.0",
         "initialCoins" to "0.0",
         "warmupTicks" to "20",
+        "cooldownTicks" to "20",
         "plotChart" to "3",
         "bt.source" to "csv",
         "bt.csv.file" to "file.csv",
@@ -148,6 +149,7 @@ class RESTServer {
         val pair = input["pair"] ?: error("pair")
         val period = input["period"]?.toLong() ?: error("period")
         val warmupTicks = input.getValue("warmupTicks").toInt()
+        val cooldownTicks = input.getValue("cooldownTicks").toInt()
         val plotChart = input["plotChart"]?.toInt() ?: error("plotIndicators")
         val initialMoney = input.getValue("initialMoney").toDouble()
         val initialCoins = input.getValue("initialCoins").toDouble()
@@ -199,8 +201,8 @@ class RESTServer {
                         val ticks = parseCandlesFromCSV(
                             file = btCsvFile,
                             periodSeconds = period.toInt(),
-                            startDate = LocalDate.parse(btCsvDateStart).atStartOfDay(),
-                            endDate = LocalDate.parse(btCsvDateEnd).atStartOfDay())
+                            startDate = LocalDate.parse(btCsvDateStart, DateTimeFormatter.ISO_DATE).atStartOfDay(),
+                            endDate = LocalDate.parse(btCsvDateEnd, DateTimeFormatter.ISO_DATE).atStartOfDay())
                         allTicks.addAll(ticks)
                         strategyOutput.write("Parsed ${allTicks.size} ticks from CSV.")
                         println(ticks)
@@ -227,13 +229,14 @@ class RESTServer {
                     series = timeSeries,
                     period = period,
                     backtest = true,
-                    epochStopBuy = ZonedDateTime.now(ZoneOffset.UTC).minusHours(8).toEpochSecond(),
                     exchange = exchange,
                     input = input
                 )
+                val sellOnlyTick = timeSeries.endIndex - cooldownTicks
                 for (i in warmupTicks..timeSeries.endIndex) {
                     val tick = timeSeries.getTick(i)
                     val epoch = tick.beginTime.toEpochSecond()
+                    if (i >= sellOnlyTick) strategy.sellOnly = true
                     val operations = strategy.onTick(i)
                     strategy.onDrawChart(chartWriter, epoch, i)
                     candles.add(Candle(
@@ -325,12 +328,12 @@ class RESTServer {
         fun main(args: Array<String>) {
             val candles = parseCandlesFromCSV(
                 file = "../Bitfinex-historical-data/BTCUSD/Candles_1m/2018/merged.csv",
-                periodSeconds = 60,
+                periodSeconds = 60/*,
                 startDate = LocalDateTime.of(2018, 5, 1, 0, 0),
-                endDate = LocalDateTime.of(2018, 10, 2, 0, 0)
+                endDate = LocalDateTime.of(2018, 10, 2, 0, 0)*/
             )
             println("candles size: ${candles.size}")
-            println(candles.map { it.endTime })
+            //println(candles.map { it.endTime })
         }
 
         private fun parseCandlesFromCSV(
@@ -341,7 +344,7 @@ class RESTServer {
         ): List<Tick> {
             val startEpochMilli = (startDate?.toEpochSecond(ZoneOffset.UTC) ?: 0) * 1000
             val endEpochMilli = (endDate?.toEpochSecond(ZoneOffset.UTC) ?: 0) * 1000
-            val result = ArrayList<Tick>(20000)
+            val result = ArrayList<Tick>(50000)
             val duration = Duration.ofSeconds(periodSeconds.toLong())
             var firstLine = true
             for (line in Files.lines(Paths.get(file))) {

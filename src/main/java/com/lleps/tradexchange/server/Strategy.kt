@@ -21,7 +21,6 @@ class Strategy(
     private val series: TimeSeries,
     private val period: Long,
     private val backtest: Boolean,
-    private val epochStopBuy: Long,
     private val exchange: Exchange,
     private val input: Map<String, String>) {
 
@@ -94,6 +93,8 @@ class Strategy(
     private val sellBarrier2 = input.getValue("strategy.sellBarrier2").toFloat()
     private val openTradesCount = input.getValue("strategy.openTradesCount").toInt()
 
+    var sellOnly = false
+
     private fun shouldOpen(i: Int, epoch: Long): Boolean {
         return rsi[i] < 40f //&& rsi[i] < 60f
     }
@@ -144,7 +145,7 @@ class Strategy(
         var operations = emptyList<Operation>()
 
         // Try to buy
-        if (openTrades.size < openTradesCount && (!backtest || epoch < epochStopBuy)) { // BUY
+        if (!sellOnly && openTrades.size < openTradesCount) { // BUY
             if (actionLock > 0) {
                 actionLock--
             } else {
