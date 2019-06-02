@@ -16,7 +16,9 @@ interface RESTInterface {
 data class InstanceState(
     var input: Map<String, String> = emptyMap(),
     var output: String = "",
-    var trades: List<TradeEntry> = emptyList()
+    var trades: List<TradeEntry> = emptyList(),
+    var statusText: String = "not initialized",
+    var statusPositiveness: Int = 0
 )
 
 /** Chart data (separated since it's too big to bundle with regular state). */

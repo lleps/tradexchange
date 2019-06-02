@@ -106,7 +106,13 @@ class RESTServer {
             input = input,
             mode = Mode.BACKTEST,
             onTrade = { buy, sell, amount -> trades.add(TradeEntry(1, buy, sell, amount)) },
-            onFinish = { state.trades = trades })
+            onFinish = {
+                state.trades = trades
+                if (trades.isNotEmpty()) {
+                    val tradeSum = trades.sumByDouble { (it.sell-it.buy)*it.amount }
+                    state.statusText = "%d trades sum \$%.2f ".format(trades.size, tradeSum) + state.statusText
+                }
+            })
     }
 
     private fun startStrategyRunThread(
@@ -132,7 +138,12 @@ class RESTServer {
                 val sw = StringWriter()
                 e.printStackTrace(PrintWriter(sw))
                 strategyOutput.write(sw.toString())
+                instanceState[instance]?.let { state ->
+                    state.statusPositiveness = -1
+                    state.statusText = "Error. check output"
+                }
                 onFinish()
+                saveInstance(instance)
             }
         }
     }
@@ -274,6 +285,24 @@ class RESTServer {
                     .format(firstPrice, latestPrice, latestPrice - firstPrice))
                 strategyOutput.write(" Trades: ${strategy.tradeCount}")
                 strategyOutput.write("  ______________________________________________________ ")
+
+                val state = instanceState.getValue(instance)
+                val bhDifference = latestPrice - firstPrice
+                val bhCoinPercent = bhDifference * 100.0 / firstPrice
+                val tradeDifference = exchange.moneyBalance - initialMoney
+                val tradePercent = tradeDifference * 100.0 / initialMoney
+                // porcentaje q subio.
+                // valua 500$ vale $1000, subio 100% (500 es 100%, 100-50=50)
+                // initialPrice - 100%
+                // lo q subio   - x
+                // loqsubio*100/initial
+                // ejemplo:
+                // initialPrice= 200$
+                // loQsubio=50$
+
+                val stateString = "(%.1f%s vs %.1f%s)".format(tradePercent, "%", bhCoinPercent, "%")
+                state.statusText = stateString
+                state.statusPositiveness = if (tradePercent > 0) 1 else -1
 
                 // Update view
                 val chartData = instanceChartData.getOrPut(instance) { InstanceChartData() }

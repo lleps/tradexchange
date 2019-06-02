@@ -45,7 +45,7 @@ class MainView {
         inputPane = VBox(-3.0)
 
         // Execute and status label
-        statusLabel = Label("Not initialized")
+        statusLabel = Label("")
         executeButton = Button("Execute").apply {
             setOnAction { onExecute(readInput()) }
         }
@@ -96,9 +96,11 @@ class MainView {
         }
     }
 
-    fun setStatusLabel(status: String, positive: Boolean) {
-        statusLabel.textFill = if (positive) Color.LIGHTGREEN else Color.RED
-        statusLabel.text = status
+    fun setStatus(status: String, positiveness: Int) {
+        Platform.runLater {
+            statusLabel.textFill = if (positiveness > 0) Color.GREEN else if (positiveness < 0) Color.RED else Color.BLACK
+            statusLabel.text = status
+        }
     }
 
     fun setInput(input: Map<String, Any>) {

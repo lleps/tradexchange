@@ -229,6 +229,7 @@ class ClientMain : Application() {
                             }
                             view.setOutput(data.output)
                             view.setTrades(data.trades)
+                            view.setStatus(data.statusText, data.statusPositiveness)
                         }
                     }
                     if (iteration % (3*4) == 0) {
