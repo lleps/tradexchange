@@ -6,9 +6,11 @@ import com.lleps.tradexchange.TradeEntry
 import javafx.application.Platform
 import javafx.beans.property.SimpleObjectProperty
 import javafx.collections.FXCollections
+import javafx.geometry.Pos
 import javafx.scene.Parent
 import javafx.scene.control.*
 import javafx.scene.control.cell.PropertyValueFactory
+import javafx.scene.layout.AnchorPane
 import javafx.scene.layout.BorderPane
 import javafx.scene.layout.VBox
 import javafx.scene.paint.Color
@@ -32,12 +34,12 @@ class MainView {
     fun initJavaFxContent(): Parent {
         // Main components
         chart = FullChart()
-        val controlPane = VBox()
+        val controlPane = VBox(5.0)
         val mainPane = BorderPane(chart, null, controlPane, null, null)
         outputPane = TextArea()
 
         // Input
-        inputPane = VBox(5.0)
+        inputPane = VBox(-3.0)
         executeButton = Button("Execute").apply {
             setOnAction { onExecute(readInput()) }
         }

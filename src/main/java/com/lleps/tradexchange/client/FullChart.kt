@@ -77,6 +77,8 @@ class FullChart : BorderPane() {
     private fun createChartNavToolbar() {
         chartNavToolbar = HBox(10.0)
         val timeFrames = mapOf(
+            "1H" to 3600,
+            "6H" to 3600*6,
             "12H" to 3600*12,
             "1D" to 3600*24,
             "7D" to 3600*24*7,

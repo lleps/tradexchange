@@ -99,7 +99,7 @@ class Strategy(
     private val sellBarrier2 = input.getValue("sellBarrier2").toFloat()
 
     private fun shouldOpen(i: Int, epoch: Long): Boolean {
-        return macd[i] < 0f //&& rsi[i] < 60f
+        return rsi[i] < 40f //&& rsi[i] < 60f
     }
 
     private fun shouldClose(i: Int, epoch: Long, trade: OpenTrade): Boolean {

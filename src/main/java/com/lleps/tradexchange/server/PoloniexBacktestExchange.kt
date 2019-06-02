@@ -50,9 +50,13 @@ class PoloniexBacktestExchange(
         }
     }
 
-    private val warmUpChartData = chartData.subList(0, warmUpTicks).toMutableList()
+    private val warmUpChartData by lazy {
+        chartData.subList(0, warmUpTicks).toMutableList()
+    }
 
-    private val testingChartData = chartData.subList(warmUpTicks, chartData.size).toMutableList()
+    private val testingChartData by lazy {
+        chartData.subList(warmUpTicks, chartData.size).toMutableList()
+    }
 
     override val warmUpHistory: List<Tick>
         get() = warmUpChartData.map {
