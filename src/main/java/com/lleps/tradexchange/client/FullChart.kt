@@ -205,11 +205,12 @@ class FullChart : BorderPane() {
                 if (operation.timestamp < minTimestamp) continue
                 else if (operation.timestamp > maxTimestamp) break
 
+                val offsetY = 15.0/2.0
                 val node = if (operation.type == OperationType.BUY) {
-                    Polygon( 5.0,0.0,  10.0,15.0, 0.0,15.0 )
+                    Polygon( 5.0,-offsetY,  10.0,15.0-offsetY, 0.0,15.0-offsetY)
                         .apply { fill = BUY_COLOR }
                 } else {
-                    Polygon( 5.0,0.0,  10.0,-15.0, 0.0,-15.0 )
+                    Polygon( 5.0,+offsetY,  10.0,-15.0+offsetY, 0.0,-15.0+offsetY)
                         .apply { fill = SELL_COLOR }
                 }
                 if (operation.description != null) {

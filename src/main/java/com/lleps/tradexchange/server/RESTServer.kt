@@ -46,7 +46,7 @@ class RESTServer {
         "cooldownTicks" to "20",
         "plotChart" to "3",
         "bt.source" to "poloniex",
-        "bt.csv.file" to "../Bitfinex-historical-data/ETHUSD/Candles_1m/2019",
+        "bt.csv.file" to "../Bitfinex-historical-data/ETHUSD/Candles_1m/2019/merged.csv",
         "bt.csv.startDate" to "2019-01-01",
         "bt.csv.endDate" to "2019-01-04",
         "bt.poloniex.dayRange" to "7-0"
