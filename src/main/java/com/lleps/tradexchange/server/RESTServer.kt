@@ -156,6 +156,8 @@ class RESTServer {
         onTrade: (buy: Double, sell: Double, amount: Double, code: Int) -> Unit,
         onFinish: () -> Unit
     ) {
+        instanceState[instance]?.output = ""
+
         // main data
         val pair = input["pair"] ?: error("pair")
         val period = input["period"]?.toLong() ?: error("period")
@@ -307,8 +309,6 @@ class RESTServer {
             Mode.LIVE -> TODO("Implement live mode")
         }
     }
-
-
 
     // Persistence
     private fun loadInstanceList(): InstancesWrapper {

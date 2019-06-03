@@ -42,8 +42,35 @@ class Strategy(
                     val buyPrice: Double = 0.0/* used only for Type.SELL to know the trade profit */,
                     val code: Int = 0)
 
+
+    // Strategy config
+    companion object {
+        val requiredInput = mapOf(
+            "strategy.openTradesCount" to 5,
+            "strategy.tradeExpiry" to 12*5,
+            "strategy.buyCooldown" to 5,
+            "strategy.topLoss" to -10,
+            "strategy.sellBarrier1" to 1.0,
+            "strategy.sellBarrier2" to 3.0,
+            "strategy.rsiBuy" to 30,
+            "strategy.rsiPeriod" to 14
+        )
+    }
+
+    private val tradeExpiry = input.getValue("strategy.tradeExpiry").toInt() // give up if can't meet the margin
+    private val buyCooldown = input.getValue("strategy.buyCooldown").toInt() // 4h. During cooldown won't buy anything
+    private val topLoss = input.getValue("strategy.topLoss").toFloat()
+    private val sellBarrier1 = input.getValue("strategy.sellBarrier1").toFloat()
+    private val sellBarrier2 = input.getValue("strategy.sellBarrier2").toFloat()
+    private val openTradesCount = input.getValue("strategy.openTradesCount").toInt()
+    private val rsiBuy = input.getValue("strategy.rsiBuy").toFloat()
+
     var tradeCount = 0
         private set
+
+    var sellOnly = false
+
+    private var buyNumber = 1
 
     // State
     private class OpenTrade(
@@ -64,7 +91,7 @@ class Strategy(
     private val normalMacd = NormalizationIndicator(macd, 30)
     private val longMA = EMAIndicator(close, 24)
     private val shortMA = EMAIndicator(close, 12)
-    private val rsi = RSIIndicator(close, 14)
+    private val rsi = RSIIndicator(close, input.getValue("strategy.rsiPeriod").toInt())
     private val avg14 = EMAIndicator(close, 12)
     private val sd14 = StandardDeviationIndicator(close, 12)
     private val middleBBand = BollingerBandsMiddleIndicator(avg14)
@@ -75,46 +102,25 @@ class Strategy(
     private val obvIndicator = OnBalanceVolumeIndicator(series)
     private val obvIndicatorNormal = NormalizationIndicator(obvIndicator, 80)
 
-    // Strategy config
-    companion object {
-        val requiredInput = mapOf(
-            "strategy.openTradesCount" to 5,
-            "strategy.tradeExpiry" to 12*5,
-            "strategy.buyCooldown" to 5,
-            "strategy.topLoss" to -10,
-            "strategy.sellBarrier1" to 1.0,
-            "strategy.sellBarrier2" to 3.0
-        )
-    }
-
-    private val tradeExpiry = input.getValue("strategy.tradeExpiry").toInt() // give up if can't meet the margin
-    private val buyCooldown = input.getValue("strategy.buyCooldown").toInt() // 4h. During cooldown won't buy anything
-    private val topLoss = input.getValue("strategy.topLoss").toFloat()
-    private val sellBarrier1 = input.getValue("strategy.sellBarrier1").toFloat()
-    private val sellBarrier2 = input.getValue("strategy.sellBarrier2").toFloat()
-    private val openTradesCount = input.getValue("strategy.openTradesCount").toInt()
-
-    var sellOnly = false
-    private var buyNumber = 1
-
     private fun shouldOpen(i: Int, epoch: Long): Boolean {
-        return rsi[i] < 40f //&& rsi[i] < 60f
+        return rsi[i] < rsiBuy //&& rsi[i] < 60f
     }
 
     private fun shouldClose(i: Int, epoch: Long, trade: OpenTrade): Boolean {
         if (epoch - trade.epoch > tradeExpiry * period) return true // trade expire at this point
 
         val diff = close[i] - trade.buyPrice
-        if (diff < topLoss) {
+        val pct = diff * 100.0 / close[i]
+        if (pct < topLoss) {
             return true // panic - sell.
         }
 
-        if (diff > sellBarrier1) {
+        if (pct > sellBarrier1) {
             trade.passed1Barrier = true
-            if (diff > sellBarrier2) {
+            if (pct > sellBarrier2) {
                 return true
             }
-        } else if (diff < sellBarrier1 && trade.passed1Barrier) {
+        } else if (pct < sellBarrier1 && trade.passed1Barrier) {
             return true
         }
 
