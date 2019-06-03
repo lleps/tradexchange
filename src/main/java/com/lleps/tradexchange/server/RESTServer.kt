@@ -84,7 +84,7 @@ class RESTServer {
 
     @PutMapping("/createInstance/{instanceCode}")
     fun createInstance(@PathVariable instanceCode: String) {
-        val parts = instanceCode.split("|")
+        val parts = instanceCode.split(":")
         val instance = if (parts.size == 2) parts[0] else instanceCode
         val inputData = if (parts.size == 2) instanceState.getValue(parts[1]).input else defaultInput
         if (instanceState.containsKey(instance)) error("instance with name '$instance' already exists.")
@@ -242,7 +242,6 @@ class RESTServer {
                             endDate = LocalDate.parse(btCsvDateEnd, DateTimeFormatter.ISO_DATE).atStartOfDay())
                         allTicks.addAll(ticks)
                         strategyOutput.write("Parsed ${allTicks.size} ticks from CSV.")
-                        println(ticks)
                     } catch (e: Throwable) {
                         strategyOutput.write("exception reading csv: $e")
                         return
