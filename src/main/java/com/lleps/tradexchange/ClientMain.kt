@@ -84,7 +84,8 @@ class ClientMain : Application() {
                                     showError("createInstance", throwable)
                                     return@createInstance
                                 }
-                                registerTab(response, select = true)
+                                val instance = if (response.contains(":")) response.split(":")[0] else response
+                                registerTab(instance, select = true)
                             }
                         }
                     }
