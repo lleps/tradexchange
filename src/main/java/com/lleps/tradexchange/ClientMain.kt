@@ -68,7 +68,7 @@ class ClientMain : Application() {
         }
         val createInstanceButton = Button("Add instance").apply {
             setOnAction {
-                val textInput = TextInputDialog("new-instance|settingsFrom")
+                val textInput = TextInputDialog("new-instance:{copy input from}?")
                 textInput.title = "Add instance"
                 textInput.headerText = null
                 textInput.dialogPane.contentText = ""
