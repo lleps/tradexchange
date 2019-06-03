@@ -33,6 +33,7 @@ package com.lleps.tradexchange.client;
 
 import java.util.Iterator;
 
+import com.lleps.tradexchange.Candle;
 import javafx.animation.FadeTransition;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
@@ -103,8 +104,8 @@ public class CandleStickChart extends XYChart<Number, Number> {
                 double x = getXAxis().getDisplayPosition(X);
                 double y = getYAxis().getDisplayPosition(Y);
                 Node itemNode = item.getNode();
-                CandleStickExtraValues extra =
-                        (CandleStickExtraValues)item.getExtraValue();
+                Candle extra =
+                        (Candle)item.getExtraValue();
 
                 if (itemNode instanceof CandleNode && extra != null) {
                     double close = yAxis.getDisplayPosition(extra.getClose());
@@ -136,7 +137,7 @@ public class CandleStickChart extends XYChart<Number, Number> {
                     itemNode.setLayoutY(y);
                 }
                 if (seriesPath != null) {
-                    double ave = yAxis.getDisplayPosition(extra != null ? extra.getAverage() : item.getYValue());
+                    double ave = yAxis.getDisplayPosition(extra != null ? extra.getClose() : item.getYValue());
                     if (seriesPath.getElements().isEmpty()) {
                         seriesPath.getElements().add(new MoveTo(x, ave));
                     } else {
