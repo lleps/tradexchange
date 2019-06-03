@@ -75,10 +75,13 @@ class RESTServer {
         onInputChanged(instance, input)
     }
 
-    @PutMapping("/createInstance/{instance}")
-    fun createInstance(@PathVariable instance: String) {
+    @PutMapping("/createInstance/{instanceCode}")
+    fun createInstance(@PathVariable instanceCode: String) {
+        val parts = instanceCode.split("|")
+        val instance = if (parts.size == 2) parts[0] else instanceCode
+        val inputData = if (parts.size == 2) instanceState.getValue(parts[1]).input else defaultInput
         if (instanceState.containsKey(instance)) error("instance with name '$instance' already exists.")
-        instanceState[instance] = InstanceState(defaultInput)
+        instanceState[instance] = InstanceState(inputData)
         instanceChartData[instance] = InstanceChartData()
         instances.list = instances.list + instance
         loadedInstances[instance] = Unit

@@ -88,31 +88,19 @@ class FullChart : BorderPane() {
         for ((timeFrameStr, timeFrameSeconds) in timeFrames) {
             chartNavToolbar.children.add(Button(timeFrameStr).apply {
                 style = "-fx-background-color: transparent;"
-                setOnAction {
-                    val xAxis = priceChart.xAxis as NumberAxis
-                    xAxis.upperBound = maxTimestamp.toDouble()
-                    xAxis.lowerBound = xAxis.upperBound - timeFrameSeconds
-                    adjustYRangeByXBounds(priceChart)
-                }
+                setOnAction { plotChart(maxTimestamp - timeFrameSeconds, maxTimestamp) }
             })
         }
         chartNavToolbar.children.add(Button("ALL").apply {
             style = "-fx-background-color: transparent;"
-            setOnAction {
-                val xAxis = priceChart.xAxis as NumberAxis
-                xAxis.upperBound = maxTimestamp.toDouble()
-                xAxis.lowerBound = minTimestamp.toDouble()
-                adjustYRangeByXBounds(priceChart)
-            }
+            setOnAction { plotChart(minTimestamp, maxTimestamp) }
         })
         chartNavToolbar.children.add(Button("<").apply {
             style = "-fx-background-color: transparent;"
             setOnAction {
                 val xAxis = priceChart.xAxis as NumberAxis
                 val currFrame = xAxis.upperBound - xAxis.lowerBound
-                xAxis.upperBound -= currFrame
-                xAxis.lowerBound -= currFrame
-                adjustYRangeByXBounds(priceChart)
+                plotChart((xAxis.lowerBound - currFrame).toLong(), (xAxis.upperBound - currFrame).toLong())
             }
         })
         chartNavToolbar.children.add(Button(">").apply {
@@ -120,9 +108,7 @@ class FullChart : BorderPane() {
             setOnAction {
                 val xAxis = priceChart.xAxis as NumberAxis
                 val currFrame = xAxis.upperBound - xAxis.lowerBound
-                xAxis.upperBound += currFrame
-                xAxis.lowerBound += currFrame
-                adjustYRangeByXBounds(priceChart)
+                plotChart((xAxis.lowerBound + currFrame).toLong(), (xAxis.upperBound + currFrame).toLong())
             }
         })
         chartNavToolbar.alignment = Pos.CENTER
@@ -176,17 +162,26 @@ class FullChart : BorderPane() {
     var priceIndicators = emptyMap<String, Map<Long, Double>>()
     var extraIndicators = emptyMap<String, Map<String, Map<Long, Double>>>()
 
-    fun fill() {
-        minTimestamp = Long.MAX_VALUE
-        maxTimestamp = 1L
+    private fun plotChart(minTimestamp: Long, maxTimestamp: Long, maxTicks: Int = 800) {
         var minValue = Double.MAX_VALUE
         var maxValue = 0.0
         val allSeries = FXCollections.observableArrayList<XYChart.Series<Number, Number>>()
         val candleSeries = XYChart.Series<Number, Number>()
-        //candleSeries.dataProperty().bind("asd")
         createPriceChart()
+
+        // Calculate tickRR based on maxTicks
+        val tickCount = priceData.count { it.timestamp in (minTimestamp)..(maxTimestamp) }
+        var tickRR = 1
+        while ((tickCount / tickRR) > maxTicks) {
+            tickRR++
+        }
+
+        var candleIndex = 0
         for (candle in priceData) {
-            // should only add if inside bounds.
+            if (candle.timestamp < minTimestamp) continue
+            else if (candle.timestamp > maxTimestamp) break
+            if (candleIndex++ % tickRR != 0) continue
+
             candleSeries.data.add(
                 XYChart.Data(
                     candle.timestamp,
@@ -199,8 +194,6 @@ class FullChart : BorderPane() {
                     )
                 )
             )
-            minTimestamp = minOf(candle.timestamp, minTimestamp)
-            maxTimestamp = maxOf(candle.timestamp, maxTimestamp)
             minValue = minOf(candle.low, minValue)
             maxValue = maxOf(candle.high, maxValue)
         }
@@ -208,7 +201,10 @@ class FullChart : BorderPane() {
 
         // this series should be hidden via css (-fx-hidden: true;)
         val operationSeries = XYChart.Series<Number, Number>()
-        for (operation in operations) {
+        for (operation in operations) { // operations are not parsed with RR in mind
+            if (operation.timestamp < minTimestamp) continue
+            else if (operation.timestamp > maxTimestamp) break
+
             val node = if (operation.type == OperationType.BUY) {
                 Polygon( 5.0,0.0,  10.0,15.0, 0.0,15.0 )
                     .apply { fill = BUY_COLOR }
@@ -229,7 +225,13 @@ class FullChart : BorderPane() {
         for ((indicatorName, indicatorPoints) in priceIndicators) {
             val series = XYChart.Series<Number, Number>()
             series.name = indicatorName
-            series.data.addAll(indicatorPoints.map { XYChart.Data<Number, Number>(it.key, it.value) })
+            var indicatorIndex = 0
+            for ((epoch, dataValue) in indicatorPoints) {
+                if (epoch < minTimestamp) continue
+                else if (epoch > maxTimestamp) break
+                if (indicatorIndex++ % tickRR != 0) continue
+                series.data.add(XYChart.Data<Number, Number>(epoch, dataValue))
+            }
             allSeries.add(series)
         }
 
@@ -261,7 +263,12 @@ class FullChart : BorderPane() {
             for ((seriesName, seriesData) in indicatorData) {
                 val series = XYChart.Series<Number, Number>()
                 series.name = seriesName
+                var indicatorIndex = 0
                 for ((epoch, value) in seriesData) {
+                    if (epoch < minTimestamp) continue
+                    else if (epoch > maxTimestamp) break
+                    if (indicatorIndex++ % tickRR != 0) continue
+
                     minExtraVal = minOf(value, minExtraVal)
                     maxExtraVal = maxOf(value, maxExtraVal)
                     series.data.add(XYChart.Data<Number, Number>(epoch, value))
@@ -275,17 +282,21 @@ class FullChart : BorderPane() {
         }
 
         // update ranges
-        if (minTimestamp == Long.MAX_VALUE) minTimestamp = 0
         if (minValue == Double.MAX_VALUE) minValue = 0.0
         val xa = (priceChart.xAxis as NumberAxis)
         val ya = (priceChart.yAxis as NumberAxis)
-        //xa.tickUnit = (maxTimestamp - minTimestamp) / 20.0
         ya.tickUnit = (maxValue - minValue) / 10.0
         priceChart.data = allSeries
         xa.lowerBound = minTimestamp.toDouble()
         xa.upperBound = maxTimestamp.toDouble()
         ya.lowerBound = minValue
         ya.upperBound = maxValue
+    }
+
+    fun fill() {
+        minTimestamp = priceData.first().timestamp
+        maxTimestamp = priceData.last().timestamp
+        plotChart(minTimestamp, maxTimestamp)
     }
 
     // To test this view quickly
