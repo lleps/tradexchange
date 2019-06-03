@@ -213,7 +213,7 @@ class FullChart : BorderPane() {
                         .apply { fill = SELL_COLOR }
                 }
                 if (operation.description != null) {
-                    Tooltip.install(node, Tooltip(operation.description).apply { hackTooltipStartTiming(this) })
+                    Tooltip.install(node, Tooltip(operation.description))
                 }
                 operationSeries.data.add(
                     XYChart.Data<Number, Number>(operation.timestamp, operation.price)
@@ -248,6 +248,7 @@ class FullChart : BorderPane() {
                 ya.lowerBound = minValue
                 ya.upperBound = maxValue
                 priceChart.data = allSeries
+                hackTooltipStartTiming()
             }
 
             // Build extra chart list

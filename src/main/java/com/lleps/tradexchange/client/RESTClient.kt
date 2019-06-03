@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.lleps.tradexchange.InstanceChartData
 import com.lleps.tradexchange.InstanceState
 import com.lleps.tradexchange.RESTInterface
+import com.lleps.tradexchange.util.GZIPCompression
+import com.lleps.tradexchange.util.gson
 import com.mashape.unirest.http.HttpResponse
 import com.mashape.unirest.http.Unirest
 import org.slf4j.LoggerFactory
@@ -71,7 +73,9 @@ class RESTClient(var host: String = "http://localhost:8080") : RESTInterface {
                 checkResponse(response)
                 // Gson doesn't deserialize this properly, creates map<string,double> instead of map<long,double>
                 // So use jackson here.
-                jacksonMapper.readValue(response.body, InstanceChartData::class.java)
+                val jsonCompressedBytes = Base64.getDecoder().decode(response.body)
+                val jsonString = GZIPCompression.decompress(jsonCompressedBytes)
+                jacksonMapper.readValue(jsonString, InstanceChartData::class.java)
             },
             errorValue = InstanceChartData(),
             resultCallback = onResult
@@ -114,6 +118,19 @@ class RESTClient(var host: String = "http://localhost:8080") : RESTInterface {
                 Unit
             },
             errorValue = Unit,
+            resultCallback = onResult
+        )
+    }
+
+    override fun getInstanceVersion(instance: String, onResult: (Pair<Int, Int>, Throwable?) -> Unit) {
+        makeRequest(
+            request = {
+                val response = Unirest.get("$host/getInstanceVersion/$instance").asString()
+                checkResponse(response)
+                val versions = response.body.split(":")
+                Pair(versions[0].toInt(), versions[1].toInt())
+            },
+            errorValue = Pair(0, 0),
             resultCallback = onResult
         )
     }

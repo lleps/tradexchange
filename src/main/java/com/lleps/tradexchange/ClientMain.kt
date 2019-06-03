@@ -31,6 +31,8 @@ class ClientMain : Application() {
     class ClientData(val host: String = "http://localhost:8080")
 
     private var clientData = ClientData()
+    private var stateVersion = mutableMapOf<String, Int>().withDefault { 0 }
+    private var chartVersion = mutableMapOf<String, Int>().withDefault { 0 }
     private lateinit var stage: Stage
 
     override fun start(stage: Stage) {
@@ -49,6 +51,8 @@ class ClientMain : Application() {
                 textInput.showAndWait()
                     .ifPresent { response ->
                         clientData = ClientData(host = response)
+                        stateVersion.clear()
+                        chartVersion.clear()
                         clientData.saveTo("tradexchange_data.json")
                         connection.host = response
                         Platform.runLater {
@@ -205,7 +209,6 @@ class ClientMain : Application() {
     /** This thread fetches the state from the server every second and update UIs accordingly */
     private fun initUpdaterThread() {
         thread(start = true, name = "backgroundUpdateThread", isDaemon = true) {
-            var iteration = 0
             var lastInstance = ""
             while (true) {
                 if (waitingToAcceptError) continue
@@ -213,35 +216,43 @@ class ClientMain : Application() {
                 val instance = tabs.entries.firstOrNull { it.value.isSelected }?.key
                 if (instance != null && views.containsKey(instance)) {
                     if (instance != lastInstance) {
-                        iteration = 0
                         lastInstance = instance
                     }
                     val view = views.getValue(instance)
-                    if (iteration % (1*4) == 0) {
-                        connection.getInstanceState(instance) { data, throwable ->
-                            if (throwable != null) {
-                                showError("getInstanceState", throwable)
-                                return@getInstanceState
+                    connection.getInstanceVersion(instance) { (newStateVersion,newChartVersion), throwable ->
+                        if (throwable != null) {
+                            showError("getInstanceVersion", throwable)
+                            return@getInstanceVersion
+                        }
+                        if (newStateVersion > stateVersion.getValue(instance)) {
+                            connection.getInstanceState(instance) { data, throwable2 ->
+                                if (throwable2 != null) {
+                                    showError("getInstanceState", throwable2)
+                                    return@getInstanceState
+                                }
+                                if (!gotInput.containsKey(instance)) {
+                                    gotInput[instance] = Unit
+                                    view.setInput(data.input)
+                                    // TODO: should update the input. but how
+                                    // to update it without overwriting made changes?
+                                }
+                                view.setOutput(data.output)
+                                view.setTrades(data.trades)
+                                view.setStatus(data.statusText, data.statusPositiveness)
+                                stateVersion[instance] = data.stateVersion
                             }
-                            if (!gotInput.containsKey(instance)) {
-                                gotInput[instance] = Unit
-                                view.setInput(data.input)
+                        }
+                        if (newChartVersion > chartVersion.getValue(instance)) {
+                            connection.getInstanceChartData(instance) { data, throwable2 ->
+                                if (throwable2 != null) {
+                                    showError("getInstanceChartData", throwable2)
+                                    return@getInstanceChartData
+                                }
+                                view.setChart(data.candles, data.operations, data.priceIndicators, data.extraIndicators)
+                                chartVersion[instance] = newChartVersion
                             }
-                            view.setOutput(data.output)
-                            view.setTrades(data.trades)
-                            view.setStatus(data.statusText, data.statusPositiveness)
                         }
                     }
-                    if (iteration % (3*4) == 0) {
-                        connection.getInstanceChartData(instance) { data, throwable ->
-                            if (throwable != null) {
-                                showError("getInstanceChartData", throwable)
-                                return@getInstanceChartData
-                            }
-                            view.setChart(data.candles, data.operations, data.priceIndicators, data.extraIndicators)
-                        }
-                    }
-                    iteration++
                 }
                 Thread.sleep(250)
             }

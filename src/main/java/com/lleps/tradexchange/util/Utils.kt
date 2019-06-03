@@ -11,7 +11,7 @@ operator fun Indicator<Decimal>.get(index: Int) = getValue(index).toDouble()
 
 fun avg(vararg entries: Pair<Double, Int>) = entries.sumByDouble { it.first * it.second } / entries.sumBy { it.second }
 
-fun hackTooltipStartTiming(tooltip: Tooltip) {
+fun hackTooltipStartTiming(tooltip: Tooltip = Tooltip()) {
     try {
         val fieldBehavior = tooltip.javaClass.getDeclaredField("BEHAVIOR")
         fieldBehavior.isAccessible = true

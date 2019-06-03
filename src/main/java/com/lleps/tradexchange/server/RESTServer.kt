@@ -1,6 +1,8 @@
 package com.lleps.tradexchange.server
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.lleps.tradexchange.*
+import com.lleps.tradexchange.util.GZIPCompression
 import com.lleps.tradexchange.util.get
 import com.lleps.tradexchange.util.loadFrom
 import com.lleps.tradexchange.util.saveTo
@@ -18,13 +20,16 @@ import java.time.*
 import kotlin.concurrent.thread
 import java.io.PrintWriter
 import java.io.StringWriter
+import java.nio.charset.Charset
 import java.time.format.DateTimeFormatter
+import java.util.*
 
 
 /** Server main class. Makes backtesting, handles http requests, etc. */
 @RestController
 class RESTServer {
     private enum class Mode { BACKTEST, LIVE }
+    private val mapper = ObjectMapper()
 
     // Server state
     private data class InstancesWrapper(var list: List<String> = emptyList())
@@ -40,10 +45,10 @@ class RESTServer {
         "warmupTicks" to "20",
         "cooldownTicks" to "20",
         "plotChart" to "3",
-        "bt.source" to "csv",
-        "bt.csv.file" to "file.csv",
-        "bt.csv.startDate" to "2000-1-1",
-        "bt.csv.endDate" to "2030-1-1",
+        "bt.source" to "poloniex",
+        "bt.csv.file" to "../Bitfinex-historical-data/ETHUSD/Candles_1m/2019",
+        "bt.csv.startDate" to "2019-01-01",
+        "bt.csv.endDate" to "2019-01-04",
         "bt.poloniex.dayRange" to "7-0"
     )
 
@@ -63,10 +68,12 @@ class RESTServer {
         return instanceState.getValue(instance).copy()
     }
 
+    // This is sent compressed - big charts may take like 20MBs.
     @GetMapping("/instanceChartData/{instance}")
-    fun getInstanceChartData(@PathVariable instance: String): InstanceChartData {
+    fun getInstanceChartData(@PathVariable instance: String): String {
         loadInstanceIfNecessary(instance)
-        return instanceChartData.getValue(instance).copy()
+        val fullString = mapper.writeValueAsString(instanceChartData.getValue(instance).copy())
+        return Base64.getEncoder().encodeToString(GZIPCompression.compress(fullString))
     }
 
     @PostMapping("/updateInput/{instance}")
@@ -91,7 +98,7 @@ class RESTServer {
 
     @DeleteMapping("/deleteInstance/{instance}")
     fun deleteInstance(@PathVariable instance: String) {
-        if (!instanceState.containsKey(instance)) error("instance with name '$instance' does not exists.")
+        loadInstanceIfNecessary(instance)
         instanceState.remove(instance)
         instanceChartData.remove(instance)
         instances.list = instances.list - instance
@@ -100,21 +107,33 @@ class RESTServer {
         saveInstanceList()
     }
 
+    @GetMapping("/getInstanceVersion/{instance}")
+    fun getInstanceVersion(@PathVariable instance: String): String {
+        loadInstanceIfNecessary(instance)
+        val state = instanceState.getValue(instance)
+        return "${state.stateVersion}:${state.chartVersion}"
+    }
+
     private fun onInputChanged(instance: String, input: Map<String, String>) {
         LOGGER.info("Input: $input")
         val state = instanceState.getValue(instance)
         state.input = input
+        state.stateVersion++
         val trades = mutableListOf<TradeEntry>()
         startStrategyRunThread(instance,
             input = input,
             mode = Mode.BACKTEST,
-            onTrade = { buy, sell, amount, code -> trades.add(TradeEntry(code, buy, sell, amount)) },
+            onTrade = { buy, sell, amount, code ->
+                trades.add(TradeEntry(code, buy, sell, amount))
+                // intermediate updates while the strategy is running
+                val tradeSum = trades.sumByDouble { (it.sell-it.buy)*it.amount }
+                state.statusText = "%d trades sum \$%.2f".format(trades.size, tradeSum)
+                state.statusPositiveness = if (tradeSum > 0.0) 1 else -1
+                state.stateVersion++
+            },
             onFinish = {
                 state.trades = trades
-                if (trades.isNotEmpty()) {
-                    val tradeSum = trades.sumByDouble { (it.sell-it.buy)*it.amount }
-                    state.statusText = "%d trades sum \$%.2f ".format(trades.size, tradeSum) + state.statusText
-                }
+                state.stateVersion++
             })
     }
 
@@ -130,6 +149,7 @@ class RESTServer {
                 LOGGER.info("$instance: $string")
                 val state = instanceState.getValue(instance)
                 state.output += "$string\n"
+                state.stateVersion++
             }
         }
         thread(start = true, isDaemon = true) {
@@ -144,6 +164,7 @@ class RESTServer {
                 instanceState[instance]?.let { state ->
                     state.statusPositiveness = -1
                     state.statusText = "Error. check output"
+                    state.stateVersion++
                 }
                 onFinish()
                 saveInstance(instance)
@@ -292,13 +313,8 @@ class RESTServer {
                 strategyOutput.write("  ______________________________________________________ ")
 
                 val state = instanceState.getValue(instance)
-                val bhDifference = latestPrice - firstPrice
-                val bhCoinPercent = bhDifference * 100.0 / firstPrice
-                val tradeDifference = exchange.moneyBalance - initialMoney
-                val tradePercent = tradeDifference * 100.0 / initialMoney
-                val stateString = "(%.1f%s vs %.1f%s)".format(tradePercent, "%", bhCoinPercent, "%")
-                state.statusText = stateString
-                state.statusPositiveness = if (tradePercent > 0) 1 else -1
+
+                onFinish()
 
                 // Update view
                 val chartData = instanceChartData.getOrPut(instance) { InstanceChartData() }
@@ -306,7 +322,20 @@ class RESTServer {
                 chartData.operations = if (plotChart >= 1) chartOperations else emptyList()
                 chartData.priceIndicators = if (plotChart >= 1) priceIndicators else emptyMap()
                 chartData.extraIndicators = if (plotChart >= 1) extraIndicators else emptyMap()
-                onFinish()
+                state.chartVersion++
+
+                // Update status text
+                val bhDifference = latestPrice - firstPrice
+                val bhCoinPercent = bhDifference * 100.0 / firstPrice
+                val tradeDifference = exchange.moneyBalance - initialMoney
+                val tradePercent = tradeDifference * 100.0 / initialMoney
+                val tradeSum = state.trades.sumByDouble { (it.sell-it.buy)*it.amount }
+                val tradesString = "%d trades sum \$%.2f".format(state.trades.size, tradeSum)
+                val tradingVsHoldingString = "(%.1f%s vs %.1f%s)".format(tradePercent, "%", bhCoinPercent, "%")
+                state.statusText = "$tradesString $tradingVsHoldingString"
+                state.statusPositiveness = if (tradePercent > 0) 1 else -1
+                state.stateVersion++
+
                 saveInstance(instance)
             }
             Mode.LIVE -> TODO("Implement live mode")

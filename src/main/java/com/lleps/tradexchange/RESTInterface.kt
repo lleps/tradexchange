@@ -8,6 +8,7 @@ interface RESTInterface {
     fun updateInput(instance: String, input: Map<String, String>, onResult: (Unit, Throwable?) -> Unit)
     fun createInstance(instance: String, onResult: (Unit, Throwable?) -> Unit)
     fun deleteInstance(instance: String, onResult: (Unit, Throwable?) -> Unit)
+    fun getInstanceVersion(instance: String, onResult: (Pair<Int, Int>, Throwable?) -> Unit)
 }
 
 // Shared data
@@ -18,7 +19,9 @@ data class InstanceState(
     var output: String = "",
     var trades: List<TradeEntry> = emptyList(),
     var statusText: String = "not initialized",
-    var statusPositiveness: Int = 0
+    var statusPositiveness: Int = 0,
+    var stateVersion: Int = 1, // those 2 should increase when a change occurs, so the client knows it needs the data
+    var chartVersion: Int = 1
 )
 
 /** Chart data (separated since it's too big to bundle with regular state). */
