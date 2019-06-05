@@ -11,7 +11,7 @@ import com.google.gson.stream.JsonReader
 import com.google.gson.stream.JsonWriter
 
 val gson = GsonBuilder()
-    //.setPrettyPrinting()
+    .setPrettyPrinting()
     .registerTypeAdapter(ZonedDateTime::class.java, object : TypeAdapter<ZonedDateTime>() {
         @Throws(IOException::class)
         override fun write(out: JsonWriter, value: ZonedDateTime) {
