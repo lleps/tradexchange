@@ -32,7 +32,7 @@ import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
-class FullChart : BorderPane() {
+class FullChart(val useCandles: Boolean = true) : BorderPane() {
     companion object {
         private val chartPlotExecutor = Executors.newCachedThreadPool()
         private val BUY_COLOR = Paint.valueOf("#0000e4")
@@ -127,6 +127,7 @@ class FullChart : BorderPane() {
         yAxis.side = Side.RIGHT
 
         priceChart = CandleStickChart(xAxis, yAxis)
+        priceChart.priceType = if (useCandles) CandleStickChart.PriceType.CANDLES else CandleStickChart.PriceType.LINE
         xAxis.tickLabelFormatter = TICK_LABEL_FORMATTER
         xAxis.tickUnitProperty().bind(Bindings.divide(Bindings.subtract(xAxis.upperBoundProperty(), xAxis.lowerBoundProperty()), 20.0))
         priceChart.apply {
@@ -233,6 +234,8 @@ class FullChart : BorderPane() {
                     else if (epoch > maxTimestamp) break
                     if (indicatorIndex++ % tickRR != 0) continue
                     series.data.add(XYChart.Data<Number, Number>(epoch, dataValue))
+                    minValue = minOf(dataValue, minValue)
+                    maxValue = maxOf(dataValue, maxValue)
                 }
                 allSeries.add(series)
             }

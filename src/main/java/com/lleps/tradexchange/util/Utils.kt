@@ -4,8 +4,18 @@ import javafx.animation.KeyFrame
 import javafx.animation.Timeline
 import javafx.scene.control.Tooltip
 import javafx.util.Duration
+import org.ta4j.core.Bar
+import org.ta4j.core.BaseBar
 import org.ta4j.core.Indicator
+import org.ta4j.core.num.DoubleNum
 import org.ta4j.core.num.Num
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
+import java.util.ArrayList
 
 operator fun Indicator<Num>.get(index: Int) = getValue(index).doubleValue()
 
@@ -82,3 +92,37 @@ fun List<Double>.isLocalMinimum(periods: Int = 3): Boolean {
     return b < a && b < c
 }
 
+fun parseCandlesFromCSV(
+    file: String,
+    periodSeconds: Int,
+    startDate: LocalDateTime? = null,
+    endDate: LocalDateTime? = null
+): List<Bar> {
+    val startEpochMilli = (startDate?.toEpochSecond(ZoneOffset.UTC) ?: 0) * 1000
+    val endEpochMilli = (endDate?.toEpochSecond(ZoneOffset.UTC) ?: 0) * 1000
+    val result = ArrayList<Bar>(50000)
+    val duration = java.time.Duration.ofSeconds(periodSeconds.toLong())
+    var firstLine = true
+    for (line in Files.lines(Paths.get(file))) {
+        if (firstLine) { firstLine = false; continue }
+
+        // parse tick, check for time bounds
+        val parts = line.split(",")
+        val epoch = parts[0].toLong()
+        if (epoch < startEpochMilli) continue
+        else if (endEpochMilli in 1..(epoch - 1)) break
+
+        val tick = BaseBar(
+            duration,
+            ZonedDateTime.ofInstant(Instant.ofEpochMilli(epoch), ZoneOffset.UTC),
+            DoubleNum.valueOf(parts[1].toDouble()), // open
+            DoubleNum.valueOf(parts[3].toDouble()), // high
+            DoubleNum.valueOf(parts[4].toDouble()), // low
+            DoubleNum.valueOf(parts[2].toDouble()), // close
+            DoubleNum.valueOf(parts[5].toDouble()), // volume
+            DoubleNum.valueOf(0)
+        )
+        result.add(tick)
+    }
+    return result
+}

@@ -56,6 +56,18 @@ import javafx.util.Duration;
  */
 public class CandleStickChart extends XYChart<Number, Number> {
 
+    public enum PriceType { CANDLES, LINE }
+
+    private PriceType priceType = PriceType.LINE;
+
+    public void setPriceType(PriceType priceType) {
+        this.priceType = priceType;
+    }
+
+    public PriceType getPriceType() {
+        return priceType;
+    }
+
     /**
      * Construct a new CandleStickChart with the given axis.
      */
@@ -82,6 +94,13 @@ public class CandleStickChart extends XYChart<Number, Number> {
 
     /** Called to update and layout the content for the plot */
     @Override protected void layoutPlotChildren() {
+        if (priceType == PriceType.CANDLES) {
+            if (!getData().isEmpty()) {
+                Series<Number, Number> candleSeries = getData().get(0);
+                candleSeries.getNode().setVisible(false);
+            }
+        }
+
         // we have nothing to layout if no data is present
         if (getData() == null) {
             return;
@@ -269,6 +288,7 @@ public class CandleStickChart extends XYChart<Number, Number> {
         } else {
             candle = new CandleNode("series" + seriesIndex, "data" + itemIndex);
             item.setNode(candle);
+            if (priceType == PriceType.LINE) candle.setVisible(false);
         }
         return candle;
     }

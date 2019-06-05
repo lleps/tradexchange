@@ -38,7 +38,9 @@
 }
 /* candle line. hidden */
 .candlestick-average-line {
-    visibility: hidden;
+    /*visibility: hidden;*/
+    -fx-stroke-width: 4px;
+    -fx-stroke: rgba(0, 0, 0, 1.0);
 }
 /* buy-sell. also hidden */
 .candlestick-series-1 {
@@ -46,16 +48,20 @@
 }
 /* indicators */
 .candlestick-series-2 {
-    -fx-stroke: rgba(0, 0, 255, 0.5);;
-    -fx-stroke-width: 1px;
+    -fx-stroke: #F44336;
+    -fx-stroke-width: 3px;
 }
 .candlestick-series-3 {
-    -fx-stroke: rgba(255, 0, 255, 0.5);
-    -fx-stroke-width: 1px;
+    -fx-stroke: #2196F3;
+    -fx-stroke-width: 3px;
 }
 .candlestick-series-4 {
-    -fx-stroke: rgba(128, 126, 0, 0.5);
-    -fx-stroke-width: 1px;
+    -fx-stroke: #FFC107;
+    -fx-stroke-width: 3px;
+}
+.candlestick-series-5 {
+    -fx-stroke: #4CAF50;
+    -fx-stroke-width: 3px;
 }
 /*.candlestick-candle {
     -fx-effect: dropshadow( two-pass-box , rgba(0,0,0,0.4) , 10, 0.0 , 2 , 4 );
@@ -71,11 +77,11 @@
     -fx-background-insets: 0,1,2;
 }
 .candlestick-line.close-above-open {
-    -fx-stroke: #008b00;
+    -fx-stroke: #555555;
     -fx-stroke-width: 1px;
 }
 .candlestick-line.open-above-close {
-    -fx-stroke: #D50000;
+    -fx-stroke: #555555;
     -fx-stroke-width: 1px;
 }
 .candlestick-bar.close-above-open {

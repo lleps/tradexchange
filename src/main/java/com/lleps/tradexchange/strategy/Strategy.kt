@@ -1,7 +1,8 @@
-package com.lleps.tradexchange.server
+package com.lleps.tradexchange.strategy
 
 import com.lleps.tradexchange.indicator.CompositeIndicator
 import com.lleps.tradexchange.indicator.NormalizationIndicator
+import com.lleps.tradexchange.server.Exchange
 import com.lleps.tradexchange.util.get
 import org.ta4j.core.TimeSeries
 import org.ta4j.core.indicators.EMAIndicator

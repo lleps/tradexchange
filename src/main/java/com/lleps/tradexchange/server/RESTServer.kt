@@ -2,26 +2,25 @@ package com.lleps.tradexchange.server
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.lleps.tradexchange.*
-import com.lleps.tradexchange.util.GZIPCompression
-import com.lleps.tradexchange.util.get
-import com.lleps.tradexchange.util.loadFrom
-import com.lleps.tradexchange.util.saveTo
+import com.lleps.tradexchange.strategy.Strategy
+import com.lleps.tradexchange.util.*
 import org.slf4j.LoggerFactory
 import org.springframework.web.bind.annotation.*
 import org.ta4j.core.Bar
-import org.ta4j.core.BaseBar
 import org.ta4j.core.BaseTimeSeries
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
-import org.ta4j.core.num.DoubleNum
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.Paths
-import java.time.*
-import kotlin.concurrent.thread
 import java.io.PrintWriter
 import java.io.StringWriter
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.*
+import kotlin.concurrent.thread
 
 
 /** Server main class. Makes backtesting, handles http requests, etc. */
@@ -384,41 +383,6 @@ class RESTServer {
             )
             println("candles size: ${candles.size}")
             //println(candles.map { it.endTime })
-        }
-
-        private fun parseCandlesFromCSV(
-            file: String,
-            periodSeconds: Int,
-            startDate: LocalDateTime? = null,
-            endDate: LocalDateTime? = null
-        ): List<Bar> {
-            val startEpochMilli = (startDate?.toEpochSecond(ZoneOffset.UTC) ?: 0) * 1000
-            val endEpochMilli = (endDate?.toEpochSecond(ZoneOffset.UTC) ?: 0) * 1000
-            val result = ArrayList<Bar>(50000)
-            val duration = Duration.ofSeconds(periodSeconds.toLong())
-            var firstLine = true
-            for (line in Files.lines(Paths.get(file))) {
-                if (firstLine) { firstLine = false; continue }
-
-                // parse tick, check for time bounds
-                val parts = line.split(",")
-                val epoch = parts[0].toLong()
-                if (epoch < startEpochMilli) continue
-                else if (endEpochMilli in 1..(epoch - 1)) break
-
-                val tick = BaseBar(
-                    duration,
-                    ZonedDateTime.ofInstant(Instant.ofEpochMilli(epoch), ZoneOffset.UTC),
-                    DoubleNum.valueOf(parts[1].toDouble()), // open
-                    DoubleNum.valueOf(parts[3].toDouble()), // high
-                    DoubleNum.valueOf(parts[4].toDouble()), // low
-                    DoubleNum.valueOf(parts[2].toDouble()), // close
-                    DoubleNum.valueOf(parts[5].toDouble()), // volume
-                    DoubleNum.valueOf(0)
-                )
-                result.add(tick)
-            }
-            return result
         }
     }
 }
