@@ -87,7 +87,7 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
             val operations = mutableListOf<Operation>()
             var maxPrice = 0.0
             var minPrice = 999999.0
-            var sellPrice = 0.1
+            var sellPrice = 0.0
             for (i in initialTick..lastTickEnd) {
                 val tickPrice = series.getBar(i).closePrice.doubleValue()
                 maxPrice = maxOf(maxPrice, tickPrice)
@@ -116,6 +116,11 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
             chart.extraIndicators = chartWriter.extraIndicators
             chart.fill()
 
+            if (sellPrice == 0.0) {
+                profitLabel.text = "no sell"
+                println("no sell")
+                return
+            }
             fun calcPercent(p: Double) = (p / initialPrice) * 100.0
             val profit = sellPrice - initialPrice
             val maxConst = maxPrice - initialPrice
