@@ -2,9 +2,9 @@ package com.lleps.tradexchange.server
 
 import com.cf.client.poloniex.PoloniexExchangeService
 import org.slf4j.LoggerFactory
-import org.ta4j.core.BaseTick
-import org.ta4j.core.Decimal
-import org.ta4j.core.Tick
+import org.ta4j.core.Bar
+import org.ta4j.core.BaseBar
+import org.ta4j.core.num.DoubleNum
 import java.math.BigDecimal
 import java.time.Duration
 import java.time.Instant
@@ -46,16 +46,17 @@ class PoloniexLiveExchange(
         }
     }
 
-    override val warmUpHistory: List<Tick>
+    override val warmUpHistory: List<Bar>
         get() = warmUp.map {
-            BaseTick(
+            BaseBar(
                 Duration.ofSeconds(period),
                 Instant.ofEpochSecond(it.date.toEpochSecond()).atZone(ZoneOffset.UTC),
-                Decimal.valueOf(it.open.toDouble()),
-                Decimal.valueOf(it.high.toDouble()),
-                Decimal.valueOf(it.low.toDouble()),
-                Decimal.valueOf(it.close.toDouble()),
-                Decimal.valueOf(it.volume.toDouble())
+                DoubleNum.valueOf(it.open.toDouble()),
+                DoubleNum.valueOf(it.high.toDouble()),
+                DoubleNum.valueOf(it.low.toDouble()),
+                DoubleNum.valueOf(it.close.toDouble()),
+                DoubleNum.valueOf(it.volume.toDouble()),
+                DoubleNum.valueOf(0)
             )
         }
 
@@ -65,7 +66,7 @@ class PoloniexLiveExchange(
     override val coinBalance: Double
         get() = poloniex.returnCurrencyBalance(pair.split("_")[1]).available.toDouble() // IGNORED_X
 
-    override fun fetchTick(): Tick? {
+    override fun fetchTick(): Bar? {
         // Fetch ticker every few seconds, to grab max,min,open,close,etc and return as a candle
         val tickExpire = System.currentTimeMillis() + period*1000
         var high = 0.0
@@ -81,14 +82,15 @@ class PoloniexLiveExchange(
             Thread.sleep(10*1000)
         }
         val close = ticker.last.toDouble()
-        return BaseTick(
-                Duration.ofSeconds(period),
-                Instant.now().atZone(ZoneOffset.UTC),
-                Decimal.valueOf(open), // open
-                Decimal.valueOf(high), // high
-                Decimal.valueOf(low), // low
-                Decimal.valueOf(close), // close
-                Decimal.valueOf(ticker.baseVolume.toDouble())
+        return BaseBar(
+            Duration.ofSeconds(period),
+            Instant.now().atZone(ZoneOffset.UTC),
+            DoubleNum.valueOf(open), // open
+            DoubleNum.valueOf(high), // high
+            DoubleNum.valueOf(low), // low
+            DoubleNum.valueOf(close), // close
+            DoubleNum.valueOf(ticker.baseVolume.toDouble()),
+            DoubleNum.valueOf(0)
         )
     }
 

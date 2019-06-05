@@ -16,12 +16,10 @@ import javafx.scene.layout.BorderPane
 import javafx.scene.layout.VBox
 import javafx.scene.paint.Color
 import javafx.stage.Stage
-import org.ta4j.core.BaseTick
-import org.ta4j.core.BaseTimeSeries
-import org.ta4j.core.Decimal
-import org.ta4j.core.Tick
+import org.ta4j.core.*
 import org.ta4j.core.indicators.EMAIndicator
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
+import org.ta4j.core.num.DoubleNum
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.time.LocalDateTime
@@ -150,15 +148,16 @@ class CloseAlgorithmView : Application() {
             topBarrier = price + topOffset
             val bottomOffset = price * (cfg.bottomBarrierInitial / 100.0)
             bottomBarrier = price - bottomOffset
-            val data = mutableListOf<Tick>()
+            val data = mutableListOf<Bar>()
             for (pastPrice in (past+price)) {
-                data.add(BaseTick(
-                        ZonedDateTime.now(),
-                        0.0,//Decimal.ZERO,
-                        0.0,//Decimal.ZERO,
-                        0.0,//Decimal.ZERO,
-                        pastPrice,//Decimal.valueOf(price),
-                        0.0
+                data.add(BaseBar(
+                    ZonedDateTime.now(),
+                    DoubleNum.valueOf(0),
+                    DoubleNum.valueOf(0),
+                    DoubleNum.valueOf(0),
+                    DoubleNum.valueOf(pastPrice),
+                    DoubleNum.valueOf(0),
+                    DoubleNum.valueOf(0)
                 ))
             }
             val closePrice = ClosePriceIndicator(BaseTimeSeries(data))
@@ -168,17 +167,15 @@ class CloseAlgorithmView : Application() {
         }
 
         val ma = maIndicator!!
-        ma.timeSeries.addTick(BaseTick(
+        ma.timeSeries.addBar(
                 ZonedDateTime.now(),
-                0.0,//Decimal.ZERO,
-                0.0,//Decimal.ZERO,
-                0.0,//Decimal.ZERO,
-                price,//Decimal.valueOf(price),
+                0.0,
+                0.0,
+                0.0,
+                price,
                 0.0
-        ))
+        )
 
-        // TODO: use percent on priceIncrease.
-        // also should use percent to get the initial position for the barriers!
         val timePassed = tickId.toDouble()
         val priceIncrease = price - lastPrice
         lastPrice = price

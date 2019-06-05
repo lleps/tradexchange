@@ -8,11 +8,11 @@ import com.lleps.tradexchange.util.loadFrom
 import com.lleps.tradexchange.util.saveTo
 import org.slf4j.LoggerFactory
 import org.springframework.web.bind.annotation.*
-import org.ta4j.core.BaseTick
+import org.ta4j.core.Bar
+import org.ta4j.core.BaseBar
 import org.ta4j.core.BaseTimeSeries
-import org.ta4j.core.Decimal
-import org.ta4j.core.Tick
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
+import org.ta4j.core.num.DoubleNum
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -20,7 +20,6 @@ import java.time.*
 import kotlin.concurrent.thread
 import java.io.PrintWriter
 import java.io.StringWriter
-import java.nio.charset.Charset
 import java.time.format.DateTimeFormatter
 import java.util.*
 
@@ -231,7 +230,7 @@ class RESTServer {
                     warmUpTicks = warmupTicks,
                     initialMoney = initialMoney,
                     initialCoins = initialCoins)
-                val allTicks = mutableListOf<Tick>()
+                val allTicks = mutableListOf<Bar>()
                 if (btSource == "csv") {
                     strategyOutput.write("Parse ticks from $btCsvFile at period ${period.toInt()}")
                     try {
@@ -270,27 +269,27 @@ class RESTServer {
                 )
                 val sellOnlyTick = timeSeries.endIndex - cooldownTicks
                 for (i in warmupTicks..timeSeries.endIndex) {
-                    val tick = timeSeries.getTick(i)
+                    val tick = timeSeries.getBar(i)
                     val epoch = tick.beginTime.toEpochSecond()
                     if (i >= sellOnlyTick) strategy.sellOnly = true
                     val operations = strategy.onTick(i)
                     strategy.onDrawChart(chartWriter, epoch, i)
                     candles.add(Candle(
                         epoch,
-                        tick.openPrice.toDouble(),
-                        tick.closePrice.toDouble(),
-                        tick.maxPrice.toDouble(),
-                        tick.minPrice.toDouble()))
+                        tick.openPrice.doubleValue(),
+                        tick.closePrice.doubleValue(),
+                        tick.maxPrice.doubleValue(),
+                        tick.minPrice.doubleValue()))
                     chartOperations.addAll(operations.map { op ->
                         val type = if (op.type == Strategy.OperationType.BUY)
                             OperationType.BUY
                         else
                             OperationType.SELL
-                        Operation(epoch, type, tick.closePrice.toDouble(), op.description)
+                        Operation(epoch, type, tick.closePrice.doubleValue(), op.description)
                     })
                     for (op in operations) {
                         if (op.type == Strategy.OperationType.SELL) {
-                            onTrade(op.buyPrice, tick.closePrice.toDouble(), op.amount, op.code)
+                            onTrade(op.buyPrice, tick.closePrice.doubleValue(), op.amount, op.code)
                         }
                     }
                 }
@@ -392,10 +391,10 @@ class RESTServer {
             periodSeconds: Int,
             startDate: LocalDateTime? = null,
             endDate: LocalDateTime? = null
-        ): List<Tick> {
+        ): List<Bar> {
             val startEpochMilli = (startDate?.toEpochSecond(ZoneOffset.UTC) ?: 0) * 1000
             val endEpochMilli = (endDate?.toEpochSecond(ZoneOffset.UTC) ?: 0) * 1000
-            val result = ArrayList<Tick>(50000)
+            val result = ArrayList<Bar>(50000)
             val duration = Duration.ofSeconds(periodSeconds.toLong())
             var firstLine = true
             for (line in Files.lines(Paths.get(file))) {
@@ -407,14 +406,15 @@ class RESTServer {
                 if (epoch < startEpochMilli) continue
                 else if (endEpochMilli in 1..(epoch - 1)) break
 
-                val tick = BaseTick(
+                val tick = BaseBar(
                     duration,
                     ZonedDateTime.ofInstant(Instant.ofEpochMilli(epoch), ZoneOffset.UTC),
-                    Decimal.valueOf(parts[1].toDouble()), // open
-                    Decimal.valueOf(parts[3].toDouble()), // high
-                    Decimal.valueOf(parts[4].toDouble()), // low
-                    Decimal.valueOf(parts[2].toDouble()), // close
-                    Decimal.valueOf(parts[5].toDouble()) // volume
+                    DoubleNum.valueOf(parts[1].toDouble()), // open
+                    DoubleNum.valueOf(parts[3].toDouble()), // high
+                    DoubleNum.valueOf(parts[4].toDouble()), // low
+                    DoubleNum.valueOf(parts[2].toDouble()), // close
+                    DoubleNum.valueOf(parts[5].toDouble()), // volume
+                    DoubleNum.valueOf(0)
                 )
                 result.add(tick)
             }

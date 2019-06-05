@@ -5,9 +5,9 @@ import com.cf.data.model.poloniex.PoloniexChartData
 import com.lleps.tradexchange.util.loadFrom
 import com.lleps.tradexchange.util.saveTo
 import org.slf4j.LoggerFactory
-import org.ta4j.core.BaseTick
-import org.ta4j.core.Decimal
-import org.ta4j.core.Tick
+import org.ta4j.core.Bar
+import org.ta4j.core.BaseBar
+import org.ta4j.core.num.DoubleNum
 import java.io.File
 import java.time.Duration
 import java.time.Instant
@@ -58,16 +58,17 @@ class PoloniexBacktestExchange(
         chartData.subList(warmUpTicks, chartData.size).toMutableList()
     }
 
-    override val warmUpHistory: List<Tick>
+    override val warmUpHistory: List<Bar>
         get() = warmUpChartData.map {
-            BaseTick(
+            BaseBar(
                 Duration.ofSeconds(period),
                 Instant.ofEpochSecond(it.date.toEpochSecond()).atZone(ZoneOffset.UTC),
-                Decimal.valueOf(it.open.toDouble()),
-                Decimal.valueOf(it.high.toDouble()),
-                Decimal.valueOf(it.low.toDouble()),
-                Decimal.valueOf(it.close.toDouble()),
-                Decimal.valueOf(it.volume.toDouble())
+                DoubleNum.valueOf(it.open.toDouble()),
+                DoubleNum.valueOf(it.high.toDouble()),
+                DoubleNum.valueOf(it.low.toDouble()),
+                DoubleNum.valueOf(it.close.toDouble()),
+                DoubleNum.valueOf(it.volume.toDouble()),
+                DoubleNum.valueOf(0)
             )
         }
 
@@ -75,24 +76,24 @@ class PoloniexBacktestExchange(
 
     override var coinBalance: Double = initialCoins// + 0.001
 
-    private val chartDataAsTicks: MutableList<BaseTick> by lazy {
+    private val chartDataAsTicks: MutableList<BaseBar> by lazy {
         testingChartData.map {
-            BaseTick(
+            BaseBar(
                 Duration.ofSeconds(period),
                 Instant.ofEpochSecond(it.date.toEpochSecond()).atZone(ZoneOffset.UTC),
-                Decimal.valueOf(it.open.toDouble()),
-                Decimal.valueOf(it.high.toDouble()),
-                Decimal.valueOf(it.low.toDouble()),
-                Decimal.valueOf(it.close.toDouble()),
-                Decimal.valueOf(it.volume.toDouble())
+                DoubleNum.valueOf(it.open.toDouble()),
+                DoubleNum.valueOf(it.high.toDouble()),
+                DoubleNum.valueOf(it.low.toDouble()),
+                DoubleNum.valueOf(it.close.toDouble()),
+                DoubleNum.valueOf(it.volume.toDouble()),
+                DoubleNum.valueOf(0)
             )
         }.toMutableList()
     }
 
-    override fun fetchTick(): Tick? {
+    override fun fetchTick(): Bar? {
         if (chartDataAsTicks.isEmpty()) return null
-        val result = chartDataAsTicks.removeAt(0)
-        return result
+        return chartDataAsTicks.removeAt(0)
     }
 
     override fun buy(coins: Double, price: Double) {

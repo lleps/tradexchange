@@ -4,10 +4,10 @@ import javafx.animation.KeyFrame
 import javafx.animation.Timeline
 import javafx.scene.control.Tooltip
 import javafx.util.Duration
-import org.ta4j.core.Decimal
 import org.ta4j.core.Indicator
+import org.ta4j.core.num.Num
 
-operator fun Indicator<Decimal>.get(index: Int) = getValue(index).toDouble()
+operator fun Indicator<Num>.get(index: Int) = getValue(index).doubleValue()
 
 fun avg(vararg entries: Pair<Double, Int>) = entries.sumByDouble { it.first * it.second } / entries.sumBy { it.second }
 
@@ -28,15 +28,15 @@ fun hackTooltipStartTiming(tooltip: Tooltip = Tooltip()) {
     }
 }
 
-fun Indicator<Decimal>.crossOver(other: Indicator<Decimal>, tick: Int): Boolean {
+fun Indicator<Num>.crossOver(other: Indicator<Num>, tick: Int): Boolean {
     return get(tick) > other[tick] && get(tick - 1) < other[tick - 1]
 }
 
-fun Indicator<Decimal>.crossUnder(other: Indicator<Decimal>, tick: Int): Boolean {
+fun Indicator<Num>.crossUnder(other: Indicator<Num>, tick: Int): Boolean {
     return get(tick) < other[tick] && get(tick - 1) > other[tick - 1]
 }
 
-fun Indicator<Decimal>.falling(tick: Int, length: Int): Boolean {
+fun Indicator<Num>.falling(tick: Int, length: Int): Boolean {
     repeat(length) { i ->
         if (get(tick - i - 1) > get(tick - i)) {
             return false
@@ -45,7 +45,7 @@ fun Indicator<Decimal>.falling(tick: Int, length: Int): Boolean {
     return true
 }
 
-fun Indicator<Decimal>.rising(tick: Int, length: Int): Boolean {
+fun Indicator<Num>.rising(tick: Int, length: Int): Boolean {
     repeat(length) { i ->
         if (get(tick - i - 1) < get(tick - i)) {
             return false
@@ -54,11 +54,11 @@ fun Indicator<Decimal>.rising(tick: Int, length: Int): Boolean {
     return true
 }
 
-fun Indicator<Decimal>.isAfterLocalMaximum(tick: Int): Boolean {
+fun Indicator<Num>.isAfterLocalMaximum(tick: Int): Boolean {
     return get(tick - 1) > get(tick) && get(tick - 1) > get(tick - 2)
 }
 
-fun Indicator<Decimal>.isAfterLocalMinimum(tick: Int): Boolean {
+fun Indicator<Num>.isAfterLocalMinimum(tick: Int): Boolean {
     return get(tick - 1) < get(tick) && get(tick - 1) < get(tick - 2)
 }
 

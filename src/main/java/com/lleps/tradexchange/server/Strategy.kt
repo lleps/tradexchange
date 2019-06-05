@@ -3,7 +3,6 @@ package com.lleps.tradexchange.server
 import com.lleps.tradexchange.indicator.CompositeIndicator
 import com.lleps.tradexchange.indicator.NormalizationIndicator
 import com.lleps.tradexchange.util.get
-import org.slf4j.LoggerFactory
 import org.ta4j.core.TimeSeries
 import org.ta4j.core.indicators.EMAIndicator
 import org.ta4j.core.indicators.MACDIndicator
@@ -14,7 +13,6 @@ import org.ta4j.core.indicators.bollinger.BollingerBandsUpperIndicator
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
 import org.ta4j.core.indicators.statistics.StandardDeviationIndicator
 import org.ta4j.core.indicators.volume.OnBalanceVolumeIndicator
-import java.util.*
 
 class Strategy(
     private val output: OutputWriter,
@@ -148,7 +146,7 @@ class Strategy(
     }
 
     fun onTick(i: Int): List<Operation> {
-        val epoch = series.getTick(i).endTime.toEpochSecond()
+        val epoch = series.getBar(i).endTime.toEpochSecond()
         var boughtSomething = false
         var operations = emptyList<Operation>()
 

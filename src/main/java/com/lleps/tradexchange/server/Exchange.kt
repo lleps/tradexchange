@@ -1,15 +1,15 @@
 package com.lleps.tradexchange.server
 
-import org.ta4j.core.Tick
+import org.ta4j.core.Bar
 
 interface Exchange {
-    val warmUpHistory: List<Tick>
+    val warmUpHistory: List<Bar>
 
     val moneyBalance: Double
 
     val coinBalance: Double
 
-    fun fetchTick(): Tick?
+    fun fetchTick(): Bar?
 
     fun buy(coins: Double, price: Double)
 
