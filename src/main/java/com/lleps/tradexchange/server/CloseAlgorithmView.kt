@@ -10,9 +10,11 @@ import javafx.scene.chart.LineChart
 import javafx.scene.chart.NumberAxis
 import javafx.scene.chart.XYChart
 import javafx.scene.control.Button
+import javafx.scene.control.Label
 import javafx.scene.control.TextArea
 import javafx.scene.layout.BorderPane
 import javafx.scene.layout.VBox
+import javafx.scene.paint.Color
 import javafx.stage.Stage
 import org.ta4j.core.BaseTick
 import org.ta4j.core.BaseTimeSeries
@@ -50,6 +52,7 @@ class CloseAlgorithmView : Application() {
     private lateinit var bottomBarrierSeries: XYChart.Series<Number, Number>
     private lateinit var maSeries: XYChart.Series<Number, Number>
     private lateinit var configJson: TextArea
+    private lateinit var profitLabel: Label
 
     private data class RunConfig(
         val ticks: Int = 20,
@@ -184,11 +187,16 @@ class CloseAlgorithmView : Application() {
         maValue = ma[tickId.toInt()]
     }
 
+    var profitSum = 0.0
+
     private fun startFillingThread(cfg: RunConfig, prices: List<Double>, past: List<Double>) {
         thread(start = true) {
-            println("starting")
             var tickId = 0L
 
+            val firstPrice = prices.firstOrNull() ?: return@thread
+            var max = 0.0
+            var min = 5000000.0
+            var passedTopBarrier = false
             for (data in prices) {
                 update(tickId, data, cfg, past)
                 val tickNum = tickId
@@ -201,7 +209,37 @@ class CloseAlgorithmView : Application() {
                     chartPriceSeries.data.add(XYChart.Data(tickNum, data))
                     maSeries.data.add(XYChart.Data(tickNum, maValueConst))
                 }
-                if (data > topBarrier || data < bottomBarrier) break
+                min = minOf(min, data)
+                max = maxOf(max, data)
+                if (!passedTopBarrier && data > topBarrier) passedTopBarrier = true
+                if ((passedTopBarrier && data < maValue)|| data < bottomBarrier) {
+                    val lastPriceConst = data
+                    Platform.runLater {
+                        fun calcPercent(p: Double) = (p / firstPrice) * 100.0
+                        val profit = lastPriceConst - firstPrice
+                        val maxConst = max - firstPrice
+                        val minConst = min - firstPrice
+                        profitLabel.text =
+                            ("Profit: $%.3f (%.1f%s)\n" +
+                                "Max: $%.3f (%.1f%s)\n" +
+                                "Min: $%.3f (%.1f%s)\n" +
+                                "Holding: $%.3f (%.3f%s)") // TODO: para holding tendria que esperar a que termine.
+                                .format(
+                                    profit, calcPercent(profit), "%",
+                                    maxConst, calcPercent(maxConst), "%",
+                                    minConst, calcPercent(minConst), "%",
+                                    999999.0, 0.0, "%"
+                                )
+                        profitSum += calcPercent(profit)
+                        println("profit: ${calcPercent(profit)}%. sum: $profitSum%")
+                        if (profit < 0.0) {
+                            profitLabel.textFill = Color.RED
+                        } else {
+                            profitLabel.textFill = Color.GREEN
+                        }
+                    }
+                    break
+                }
                 tickId++
                 Thread.sleep(cfg.runSleepMillis.toLong())
             }
@@ -277,8 +315,9 @@ class CloseAlgorithmView : Application() {
                     execute(config, retry = true)
                 }
             }
+            profitLabel = Label("profit: ???")
 
-            primaryStage.scene = Scene(BorderPane(chart, null, VBox(5.0, configJson, runButton, retryButton), null, null))
+            primaryStage.scene = Scene(BorderPane(chart, null, VBox(5.0, configJson, runButton, retryButton, profitLabel), null, null))
             primaryStage.show()
         }
     }
@@ -301,9 +340,8 @@ class CloseAlgorithmView : Application() {
 
     private fun takeRandomPrices(ticks: Long, path: String = ""): List<Double> {
         val paths = listOf(
-                "../Bitfinex-historical-data/ETHUSD/Candles_1m/2017/merged.csv"
-                //,
-                //"../Bitfinex-historical-data/ETHUSD/Candles_1m/2018/merged.csv",
+                "../Bitfinex-historical-data/ETHUSD/Candles_1m/2017/merged.csv",
+                "../Bitfinex-historical-data/ETHUSD/Candles_1m/2018/merged.csv"
                 //"../Bitfinex-historical-data/ETHUSD/Candles_1m/2019/merged.csv"
         )
         val pathString = if (path != "") path else paths[Random().nextInt(paths.size)]
