@@ -1,10 +1,7 @@
 package com.lleps.tradexchange.server
 
 import com.google.gson.Gson
-import com.lleps.tradexchange.util.gson
-import com.lleps.tradexchange.util.loadFrom
-import com.lleps.tradexchange.util.saveTo
-import com.lleps.tradexchange.util.toJsonString
+import com.lleps.tradexchange.util.*
 import javafx.application.Application
 import javafx.application.Platform
 import javafx.collections.FXCollections
@@ -17,8 +14,17 @@ import javafx.scene.control.TextArea
 import javafx.scene.layout.BorderPane
 import javafx.scene.layout.VBox
 import javafx.stage.Stage
+import org.ta4j.core.BaseTick
+import org.ta4j.core.BaseTimeSeries
+import org.ta4j.core.Decimal
+import org.ta4j.core.Tick
+import org.ta4j.core.indicators.EMAIndicator
+import org.ta4j.core.indicators.helpers.ClosePriceIndicator
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import java.util.*
 import kotlin.concurrent.thread
 
@@ -42,6 +48,7 @@ class CloseAlgorithmView : Application() {
     private lateinit var chartPriceSeries: XYChart.Series<Number, Number>
     private lateinit var topBarrierSeries: XYChart.Series<Number, Number>
     private lateinit var bottomBarrierSeries: XYChart.Series<Number, Number>
+    private lateinit var maSeries: XYChart.Series<Number, Number>
     private lateinit var configJson: TextArea
 
     private data class RunConfig(
@@ -52,13 +59,15 @@ class CloseAlgorithmView : Application() {
         var timeWeightTop: Double = 2.0,
         var priceWeightBottom: Double = 2.0,
         var timeWeightBottom: Double = 2.0,
-        val runSleepMillis: Int = 5
+        val runSleepMillis: Int = 5,
+        val longEmaPeriod: Int = 20,
+        val pastTicks: Int = 60
     )
 
     private fun runStrategyWithCfg(prices: List<Double>, cfg: RunConfig): Double {
         var result = 0.0
         for ((index, price) in prices.withIndex()) {
-            update(index.toLong(), price, cfg)
+            update(index.toLong(), price, cfg, emptyList())
             if (price > topBarrier || price < bottomBarrier) {
                 result = price
                 break
@@ -128,16 +137,42 @@ class CloseAlgorithmView : Application() {
     private var lastPrice = 0.0
     private var topBarrier = 0.0
     private var bottomBarrier = 0.0
+    private var maValue = 0.0
+    private var maIndicator: EMAIndicator? = null
 
-    private fun update(tickId: Long, price: Double, cfg: RunConfig) {
+    private fun update(tickId: Long, price: Double, cfg: RunConfig, past: List<Double>) {
         if (tickId == 0L) {
             lastPrice = price
             val topOffset = price * (cfg.topBarrierInitial / 100.0)
             topBarrier = price + topOffset
             val bottomOffset = price * (cfg.bottomBarrierInitial / 100.0)
             bottomBarrier = price - bottomOffset
+            val data = mutableListOf<Tick>()
+            for (pastPrice in (past+price)) {
+                data.add(BaseTick(
+                        ZonedDateTime.now(),
+                        0.0,//Decimal.ZERO,
+                        0.0,//Decimal.ZERO,
+                        0.0,//Decimal.ZERO,
+                        pastPrice,//Decimal.valueOf(price),
+                        0.0
+                ))
+            }
+            val closePrice = ClosePriceIndicator(BaseTimeSeries(data))
+            maIndicator = EMAIndicator(closePrice, cfg.longEmaPeriod)
+            maValue = price
             return
         }
+
+        val ma = maIndicator!!
+        ma.timeSeries.addTick(BaseTick(
+                ZonedDateTime.now(),
+                0.0,//Decimal.ZERO,
+                0.0,//Decimal.ZERO,
+                0.0,//Decimal.ZERO,
+                price,//Decimal.valueOf(price),
+                0.0
+        ))
 
         // TODO: use percent on priceIncrease.
         // also should use percent to get the initial position for the barriers!
@@ -146,22 +181,25 @@ class CloseAlgorithmView : Application() {
         lastPrice = price
         topBarrier += priceIncrease*cfg.priceWeightTop - timePassed*cfg.timeWeightTop
         bottomBarrier += priceIncrease.coerceAtLeast(0.0)*cfg.priceWeightBottom + timePassed*cfg.timeWeightBottom
+        maValue = ma[tickId.toInt()]
     }
 
-    private fun startFillingThread(cfg: RunConfig, prices: List<Double>) {
+    private fun startFillingThread(cfg: RunConfig, prices: List<Double>, past: List<Double>) {
         thread(start = true) {
             println("starting")
             var tickId = 0L
 
             for (data in prices) {
-                update(tickId, data, cfg)
+                update(tickId, data, cfg, past)
                 val tickNum = tickId
                 val topBarrierConst = topBarrier
                 val bottomBarrierConst = bottomBarrier
+                val maValueConst = maValue
                 Platform.runLater {
                     topBarrierSeries.data.add(XYChart.Data(tickNum, topBarrierConst))
                     bottomBarrierSeries.data.add(XYChart.Data(tickNum, bottomBarrierConst))
                     chartPriceSeries.data.add(XYChart.Data(tickNum, data))
+                    maSeries.data.add(XYChart.Data(tickNum, maValueConst))
                 }
                 if (data > topBarrier || data < bottomBarrier) break
                 tickId++
@@ -172,23 +210,28 @@ class CloseAlgorithmView : Application() {
 
     private var lastTicks = listOf<Double>()
     private fun execute(cfg: RunConfig, retry: Boolean = false) {
-        val maxTicks = cfg.ticks
-        val ticks = if (!retry) {
+        val maxTicks = cfg.pastTicks + cfg.ticks
+        val allTicks = if (!retry) {
             // generate new ticks
             takeRandomPrices(maxTicks.toLong())
         } else {
             // use ticks from last execution
             lastTicks
         }
-        this.lastTicks = ticks
+
+        this.lastTicks = allTicks
         chartPriceSeries.data.clear()
         topBarrierSeries.data.clear()
         bottomBarrierSeries.data.clear()
-        (chart.xAxis as NumberAxis).upperBound = maxTicks.toDouble()
+        maSeries.data.clear()
+        (chart.xAxis as NumberAxis).upperBound = (maxTicks - cfg.pastTicks).toDouble()
         //val (bestCfg, value) = calculateBestParameters(ticks, cfg)
         //println("Best value: $value. CFG: $bestCfg")
         //configJson.text = bestCfg.toJsonString()
-        startFillingThread(cfg, ticks)
+
+        val past = allTicks.subList(0, cfg.pastTicks)
+        val price = allTicks.subList(cfg.pastTicks, cfg.pastTicks + cfg.ticks)
+        startFillingThread(cfg, price, past)
     }
 
     override fun start(primaryStage: Stage) {
@@ -213,7 +256,9 @@ class CloseAlgorithmView : Application() {
             topBarrierSeries.name = "topBarrier"
             bottomBarrierSeries = XYChart.Series()
             bottomBarrierSeries.name = "bottomBarrier"
-            chart.data = FXCollections.observableArrayList(chartPriceSeries, bottomBarrierSeries, topBarrierSeries)
+            maSeries = XYChart.Series()
+            maSeries.name = "movingAverage"
+            chart.data = FXCollections.observableArrayList(chartPriceSeries, bottomBarrierSeries, topBarrierSeries, maSeries)
 
             // init config ui
             val initialRunConfig = loadFrom<RunConfig>("runConfig.json") ?: RunConfig()
