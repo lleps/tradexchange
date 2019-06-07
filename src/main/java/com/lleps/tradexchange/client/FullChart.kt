@@ -51,9 +51,15 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
     private val nodeHBox = VBox(-10.0)
     private lateinit var priceChart: CandleStickChart
     private lateinit var chartNavToolbar: HBox
+    private lateinit var operationSeries: XYChart.Series<Number, Number>
     private val extraCharts = mutableListOf<LineChart<Number, Number>>()
     private var minTimestamp = 0L
     private var maxTimestamp = 0L
+
+    private var onSelectCandleCallback: (Candle) -> Unit = {}
+    fun onSelectCandle(onSelect: (Candle) -> Unit) {
+        onSelectCandleCallback = onSelect
+    }
 
     init {
         center = nodeHBox
@@ -140,11 +146,13 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
             setOnMouseMoved { lastX = it.x }
             setOnMouseDragged {
                 val delta = it.x - lastX
-                xAxis.lowerBound += 900 * -delta
-                xAxis.upperBound += 900 * -delta
+                val difference = (xAxis.upperBound - xAxis.lowerBound) / 20
+                xAxis.lowerBound += 300 * difference * -delta
+                xAxis.upperBound += 300 * difference * -delta
                 lastX = it.x
                 adjustYRangeByXBounds(this)
             }
+            setOnSelectCandle { onSelectCandleCallback(it) }
         }
         val anchor = AnchorPane()
         anchor.children.addAll(priceChart, chartNavToolbar)
@@ -166,6 +174,34 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
     var operations = emptyList<Operation>()
     var priceIndicators = emptyMap<String, Map<Long, Double>>()
     var extraIndicators = emptyMap<String, Map<String, Map<Long, Double>>>()
+
+    // provide a method to update operations since this is needed for candle clicks.
+    // You can't rebuild the chart, lose the interval, etc at each click.
+    fun updateOperations() {
+        Platform.runLater {
+            operationSeries.data.clear()
+            for (operation in operations) { // operations are not parsed with RR in mind
+                if (operation.timestamp < minTimestamp) continue
+                else if (operation.timestamp > maxTimestamp) break
+
+                val offsetY = 15.0/2.0
+                val node = if (operation.type == OperationType.BUY) {
+                    Polygon( 5.0,-offsetY,  10.0,15.0-offsetY, 0.0,15.0-offsetY)
+                        .apply { fill = BUY_COLOR }
+                } else {
+                    Polygon( 5.0,+offsetY,  10.0,-15.0+offsetY, 0.0,-15.0+offsetY)
+                        .apply { fill = SELL_COLOR }
+                }
+                if (operation.description != null) {
+                    Tooltip.install(node, Tooltip(operation.description))
+                }
+                operationSeries.data.add(
+                    XYChart.Data<Number, Number>(operation.timestamp, operation.price)
+                        .also { it.node = node }
+                )
+            }
+        }
+    }
 
     private fun plotChart(minTimestamp: Long, maxTimestamp: Long, maxTicks: Int = 400) {
         chartPlotExecutor.execute {
@@ -222,6 +258,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
                         .also { it.node = node }
                 )
             }
+            this.operationSeries = operationSeries
             allSeries.add(operationSeries)
 
             // Build price indicators list

@@ -250,6 +250,12 @@ class ClientMain : Application() {
                                     return@getInstanceChartData
                                 }
                                 view.setChart(data.candles, data.operations, data.priceIndicators, data.extraIndicators)
+                                view.chart.onSelectCandle {
+                                    println("candle selected: $it")
+                                    val op = Operation(it.timestamp, OperationType.BUY, it.close, "buy clicked")
+                                    view.chart.operations = view.chart.operations + op
+                                    view.chart.updateOperations()
+                                }
                                 chartVersion[instance] = newChartVersion
                             }
                         }

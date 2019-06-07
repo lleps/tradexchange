@@ -32,6 +32,8 @@
 package com.lleps.tradexchange.client;
 
 import java.util.Iterator;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 import com.lleps.tradexchange.Candle;
 import javafx.animation.FadeTransition;
@@ -58,6 +60,8 @@ public class CandleStickChart extends XYChart<Number, Number> {
 
     public enum PriceType { CANDLES, LINE }
 
+    private Consumer<Candle> onSelectCandle;
+
     private PriceType priceType = PriceType.LINE;
 
     public void setPriceType(PriceType priceType) {
@@ -66,6 +70,10 @@ public class CandleStickChart extends XYChart<Number, Number> {
 
     public PriceType getPriceType() {
         return priceType;
+    }
+
+    public void setOnSelectCandle(Consumer<Candle> onSelectCandle) {
+        this.onSelectCandle = onSelectCandle;
     }
 
     /**
@@ -288,6 +296,7 @@ public class CandleStickChart extends XYChart<Number, Number> {
         } else {
             candle = new CandleNode("series" + seriesIndex, "data" + itemIndex);
             item.setNode(candle);
+            candle.setOnMouseClicked(e -> onSelectCandle.accept((Candle)item.getExtraValue()));
             if (priceType == PriceType.LINE) candle.setVisible(false);
         }
         return candle;

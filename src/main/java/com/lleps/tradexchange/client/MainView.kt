@@ -24,7 +24,7 @@ import javafx.scene.paint.Color
  * through setters passing bulk data.
  */
 class MainView {
-    private lateinit var chart: FullChart
+    lateinit var chart: FullChart
     private lateinit var outputPane: TextArea
     private lateinit var executeButton: Button
     private lateinit var tradeTableContainer: BorderPane
@@ -36,7 +36,7 @@ class MainView {
 
     fun initJavaFxContent(): Parent {
         // Main components
-        chart = FullChart(useCandles = false)
+        chart = FullChart(useCandles = true)
         val controlPane = VBox(15.0).apply { this.padding = Insets(5.0, 10.0, 1.0, 1.0) }
         val mainPane = BorderPane(chart, null, controlPane, null, null)
         outputPane = TextArea()
