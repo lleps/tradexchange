@@ -36,7 +36,7 @@ class MainView {
 
     fun initJavaFxContent(): Parent {
         // Main components
-        chart = FullChart()
+        chart = FullChart(useCandles = false)
         val controlPane = VBox(15.0).apply { this.padding = Insets(5.0, 10.0, 1.0, 1.0) }
         val mainPane = BorderPane(chart, null, controlPane, null, null)
         outputPane = TextArea()

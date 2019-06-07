@@ -15,9 +15,14 @@ import javafx.scene.layout.VBox
 import javafx.scene.paint.Color
 import javafx.stage.Stage
 import org.ta4j.core.BaseTimeSeries
+import org.ta4j.core.Indicator
 import org.ta4j.core.TimeSeries
 import org.ta4j.core.indicators.EMAIndicator
+import org.ta4j.core.indicators.RSIIndicator
+import org.ta4j.core.indicators.SMAIndicator
+import org.ta4j.core.indicators.StochasticRSIIndicator
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
+import org.ta4j.core.num.Num
 import kotlin.random.Random
 
 class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: Int, val buyPrice: Double) {
@@ -25,12 +30,15 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
     companion object {
 
         private lateinit var emaLong: EMAIndicator
+        private lateinit var emaShort: EMAIndicator // to smooth the price. very few ticks
+        private lateinit var rsi: RSIIndicator
         private lateinit var close: ClosePriceIndicator
 
         private var inited = false
+        private var lastCfg: Config = Config()
     }
 
-    class Config(
+    data class Config(
         var topBarrierInitial: Double = 2.0,
         var bottomBarrierInitial: Double = 2.0,
         var priceWeightTop: Double = 2.0,
@@ -38,13 +46,23 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
         var priceWeightBottom: Double = 2.0,
         var timeWeightBottom: Double = 2.0,
         val longEmaPeriod: Int = 20,
+        val shortEmaPeriod: Int = 3,
+        val rsiPeriod: Int = 14,
+        val openRsiValue: Int = 30,
+        val rsiPeriodEnter: Int = 60,
         var times: Int = 1
     )
 
     init {
+        if (inited && lastCfg != cfg) {
+            inited = false
+            lastCfg = cfg.copy()
+        }
         if (!inited) {
             close = ClosePriceIndicator(timeSeries)
             emaLong = EMAIndicator(close, cfg.longEmaPeriod) // To detect market trend change
+            emaShort = EMAIndicator(close, cfg.shortEmaPeriod)
+            rsi = RSIIndicator(close, cfg.rsiPeriod)
             inited = true
         }
     }
@@ -53,6 +71,9 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
     private var bottomBarrier: Double = buyPrice - pctToPrice(cfg.bottomBarrierInitial)
     private var topBarrierCrossed = false
     private var timePassed: Int = 0
+    private var startedDowntrend = false
+    private var firstTick = true
+    private var minWin = 0.0// how much win is secured
 
     /** Process the tick. Returns true if should close, false otherwise. */
     fun doTick(i: Int, chart: Strategy.ChartWriter?): Boolean {
@@ -60,25 +81,30 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
         val epoch = timeSeries.getBar(i).endTime.toEpochSecond()
         val timePassed = (this.timePassed++).toDouble()
         val priceIncreasePct = priceToPct(price - buyPrice)
+
+        if (firstTick) {
+            startedDowntrend = close[i] < emaLong[i]
+            firstTick = false
+        }
+
+
         topBarrier += priceIncreasePct*cfg.priceWeightTop - timePassed*cfg.timeWeightTop
         bottomBarrier += priceIncreasePct.coerceAtLeast(0.0)*cfg.priceWeightBottom + timePassed*cfg.timeWeightBottom
 
         if (chart != null) {
-            chart?.priceIndicator("ema", epoch, emaLong[i])
-            chart?.priceIndicator("topBarrier", epoch, topBarrier)
-            chart?.priceIndicator("bottomBarrier", epoch, bottomBarrier)
+            chart.priceIndicator("ema", epoch, emaLong[i])
+            chart.priceIndicator("topBarrier", epoch, topBarrier)
+            chart.priceIndicator("bottomBarrier", epoch, bottomBarrier)
+            chart.priceIndicator("emaShort", epoch, emaShort[i])
+            chart.extraIndicator("rsi", "rsi", epoch, rsi[i])
+            //chart.priceIndicator("minWin", epoch, minWin)
         }
 
-        if (!topBarrierCrossed && price > topBarrier) {
-            topBarrierCrossed = true
-        }
-        var result = false
-        if (topBarrierCrossed && close.crossUnder(emaLong, i)) {
-            result = true
-        } else if (price < bottomBarrier) {
-            result = true
-        }
-        return result
+        if (price > topBarrier) return true // for extreme gains
+        if (price < bottomBarrier) return true // for extreme losses
+        if (timePassed >= 145.0) return true
+        //if (emaShort.crossUnder(emaLong, i)) return true // for general downtrend
+        return false
     }
 
     private fun pctToPrice(pct: Double) = buyPrice * (pct / 100.0)
@@ -86,19 +112,26 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
 
     /** To quickly test the strategy visually */
     class Tester : Application() {
-        private var lastTickInitial = 0
-        private var lastTickEnd = 0
+        private var initialTick = 0
+        private var finalTick = 0
         private lateinit var chart: FullChart
         private var profitSum: Double = 0.0
         private var randomSum: Double = 0.0
         private lateinit var profitLabel: Label
+        private lateinit var selectionIndicator: Indicator<Num>
+        private var lastRsiPeriod = 0
+
 
         private fun execute(cfg: Config, retry: Boolean = false) {
             if (!retry) {
-                lastTickInitial = Random.nextInt(series.barCount - 200)
-                lastTickEnd = lastTickInitial + 200
+                // take candles at rsi>35
+                while (true) {
+                    initialTick = Random.nextInt(series.barCount - 200)
+                    finalTick = initialTick + 200
+                    if (selectionIndicator[initialTick + 50] < selectionIndicator[finalTick]) break
+                }
             }
-            val initialTick = lastTickInitial + 50
+            val initialTick = initialTick + 50
             val initialPrice = series.getBar(initialTick).closePrice.doubleValue()
             val closeStrategy = CloseStrategy(cfg, series, initialTick, initialPrice)
             val multipleTimes = cfg.times > 1
@@ -107,7 +140,7 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
             var maxPrice = 0.0
             var minPrice = 999999.0
             var sellPrice = 0.0
-            for (i in initialTick..lastTickEnd) {
+            for (i in initialTick..finalTick) {
                 val tickPrice = series.getBar(i).closePrice.doubleValue()
                 maxPrice = maxOf(maxPrice, tickPrice)
                 minPrice = minOf(minPrice, tickPrice)
@@ -138,12 +171,12 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
             profitSum += calcPercent(profit)
 
             // calculate results for random
-            val profitRandom = series.getBar(lastTickEnd).closePrice.doubleValue() - initialPrice
+            val profitRandom = series.getBar(finalTick).closePrice.doubleValue() - initialPrice
             randomSum += calcPercent(profitRandom)
 
             // display stuff if necessary
             if (!multipleTimes && chartWriter != null) {
-                chart.priceData = (initialTick..lastTickEnd).map {
+                chart.priceData = (initialTick..finalTick).map {
                     val bar = series.getBar(it)
                     Candle(
                         bar.endTime.toEpochSecond(),
@@ -179,8 +212,8 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
         private lateinit var series: TimeSeries
         override fun start(stage: Stage) {
             val paths = listOf(
-                "../Bitfinex-historical-data/ETHUSD/Candles_1m/2017/merged.csv",
-                "../Bitfinex-historical-data/ETHUSD/Candles_1m/2018/merged.csv"
+                "../Bitfinex-historical-data/ETHUSD/Candles_1m/2017/merged.csv"//,
+                //"../Bitfinex-historical-data/ETHUSD/Candles_1m/2018/merged.csv"
                 //"../Bitfinex-historical-data/ETHUSD/Candles_1m/2019/merged.csv"
             )
             println("loading...")
@@ -194,6 +227,10 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
                 setOnAction {
                     val cfg = gson.fromJson<Config>(jsonTextArea.text, Config::class.java)
                     cfg.saveTo("CloseStrategyTestConfig.json")
+                    if (lastRsiPeriod != cfg.rsiPeriodEnter) {
+                        selectionIndicator = SMAIndicator(ClosePriceIndicator(series), cfg.rsiPeriodEnter)
+                        lastRsiPeriod = cfg.rsiPeriodEnter
+                    }
                     if (cfg.times > 1) {
                         profitSum = 0.0
                         randomSum = 0.0
@@ -202,8 +239,8 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
                         }
                         val times = cfg.times
                         println(" ")
-                        println("trading: $profitSum ($times times). profit per trade avg: ${profitSum / times}")
-                        println("random: $randomSum ($times times). profit per trade avg: ${randomSum / times}")
+                        println("trading: $profitSum% ($times times). profit per trade avg: ${profitSum / times}%")
+                        println("random: $randomSum% ($times times). profit per trade avg: ${randomSum / times}%")
                     } else {
                         execute(cfg)
                     }

@@ -52,7 +52,9 @@ class Strategy(
             "strategy.sellBarrier1" to 1.0,
             "strategy.sellBarrier2" to 3.0,
             "strategy.rsiBuy" to 30,
-            "strategy.rsiPeriod" to 14
+            "strategy.rsiPeriod" to 14,
+            "strategy.obvBuy" to .25,
+            "strategy.obvNormalPeriod" to 120
         )
     }
 
@@ -63,6 +65,8 @@ class Strategy(
     private val sellBarrier2 = input.getValue("strategy.sellBarrier2").toFloat()
     private val openTradesCount = input.getValue("strategy.openTradesCount").toInt()
     private val rsiBuy = input.getValue("strategy.rsiBuy").toFloat()
+    private val obvBuy = input.getValue("strategy.obvBuy").toFloat()
+    private val obvNormalPeriod = input.getValue("strategy.obvNormalPeriod").toInt()
 
     var tradeCount = 0
         private set
@@ -84,7 +88,7 @@ class Strategy(
 
     // Indicators
     private val close = ClosePriceIndicator(series)
-    private val macd = MACDIndicator(close, 12, 26)
+    private val macd = NormalizationIndicator(MACDIndicator(close, 12, 26), 130)
     private val macdSignal = EMAIndicator(macd, 9)
     private val macdHistogram = CompositeIndicator(macd, macdSignal) { macd, macdSignal -> macd - macdSignal }
     private val normalMacd = NormalizationIndicator(macd, 30)
@@ -99,10 +103,10 @@ class Strategy(
     private val volatiltyIndicatorBB = CompositeIndicator(upBBand, lowBBand) { up, low -> up - low }
     private val normalMacd2 = NormalizationIndicator(macd, 200)
     private val obvIndicator = OnBalanceVolumeIndicator(series)
-    private val obvIndicatorNormal = NormalizationIndicator(obvIndicator, 80)
+    private val obvIndicatorNormal = NormalizationIndicator(obvIndicator, obvNormalPeriod)
 
     private fun shouldOpen(i: Int, epoch: Long): Boolean {
-        return rsi[i] < rsiBuy //&& rsi[i] < 60f
+        return macd[i] < rsiBuy && obvIndicatorNormal[i] < obvBuy
     }
 
     private fun shouldClose(i: Int, epoch: Long, trade: OpenTrade): Boolean {
@@ -129,7 +133,7 @@ class Strategy(
 
     fun onDrawChart(chart: ChartWriter, epoch: Long, i: Int) {
         //chart.priceIndicator("BB Lower", epoch, lowBBand[i])
-        chart.priceIndicator("short MA", epoch, shortMA[i])
+        //chart.priceIndicator("short MA", epoch, shortMA[i])
         //chart.priceIndicator("long MA", epoch, longMA[i])
 
         // RSI
@@ -143,7 +147,7 @@ class Strategy(
         //chart.extraIndicator("MACD", "histogram", epoch, macdHistogram[i])
 
         // OBV
-        //chart.extraIndicator("OBV", "obv", epoch, obvIndicator[i])
+        chart.extraIndicator("OBV", "obv", epoch, obvIndicatorNormal[i])
     }
 
     fun onTick(i: Int): List<Operation> {
