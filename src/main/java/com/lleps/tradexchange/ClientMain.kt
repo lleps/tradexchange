@@ -20,6 +20,7 @@ import java.io.PrintWriter
 import java.io.StringWriter
 import javafx.scene.control.ButtonType
 import javafx.scene.control.Alert
+import javafx.scene.image.ImageView
 
 class ClientMain : Application() {
     private lateinit var tabPane: TabPane
@@ -39,7 +40,7 @@ class ClientMain : Application() {
         this.stage = stage
         clientData = loadFrom<ClientData>("tradexchange_data.json") ?: ClientData()
         connection = RESTClient(clientData.host)
-        initUpdaterThread()
+        fetchCurrentInstanceDataThread()
 
         // Controls
         val selectServerButton = Button("Set host").apply {
@@ -68,10 +69,10 @@ class ClientMain : Application() {
         }
         val createInstanceButton = Button("Add instance").apply {
             setOnAction {
-                val textInput = TextInputDialog("new-instance:{copy input from}?")
+                val textInput = TextInputDialog("type:name:{source?}")
                 textInput.title = "Add instance"
                 textInput.headerText = null
-                textInput.dialogPane.contentText = ""
+                textInput.dialogPane.contentText = "types: backtest, live, train. ej 'live:ethbot'"
                 textInput.showAndWait()
                     .ifPresent { response ->
                         if (!response.isEmpty()) {
@@ -79,13 +80,12 @@ class ClientMain : Application() {
                                 showError("name already used")
                                 return@ifPresent
                             }
-                            connection.createInstance(response) { _, throwable ->
+                            connection.createInstance(response) { newInstance, throwable ->
                                 if (throwable != null) {
                                     showError("createInstance", throwable)
                                     return@createInstance
                                 }
-                                val instance = if (response.contains(":")) response.split(":")[0] else response
-                                registerTab(instance, select = true)
+                                registerTab(newInstance, select = true)
                             }
                         }
                     }
@@ -208,8 +208,8 @@ class ClientMain : Application() {
     }
 
     /** This thread fetches the state from the server every second and update UIs accordingly */
-    private fun initUpdaterThread() {
-        thread(start = true, name = "backgroundUpdateThread", isDaemon = true) {
+    private fun fetchCurrentInstanceDataThread() {
+        thread(start = true, name = "backendDataFetchThread", isDaemon = true) {
             var lastInstance = ""
             while (true) {
                 if (waitingToAcceptError) continue
@@ -227,6 +227,20 @@ class ClientMain : Application() {
                         }
                         if (newStateVersion > stateVersion.getValue(instance)) {
                             connection.getInstanceState(instance) { data, throwable2 ->
+                                // Add icon depending on type
+                                val tab = tabs[instance]
+                                if (tab != null) {
+                                    Platform.runLater {
+                                        if (tab.graphic == null) {
+                                            val image = when (data.type) {
+                                                InstanceType.BACKTEST -> "backtesticon.png"
+                                                InstanceType.LIVE -> "liveicon.png"
+                                                InstanceType.TRAIN -> "trainicon.png"
+                                            }
+                                            tab.graphic = ImageView(Image(image, true))
+                                        }
+                                    }
+                                }
                                 if (throwable2 != null) {
                                     showError("getInstanceState", throwable2)
                                     return@getInstanceState

@@ -6,22 +6,27 @@ interface RESTInterface {
     fun getInstanceState(instance: String, onResult: (InstanceState, Throwable?) -> Unit)
     fun getInstanceChartData(instance: String, onResult: (InstanceChartData, Throwable?) -> Unit)
     fun updateInput(instance: String, input: Map<String, String>, onResult: (Unit, Throwable?) -> Unit)
-    fun createInstance(instance: String, onResult: (Unit, Throwable?) -> Unit)
+    fun createInstance(instanceQuery: String, onResult: (String, Throwable?) -> Unit)
     fun deleteInstance(instance: String, onResult: (Unit, Throwable?) -> Unit)
     fun getInstanceVersion(instance: String, onResult: (Pair<Int, Int>, Throwable?) -> Unit)
 }
 
 // Shared data
 
+enum class InstanceType { BACKTEST, LIVE, TRAIN }
+
 /** Encapsulates main instance state. */
 data class InstanceState(
+    val type: InstanceType = InstanceType.LIVE,
     var input: Map<String, String> = emptyMap(),
     var output: String = "",
     var trades: List<TradeEntry> = emptyList(),
     var statusText: String = "not initialized",
     var statusPositiveness: Int = 0,
     var stateVersion: Int = 1, // those 2 should increase when a change occurs, so the client knows it needs the data
-    var chartVersion: Int = 1
+    var chartVersion: Int = 1,
+    var action1: String = "",
+    var action2: String = ""
 )
 
 /** Chart data (separated since it's too big to bundle with regular state). */

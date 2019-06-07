@@ -6,7 +6,6 @@ import com.lleps.tradexchange.InstanceChartData
 import com.lleps.tradexchange.InstanceState
 import com.lleps.tradexchange.RESTInterface
 import com.lleps.tradexchange.util.GZIPCompression
-import com.lleps.tradexchange.util.gson
 import com.mashape.unirest.http.HttpResponse
 import com.mashape.unirest.http.Unirest
 import org.slf4j.LoggerFactory
@@ -98,14 +97,14 @@ class RESTClient(var host: String = "http://localhost:8080") : RESTInterface {
         )
     }
 
-    override fun createInstance(instance: String, onResult: (Unit, Throwable?) -> Unit) {
+    override fun createInstance(instanceQuery: String, onResult: (String, Throwable?) -> Unit) {
         makeRequest(
             request = {
-                val response = Unirest.put("$host/createInstance/$instance").asString()
+                val response = Unirest.put("$host/createInstance/$instanceQuery").asString()
                 checkResponse(response)
-                Unit
+                response.body
             },
-            errorValue = Unit,
+            errorValue = "",
             resultCallback = onResult
         )
     }

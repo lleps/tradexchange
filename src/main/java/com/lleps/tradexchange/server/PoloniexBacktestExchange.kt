@@ -13,88 +13,48 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 
+/** Get market history from poloniex, using a local cache to speed it up. */
+private class ChartDataWrapper(val content: List<PoloniexChartData> = mutableListOf())
+fun getTicksFromPoloniex(pair: String, period: Int, daysBack: Int): List<Bar> {
+    val fromEpoch = (Instant.now().toEpochMilli() / 1000) - (daysBack * 24 * 3600)
+    File("data").mkdir()
+    File("data/cache").mkdir()
+    val file = "data/cache/pol-$pair-$period-${fromEpoch/3600}.json"
+    val cached = loadFrom<ChartDataWrapper>(file)
+    val poloniex = PoloniexExchangeService("", "")
+    val chartData = if (cached == null) {
+        val result = ChartDataWrapper(poloniex.returnChartData(pair, period.toLong(), fromEpoch).toList())
+        result.saveTo(file)
+        result.content
+    } else {
+        cached.content
+    }
+
+    return chartData.map {
+        BaseBar(
+            Duration.ofSeconds(period.toLong()),
+            Instant.ofEpochSecond(it.date.toEpochSecond()).atZone(ZoneOffset.UTC),
+            DoubleNum.valueOf(it.open.toDouble()),
+            DoubleNum.valueOf(it.high.toDouble()),
+            DoubleNum.valueOf(it.low.toDouble()),
+            DoubleNum.valueOf(it.close.toDouble()),
+            DoubleNum.valueOf(it.volume.toDouble()),
+            DoubleNum.valueOf(0)
+        )
+    }
+}
+
 class PoloniexBacktestExchange(
-    pair: String,
-    private val period: Long,
-    fromEpoch: Long,
-    warmUpTicks: Int,
     initialMoney: Double = 0.0,
     initialCoins: Double = 0.0
 ) : Exchange {
-
-    private val apiKey = "GW202H58-HQULS9AJ-SZDSHJZ1-FXRYESKK"
-    private val apiSecret = "7fe0d64f187fd333a9754085fa7a1e57c6a98345908f7c84dcbeed1465aa55a7adb7b36a276e95557a4598887673cbdbfbc8bacc0f9968f970bbe96fccb0745b"
-    private val poloniex = PoloniexExchangeService(apiKey, apiSecret)
-    private class ChartDataWrapper(val content: List<PoloniexChartData> = mutableListOf())
-    private val chartData: List<PoloniexChartData>
 
     companion object {
         private val LOGGER = LoggerFactory.getLogger(PoloniexBacktestExchange::class.java)
     }
 
-    init {
-        val from = fromEpoch - (warmUpTicks * period)
-        File("data").mkdir()
-        File("data/cache").mkdir()
-        val file = "data/cache/pol-$pair-$period-${from/3600}.json"
-        LOGGER.info("Trying to load data from '$file'...")
-        val cached = loadFrom<ChartDataWrapper>(file)
-        if (cached == null) {
-            LOGGER.info("Failed. Fetching online...")
-            val result = ChartDataWrapper(poloniex.returnChartData(pair, period, from).toList())
-            result.saveTo(file)
-            chartData = result.content
-        } else {
-            LOGGER.info("Loaded from cache.")
-            chartData = cached.content
-        }
-    }
-
-    private val warmUpChartData by lazy {
-        chartData.subList(0, warmUpTicks).toMutableList()
-    }
-
-    private val testingChartData by lazy {
-        chartData.subList(warmUpTicks, chartData.size).toMutableList()
-    }
-
-    override val warmUpHistory: List<Bar>
-        get() = warmUpChartData.map {
-            BaseBar(
-                Duration.ofSeconds(period),
-                Instant.ofEpochSecond(it.date.toEpochSecond()).atZone(ZoneOffset.UTC),
-                DoubleNum.valueOf(it.open.toDouble()),
-                DoubleNum.valueOf(it.high.toDouble()),
-                DoubleNum.valueOf(it.low.toDouble()),
-                DoubleNum.valueOf(it.close.toDouble()),
-                DoubleNum.valueOf(it.volume.toDouble()),
-                DoubleNum.valueOf(0)
-            )
-        }
-
-    override var moneyBalance: Double = initialMoney// + 0.001
-
-    override var coinBalance: Double = initialCoins// + 0.001
-
-    private val chartDataAsTicks: MutableList<BaseBar> by lazy {
-        testingChartData.map {
-            BaseBar(
-                Duration.ofSeconds(period),
-                Instant.ofEpochSecond(it.date.toEpochSecond()).atZone(ZoneOffset.UTC),
-                DoubleNum.valueOf(it.open.toDouble()),
-                DoubleNum.valueOf(it.high.toDouble()),
-                DoubleNum.valueOf(it.low.toDouble()),
-                DoubleNum.valueOf(it.close.toDouble()),
-                DoubleNum.valueOf(it.volume.toDouble()),
-                DoubleNum.valueOf(0)
-            )
-        }.toMutableList()
-    }
-
-    override fun fetchTick(): Bar? {
-        if (chartDataAsTicks.isEmpty()) return null
-        return chartDataAsTicks.removeAt(0)
-    }
+    override var moneyBalance: Double = initialMoney
+    override var coinBalance: Double = initialCoins
 
     override fun buy(coins: Double, price: Double) {
         if (moneyBalance < coins * price) {

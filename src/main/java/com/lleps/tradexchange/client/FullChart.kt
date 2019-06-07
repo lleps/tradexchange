@@ -361,12 +361,6 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
     class TestApp : Application() {
         override fun start(primaryStage: Stage) {
             val chart = FullChart()
-            val poloniex = PoloniexBacktestExchange(
-                pair = "USDT_ETH",
-                period = 300 * 6,
-                fromEpoch = Instant.now().minusSeconds(3600 * 24 * 5).epochSecond,
-                warmUpTicks = 100
-            )
             /*chart.priceData = listOf(
                 Candle(1, 23.0, 25.5, 26.6, 22.0),
                 Candle(2, 24.0, 23.5, 28.6, 24.0),

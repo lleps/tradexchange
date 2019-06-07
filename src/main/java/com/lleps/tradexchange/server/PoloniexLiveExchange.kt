@@ -20,7 +20,6 @@ class PoloniexLiveExchange(
 ) : Exchange {
     private val poloniex = PoloniexExchangeService(apiKey, apiSecret)
     private val initialNowEpoch = ZonedDateTime.now(ZoneOffset.UTC).toEpochSecond()
-    private val warmUp = poloniex.returnChartData(pair, period, initialNowEpoch - warmUpPeriods*period).toMutableList()
 
     companion object {
         private val LOGGER = LoggerFactory.getLogger(PoloniexLiveExchange::class.java)
@@ -46,27 +45,13 @@ class PoloniexLiveExchange(
         }
     }
 
-    override val warmUpHistory: List<Bar>
-        get() = warmUp.map {
-            BaseBar(
-                Duration.ofSeconds(period),
-                Instant.ofEpochSecond(it.date.toEpochSecond()).atZone(ZoneOffset.UTC),
-                DoubleNum.valueOf(it.open.toDouble()),
-                DoubleNum.valueOf(it.high.toDouble()),
-                DoubleNum.valueOf(it.low.toDouble()),
-                DoubleNum.valueOf(it.close.toDouble()),
-                DoubleNum.valueOf(it.volume.toDouble()),
-                DoubleNum.valueOf(0)
-            )
-        }
-
     override val moneyBalance: Double
         get() = poloniex.returnCurrencyBalance(pair.split("_")[0]).available.toDouble() // X_IGNORED
 
     override val coinBalance: Double
         get() = poloniex.returnCurrencyBalance(pair.split("_")[1]).available.toDouble() // IGNORED_X
 
-    override fun fetchTick(): Bar? {
+    fun fetchTicker(): Bar {
         // Fetch ticker every few seconds, to grab max,min,open,close,etc and return as a candle
         val tickExpire = System.currentTimeMillis() + period*1000
         var high = 0.0
