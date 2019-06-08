@@ -60,7 +60,7 @@ public class CandleStickChart extends XYChart<Number, Number> {
 
     public enum PriceType { CANDLES, LINE }
 
-    private Consumer<Candle> onSelectCandle;
+    private Consumer<Candle> onSelectCandle = (Candle c) -> {};
 
     private PriceType priceType = PriceType.LINE;
 

@@ -146,9 +146,9 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
             setOnMouseMoved { lastX = it.x }
             setOnMouseDragged {
                 val delta = it.x - lastX
-                val difference = (xAxis.upperBound - xAxis.lowerBound) / 20
-                xAxis.lowerBound += 300 * difference * -delta
-                xAxis.upperBound += 300 * difference * -delta
+                val difference = (xAxis.upperBound - xAxis.lowerBound) / 100
+                xAxis.lowerBound += difference * -delta
+                xAxis.upperBound += difference * -delta
                 lastX = it.x
                 adjustYRangeByXBounds(this)
             }
@@ -212,6 +212,8 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
 
             // Calculate chart resolution
             val tickCount = priceData.count { it.timestamp in (minTimestamp)..(maxTimestamp) }
+            if (tickCount == 0) return@execute
+
             var tickRR = 1
             while ((tickCount / tickRR) > maxTicks) {
                 tickRR++

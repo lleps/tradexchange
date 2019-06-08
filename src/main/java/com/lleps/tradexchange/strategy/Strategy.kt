@@ -19,7 +19,7 @@ class Strategy(
     private val output: OutputWriter,
     private val series: TimeSeries,
     private val period: Long,
-    private val backtest: Boolean,
+    private val training: Boolean,
     private val exchange: Exchange,
     private val input: Map<String, String>) {
 

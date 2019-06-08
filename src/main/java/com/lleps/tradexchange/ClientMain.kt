@@ -150,6 +150,28 @@ class ClientMain : Application() {
             if (img != null) {
                 tab.graphic = ImageView(Image(img, true))
             }
+            view.onSelectCandle { candle ->
+                val op = view.chart.operations.firstOrNull { op -> op.timestamp == candle.timestamp }
+                connection.toggleCandleState(instance, candle.timestamp, toggle = op == null) { _, throwable3 ->
+                    if (throwable3 != null) {
+                        showError("toggleCandleState", throwable3)
+                        return@toggleCandleState
+                    }
+
+                    // once we get the ok response from the server, proceed to (un)plot it locally
+                    if (op == null) {
+                        val newOp = Operation(
+                            candle.timestamp,
+                            OperationType.BUY,
+                            candle.close,
+                            "buy train point")
+                        view.chart.operations += newOp
+                    } else {
+                        view.chart.operations -= op
+                    }
+                    view.chart.updateOperations()
+                }
+            }
             tab.setOnCloseRequest { e ->
                 e.consume()
                 val alert = Alert(Alert.AlertType.CONFIRMATION, "")
@@ -175,8 +197,13 @@ class ClientMain : Application() {
             views[instance] = view
             tabPane.tabs.add(tab)
             if (select) tabPane.selectionModel.select(tab)
-            view.onExecute {
-                connection.updateInput(instance, it) { _, throwable ->
+            view.onAction1 {
+                connection.updateInput(instance, it, 1) { _, throwable ->
+                    if (throwable != null) showError("updateInput", throwable)
+                }
+            }
+            view.onAction2 {
+                connection.updateInput(instance, it, 2) { _, throwable ->
                     if (throwable != null) showError("updateInput", throwable)
                 }
             }
@@ -266,12 +293,6 @@ class ClientMain : Application() {
                                     return@getInstanceChartData
                                 }
                                 view.setChart(data.candles, data.operations, data.priceIndicators, data.extraIndicators)
-                                view.chart.onSelectCandle {
-                                    println("candle selected: $it")
-                                    val op = Operation(it.timestamp, OperationType.BUY, it.close, "buy clicked")
-                                    view.chart.operations = view.chart.operations + op
-                                    view.chart.updateOperations()
-                                }
                                 chartVersion[instance] = newChartVersion
                             }
                         }

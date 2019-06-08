@@ -81,10 +81,10 @@ class RESTClient(var host: String = "http://localhost:8080") : RESTInterface {
         )
     }
 
-    override fun updateInput(instance: String, input: Map<String, String>, onResult: (Unit, Throwable?) -> Unit) {
+    override fun updateInput(instance: String, input: Map<String, String>, button: Int, onResult: (Unit, Throwable?) -> Unit) {
         makeRequest(
             request = {
-                val response = Unirest.post("$host/updateInput/$instance")
+                val response = Unirest.post("$host/updateInput/$instance/$button")
                     .header("accept", "application/json")
                     .header("Content-Type", "application/json")
                     .body(jacksonMapper.writeValueAsString(input))
@@ -130,6 +130,18 @@ class RESTClient(var host: String = "http://localhost:8080") : RESTInterface {
                 Pair(versions[0].toInt(), versions[1].toInt())
             },
             errorValue = Pair(0, 0),
+            resultCallback = onResult
+        )
+    }
+
+    override fun toggleCandleState(instance: String, candleEpoch: Long, toggle: Boolean, onResult: (Unit, Throwable?) -> Unit) {
+        makeRequest(
+            request = {
+                val response = Unirest.post("$host/toggleCandleState/$instance/$candleEpoch/$toggle").asString()
+                checkResponse(response)
+                Unit
+            },
+            errorValue = Unit,
             resultCallback = onResult
         )
     }

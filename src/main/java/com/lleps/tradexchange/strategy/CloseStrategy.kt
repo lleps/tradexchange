@@ -225,7 +225,7 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
             val jsonTextArea = TextArea(initialRunConfig.toJsonString())
             val runButton = Button("Run").apply {
                 setOnAction {
-                    val cfg = gson.fromJson<Config>(jsonTextArea.text, Config::class.java)
+                    val cfg = parseJson<Config>(jsonTextArea.text)
                     cfg.saveTo("CloseStrategyTestConfig.json")
                     if (lastRsiPeriod != cfg.rsiPeriodEnter) {
                         selectionIndicator = SMAIndicator(ClosePriceIndicator(series), cfg.rsiPeriodEnter)
@@ -248,7 +248,7 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
             }
             val retryButton = Button("Retry").apply {
                 setOnAction {
-                    val cfg = gson.fromJson<Config>(jsonTextArea.text, Config::class.java)
+                    val cfg = parseJson<Config>(jsonTextArea.text)
                     cfg.saveTo("CloseStrategyTestConfig.json")
                     execute(cfg, retry = true)
                 }

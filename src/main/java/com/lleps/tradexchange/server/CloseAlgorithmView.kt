@@ -300,14 +300,14 @@ class CloseAlgorithmView : Application() {
             configJson = TextArea(initialRunConfig.toJsonString())
             val runButton = Button("Run").apply {
                 setOnAction {
-                    val config = gson.fromJson<RunConfig>(configJson.text, RunConfig::class.java)
+                    val config = parseJson<RunConfig>(configJson.text)
                     config.saveTo("runConfig.json")
                     execute(config)
                 }
             }
             val retryButton = Button("Retry").apply {
                 setOnAction {
-                    val config = gson.fromJson<RunConfig>(configJson.text, RunConfig::class.java)
+                    val config = parseJson<RunConfig>(configJson.text)
                     config.saveTo("runConfig.json")
                     execute(config, retry = true)
                 }

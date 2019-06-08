@@ -33,16 +33,22 @@ class MainView {
     private lateinit var action2Button: Button
     private var onAction1: (Map<String, String>) -> Unit = {}
     private var onAction2: (Map<String, String>) -> Unit = {}
+    private val paneWidth = 300.0
+    private var onSelectCandle: ((Candle) -> Unit)? = null
 
     fun initJavaFxContent(): Parent {
         // Main components
         chart = FullChart(useCandles = true)
+        chart.onSelectCandle { onSelectCandle?.invoke(it) }
         val controlPane = VBox(15.0).apply { this.padding = Insets(5.0, 10.0, 1.0, 1.0) }
+        controlPane.prefWidth = paneWidth
         val mainPane = BorderPane(chart, null, controlPane, null, null)
         outputPane = TextArea()
+        outputPane.prefHeight = 500.0
 
         // Input
-        inputPane = VBox(-3.0)
+        inputPane = VBox(5.0)
+        inputPane.prefWidth = paneWidth
 
         // Execute and status label
         statusLabel = Label("")
@@ -55,13 +61,18 @@ class MainView {
         val tabTrades = Tab("Trades", tradeTableContainer)
         val tabPane = TabPane(tabOutput, tabTrades)
         tabPane.tabClosingPolicy = TabPane.TabClosingPolicy.UNAVAILABLE
+        tabPane.prefWidth = paneWidth
 
-        outputPane.prefWidth = 400.0
+        outputPane.prefWidth = paneWidth
         controlPane.children.add(inputPane)
-        controlPane.children.add(HBox(statusLabel).apply { alignment = Pos.CENTER_RIGHT })
-        controlPane.children.add(HBox(5.0, action2Button, action1Button).apply { alignment = Pos.CENTER_RIGHT })
+        controlPane.children.add(HBox(statusLabel).apply { alignment = Pos.CENTER_RIGHT; prefWidth = paneWidth })
+        controlPane.children.add(HBox(5.0, action2Button, action1Button).apply { alignment = Pos.CENTER_RIGHT; prefWidth = paneWidth })
         controlPane.children.add(tabPane)
         return mainPane
+    }
+
+    fun onSelectCandle(callback: (Candle) -> Unit) {
+        onSelectCandle = callback
     }
 
     private fun readInput(): Map<String, String>{
@@ -70,8 +81,12 @@ class MainView {
         return result
     }
 
-    fun onExecute(callback: (Map<String, String>) -> Unit) {
+    fun onAction1(callback: (Map<String, String>) -> Unit) {
         onAction1 = callback
+    }
+
+    fun onAction2(callback: (Map<String, String>) -> Unit) {
+        onAction2 = callback
     }
 
     fun setAction1(action1: String) {
@@ -113,15 +128,19 @@ class MainView {
 
     fun setInput(input: Map<String, Any>) {
         Platform.runLater {
-            inputPane.children.clear()
+            val mainInput = VBox(-3.0)
+            val strategyInput = VBox(-3.0) // to group this in an accordition
             inputUIElements.clear()
             for ((itemName, itemDefaultValue) in input) {
                 val label = Label(itemName)
                 val field = TextField(itemDefaultValue.toString())
                 field.setOnKeyTyped { Platform.runLater { updateInput() } }
                 inputUIElements += Pair(label, field)
-                inputPane.children.add(BorderPane(null, null, field, null, label))
+                val paneToAdd = if (label.text.startsWith("strategy.")) strategyInput else mainInput
+                paneToAdd.children.add(BorderPane(null, null, field, null, label))
             }
+            inputPane.children.clear()
+            inputPane.children.addAll(mainInput, TitledPane("Strategy", strategyInput))
             updateInput()
         }
     }
@@ -141,10 +160,21 @@ class MainView {
         operations: List<Operation>,
         priceIndicators: Map<String, Map<Long, Double>>,
         extraIndicators: Map<String, Map<String, Map<Long, Double>>>) {
-        if (chart.priceData == candles &&
-            chart.operations == operations &&
-            chart.priceIndicators == priceIndicators &&
-            chart.extraIndicators == extraIndicators) return
+        val priceChanged = chart.priceData != candles
+        val operationsChanged = chart.operations != operations
+        val priceIndicatorsChanged = chart.priceIndicators != priceIndicators
+        val extraIndicatorsChanged = chart.extraIndicators != extraIndicators
+        // nothing changed
+        if (!priceChanged && !operationsChanged && !priceIndicatorsChanged && !extraIndicatorsChanged) {
+            return
+        }
+        // only operations changed, update them without rebuilding the whole chart
+        else if (operationsChanged && !priceChanged && !priceIndicatorsChanged && !extraIndicatorsChanged) {
+            chart.operations = operations
+            chart.updateOperations()
+            return
+        }
+        // something else, rebuild the chart
         chart.priceData = candles
         chart.operations = operations
         chart.priceIndicators = priceIndicators

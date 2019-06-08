@@ -5,10 +5,11 @@ interface RESTInterface {
     fun getInstances(onResult: (List<String>, Throwable?) -> Unit)
     fun getInstanceState(instance: String, onResult: (InstanceState, Throwable?) -> Unit)
     fun getInstanceChartData(instance: String, onResult: (InstanceChartData, Throwable?) -> Unit)
-    fun updateInput(instance: String, input: Map<String, String>, onResult: (Unit, Throwable?) -> Unit)
+    fun updateInput(instance: String, input: Map<String, String>, button: Int, onResult: (Unit, Throwable?) -> Unit)
     fun createInstance(instanceQuery: String, onResult: (String, Throwable?) -> Unit)
     fun deleteInstance(instance: String, onResult: (Unit, Throwable?) -> Unit)
     fun getInstanceVersion(instance: String, onResult: (Pair<Int, Int>, Throwable?) -> Unit)
+    fun toggleCandleState(instance: String, candleEpoch: Long, toggle: Boolean, onResult: (Unit, Throwable?) -> Unit)
 }
 
 // Shared data
