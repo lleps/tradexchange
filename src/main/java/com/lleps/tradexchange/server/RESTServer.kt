@@ -11,9 +11,13 @@ import org.ta4j.core.Bar
 import org.ta4j.core.BaseTimeSeries
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
 import java.io.File
+import java.io.IOException
 import java.io.PrintWriter
 import java.io.StringWriter
+import java.lang.StringBuilder
+import java.nio.charset.Charset
 import java.nio.file.Files
+import java.nio.file.OpenOption
 import java.nio.file.Paths
 import java.time.*
 import java.time.format.DateTimeFormatter
@@ -183,8 +187,29 @@ class RESTServer {
                         if (button == 1) {
                             loadTrainChart(instance, input, out)
                         } else {
-                            out.write("Exporting...")
-                            out.write("Exported. (no, its fake)")
+                            File("data/trainings").mkdir()
+                            val path = "data/trainings/$instance.csv"
+                            out.write("Exporting to $path...")
+                            val chartData = instanceChartData.getValue(instance)
+                            val sb = StringBuilder()
+                            repeat(chartData.candles.size) { i ->
+                                val features = mutableListOf<Double>()
+                                val tickTimestamp = chartData.candles[i].timestamp
+                                features.add(chartData.candles[i].close)
+                                for ((_, extraChartData) in chartData.extraIndicators) {
+                                    for ((_, series) in extraChartData) {
+                                        val sorted = series.entries.sortedBy { it.key }.map { it.value }.toList()
+                                        features.add(sorted[i])
+                                    }
+                                }
+                                val buy = chartData.operations.firstOrNull { it.timestamp == tickTimestamp }
+                                val action = if (buy != null) 1 else 0
+                                sb.append(features.joinToString(separator = ","))
+                                sb.append(",$action\n")
+                            }
+                            // TODO: finish
+                            Files.write(Paths.get(path), sb.toString().toByteArray(Charset.defaultCharset()))
+                            out.write("Exported!")
                         }
                     }
                     InstanceType.LIVE -> TODO("live not implemented")

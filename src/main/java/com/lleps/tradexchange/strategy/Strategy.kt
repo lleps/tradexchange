@@ -2,6 +2,7 @@ package com.lleps.tradexchange.strategy
 
 import com.lleps.tradexchange.indicator.CompositeIndicator
 import com.lleps.tradexchange.indicator.NormalizationIndicator
+import com.lleps.tradexchange.indicator.OBVOscillatorIndicator
 import com.lleps.tradexchange.server.Exchange
 import com.lleps.tradexchange.util.get
 import org.ta4j.core.TimeSeries
@@ -102,7 +103,7 @@ class Strategy(
     private val upBBand = BollingerBandsUpperIndicator(middleBBand, sd14)
     private val volatiltyIndicatorBB = CompositeIndicator(upBBand, lowBBand) { up, low -> up - low }
     private val normalMacd2 = NormalizationIndicator(macd, 200)
-    private val obvIndicator = OnBalanceVolumeIndicator(series)
+    private val obvIndicator = OBVOscillatorIndicator(series, 38)
     private val obvIndicatorNormal = NormalizationIndicator(obvIndicator, obvNormalPeriod)
 
     private fun shouldOpen(i: Int, epoch: Long): Boolean {
