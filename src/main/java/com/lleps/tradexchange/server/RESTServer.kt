@@ -78,9 +78,9 @@ class RESTServer {
         val parts = instanceQuery.split(":")
         if (parts.size < 2 || parts.size > 3) error("query should be <type>:<name>:<copyFrom?>")
         val instanceTypeStr = parts[0]
-        val instanceName = parts[1]
         val instanceCopyFrom = if (parts.size == 3) parts[2] else null
         val instanceType = InstanceType.valueOf(instanceTypeStr.toUpperCase())
+        val instanceName = "[${instanceType.toString().toLowerCase()}]${parts[1]}"
 
         // try to get the input if copied from somewhere
         val inputData = if (instanceCopyFrom != null) instanceState.getValue(instanceCopyFrom).input else defaultInput

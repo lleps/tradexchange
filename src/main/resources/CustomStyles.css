@@ -12,3 +12,7 @@
 .table-view .column-header .label {
     -fx-padding: 1 1 1 1;
 }
+
+.tab-pane .tab-header-area {
+    -fx-padding: 0 0 0 140;
+}

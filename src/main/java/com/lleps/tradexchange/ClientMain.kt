@@ -43,7 +43,7 @@ class ClientMain : Application() {
         fetchCurrentInstanceDataThread()
 
         // Controls
-        val selectServerButton = Button("Set host").apply {
+        val selectServerButton = Button("IP").apply {
             setOnAction {
                 val textInput = TextInputDialog(connection.host)
                 textInput.title = "Set host (http://ip:port)"
@@ -67,7 +67,7 @@ class ClientMain : Application() {
                     }
             }
         }
-        val createInstanceButton = Button("Add instance").apply {
+        val createInstanceButton = Button("+").apply {
             setOnAction {
                 val textInput = TextInputDialog("type:name:{source?}")
                 textInput.title = "Add instance"
@@ -102,7 +102,7 @@ class ClientMain : Application() {
         val anchor = AnchorPane()
         anchor.children.addAll(tabPane, controlsHBox)
         AnchorPane.setTopAnchor(controlsHBox, 3.0)
-        AnchorPane.setRightAnchor(controlsHBox, 5.0)
+        AnchorPane.setLeftAnchor(controlsHBox, 5.0)
         AnchorPane.setTopAnchor(tabPane, 1.0)
         AnchorPane.setRightAnchor(tabPane, 1.0)
         AnchorPane.setLeftAnchor(tabPane, 1.0)
@@ -135,7 +135,21 @@ class ClientMain : Application() {
     private fun registerTab(instance: String, select: Boolean = false) {
         Platform.runLater {
             val view = MainView()
-            val tab = Tab(instance, view.initJavaFxContent())
+            val img = when {
+                instance.startsWith("[live]") -> "liveicon.png"
+                instance.startsWith("[backtest]") -> "backtesticon.png"
+                instance.startsWith("[train]") -> "trainicon.png"
+                else -> null
+            }
+            val tabName = if (img == null)
+                instance
+            else
+                instance.replace("[live]","").replace("[backtest]","").replace("[train]","")
+
+            val tab = Tab(tabName, view.initJavaFxContent())
+            if (img != null) {
+                tab.graphic = ImageView(Image(img, true))
+            }
             tab.setOnCloseRequest { e ->
                 e.consume()
                 val alert = Alert(Alert.AlertType.CONFIRMATION, "")
@@ -227,20 +241,6 @@ class ClientMain : Application() {
                         }
                         if (newStateVersion > stateVersion.getValue(instance)) {
                             connection.getInstanceState(instance) { data, throwable2 ->
-                                // Add icon depending on type
-                                val tab = tabs[instance]
-                                if (tab != null) {
-                                    Platform.runLater {
-                                        if (tab.graphic == null) {
-                                            val image = when (data.type) {
-                                                InstanceType.BACKTEST -> "backtesticon.png"
-                                                InstanceType.LIVE -> "liveicon.png"
-                                                InstanceType.TRAIN -> "trainicon.png"
-                                            }
-                                            tab.graphic = ImageView(Image(image, true))
-                                        }
-                                    }
-                                }
                                 if (throwable2 != null) {
                                     showError("getInstanceState", throwable2)
                                     return@getInstanceState
