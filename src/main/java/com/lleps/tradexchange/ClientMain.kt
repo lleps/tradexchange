@@ -254,6 +254,8 @@ class ClientMain : Application() {
                                 view.setOutput(data.output)
                                 view.setTrades(data.trades)
                                 view.setStatus(data.statusText, data.statusPositiveness)
+                                view.setAction1(data.action1)
+                                view.setAction2(data.action2)
                                 stateVersion[instance] = data.stateVersion
                             }
                         }

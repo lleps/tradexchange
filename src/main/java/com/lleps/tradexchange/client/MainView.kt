@@ -13,7 +13,6 @@ import javafx.scene.control.*
 import javafx.scene.control.cell.PropertyValueFactory
 import javafx.scene.layout.BorderPane
 import javafx.scene.layout.HBox
-import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
 import javafx.scene.paint.Color
 
@@ -26,13 +25,14 @@ import javafx.scene.paint.Color
 class MainView {
     lateinit var chart: FullChart
     private lateinit var outputPane: TextArea
-    private lateinit var executeButton: Button
     private lateinit var tradeTableContainer: BorderPane
     private lateinit var inputPane: VBox
     private lateinit var statusLabel: Label
     private val inputUIElements = mutableListOf<Pair<Label, TextField>>()
-
-    private var onExecute: (Map<String, String>) -> Unit = {}
+    private lateinit var action1Button: Button
+    private lateinit var action2Button: Button
+    private var onAction1: (Map<String, String>) -> Unit = {}
+    private var onAction2: (Map<String, String>) -> Unit = {}
 
     fun initJavaFxContent(): Parent {
         // Main components
@@ -46,9 +46,8 @@ class MainView {
 
         // Execute and status label
         statusLabel = Label("")
-        executeButton = Button("Execute").apply {
-            setOnAction { onExecute(readInput()) }
-        }
+        action1Button = Button("").apply { setOnAction { onAction1(readInput()) } }
+        action2Button = Button("").apply { setOnAction { onAction2(readInput()) } }
 
         // Tabs
         tradeTableContainer = BorderPane()
@@ -59,7 +58,8 @@ class MainView {
 
         outputPane.prefWidth = 400.0
         controlPane.children.add(inputPane)
-        controlPane.children.add(HBox(5.0, statusLabel, executeButton).apply { alignment = Pos.CENTER_RIGHT })
+        controlPane.children.add(HBox(statusLabel).apply { alignment = Pos.CENTER_RIGHT })
+        controlPane.children.add(HBox(5.0, action2Button, action1Button).apply { alignment = Pos.CENTER_RIGHT })
         controlPane.children.add(tabPane)
         return mainPane
     }
@@ -71,12 +71,20 @@ class MainView {
     }
 
     fun onExecute(callback: (Map<String, String>) -> Unit) {
-        onExecute = callback
+        onAction1 = callback
     }
 
-    fun toggleExecute(toggle: Boolean) {
+    fun setAction1(action1: String) {
         Platform.runLater {
-            executeButton.isDisable = !toggle
+            action1Button.text = action1
+            action1Button.isVisible = !action1.isEmpty()
+        }
+    }
+
+    fun setAction2(action2: String) {
+        Platform.runLater {
+            action2Button.text = action2
+            action2Button.isVisible = !action2.isEmpty()
         }
     }
 
