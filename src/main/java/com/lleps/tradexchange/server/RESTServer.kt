@@ -277,6 +277,7 @@ class RESTServer {
     }
 
     private fun runBacktest(instance: String, input: Map<String, String>, out: Strategy.OutputWriter) {
+        ImportKerasModel.main(arrayOf())
         val state = instanceState.getValue(instance)
         state.output = ""
 

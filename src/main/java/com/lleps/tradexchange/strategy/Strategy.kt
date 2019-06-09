@@ -1,14 +1,13 @@
 package com.lleps.tradexchange.strategy
 
+import com.lleps.tradexchange.ImportKerasModel
 import com.lleps.tradexchange.indicator.CompositeIndicator
 import com.lleps.tradexchange.indicator.NormalizationIndicator
 import com.lleps.tradexchange.indicator.OBVOscillatorIndicator
 import com.lleps.tradexchange.server.Exchange
 import com.lleps.tradexchange.util.get
 import org.ta4j.core.TimeSeries
-import org.ta4j.core.indicators.EMAIndicator
-import org.ta4j.core.indicators.MACDIndicator
-import org.ta4j.core.indicators.RSIIndicator
+import org.ta4j.core.indicators.*
 import org.ta4j.core.indicators.bollinger.BollingerBandsLowerIndicator
 import org.ta4j.core.indicators.bollinger.BollingerBandsMiddleIndicator
 import org.ta4j.core.indicators.bollinger.BollingerBandsUpperIndicator
@@ -53,9 +52,11 @@ class Strategy(
             "strategy.sellBarrier1" to 1.0,
             "strategy.sellBarrier2" to 3.0,
             "strategy.rsiBuy" to 30,
+            "strategy.rsiBuy" to 30,
             "strategy.rsiPeriod" to 14,
             "strategy.obvBuy" to .25,
-            "strategy.obvNormalPeriod" to 120
+            "strategy.obvNormalPeriod" to 120,
+            "strategy.mlBuyValue" to 0.7
         )
     }
 
@@ -105,9 +106,15 @@ class Strategy(
     private val normalMacd2 = NormalizationIndicator(macd, 200)
     private val obvIndicator = OBVOscillatorIndicator(series, 38)
     private val obvIndicatorNormal = NormalizationIndicator(obvIndicator, obvNormalPeriod)
+    private val mlBuyValue = input.getValue("strategy.mlBuyValue").toFloat()
+    private val stochasticIndicatorK = StochasticOscillatorKIndicator(series, input.getValue("strategy.rsiPeriod").toInt())
+    private val stochasticIndicatorD = StochasticOscillatorDIndicator(stochasticIndicatorK)
+    private val stochasticRSIIndicator = StochasticRSIIndicator(series, input.getValue("strategy.rsiPeriod").toInt())
 
     private fun shouldOpen(i: Int, epoch: Long): Boolean {
-        return macd[i] < rsiBuy && obvIndicatorNormal[i] < obvBuy
+        val prob = ImportKerasModel.predict(close[i], stochasticIndicatorK[i], stochasticIndicatorD[i], macd[i], obvIndicatorNormal[i])
+        println("prob: $prob")
+        return prob > mlBuyValue//macd[i] < rsiBuy && obvIndicatorNormal[i] < obvBuy
     }
 
     private fun shouldClose(i: Int, epoch: Long, trade: OpenTrade): Boolean {
@@ -138,9 +145,12 @@ class Strategy(
         //chart.priceIndicator("long MA", epoch, longMA[i])
 
         // RSI
-        chart.extraIndicator("RSI", "rsi", epoch, rsi[i])
+        //chart.extraIndicator("RSI", "rsi", epoch, rsi[i])
         //chart.extraIndicator("RSI", "line30", epoch, 30.0)
         //chart.extraIndicator("RSI", "line70", epoch, 70.0)
+        chart.extraIndicator("stochastic", "k", epoch, stochasticIndicatorK[i])
+        chart.extraIndicator("stochastic", "d", epoch, stochasticIndicatorD[i])
+        //chart.extraIndicator("stochastic", "rsi", epoch, stochasticRSIIndicator[i])
 
         // MACD
         chart.extraIndicator("MACD", "macd", epoch, macd[i])

@@ -92,6 +92,14 @@ fun List<Double>.isLocalMinimum(periods: Int = 3): Boolean {
     return b < a && b < c
 }
 
+fun main() {
+    val ticks = parseCandlesFromCSV(
+        "../Bitfinex-historical-data/ETHUSD/Candles_1m/2019/merged.csv",
+        periodSeconds = 60
+        )
+    println(ticks)
+}
+
 fun parseCandlesFromCSV(
     file: String,
     periodSeconds: Int,
