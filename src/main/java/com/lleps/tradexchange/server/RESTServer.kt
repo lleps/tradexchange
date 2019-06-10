@@ -287,7 +287,6 @@ class RESTServer {
     }
 
     private fun runBacktest(instance: String, input: Map<String, String>, out: Strategy.OutputWriter) {
-        ImportKerasModel.main(arrayOf())
         val state = instanceState.getValue(instance)
         state.output = ""
 
@@ -320,6 +319,7 @@ class RESTServer {
             exchange = exchange,
             input = input
         )
+        strategy.init()
         val sellOnlyTick = timeSeries.endIndex - cooldownTicks
         for (i in warmupTicks..timeSeries.endIndex) {
             val tick = timeSeries.getBar(i)

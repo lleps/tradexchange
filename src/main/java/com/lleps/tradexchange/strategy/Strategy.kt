@@ -6,6 +6,9 @@ import com.lleps.tradexchange.indicator.NormalizationIndicator
 import com.lleps.tradexchange.indicator.OBVOscillatorIndicator
 import com.lleps.tradexchange.server.Exchange
 import com.lleps.tradexchange.util.get
+import org.deeplearning4j.nn.modelimport.keras.KerasModelImport
+import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
+import org.nd4j.linalg.factory.Nd4j
 import org.ta4j.core.TimeSeries
 import org.ta4j.core.indicators.*
 import org.ta4j.core.indicators.bollinger.BollingerBandsLowerIndicator
@@ -13,7 +16,6 @@ import org.ta4j.core.indicators.bollinger.BollingerBandsMiddleIndicator
 import org.ta4j.core.indicators.bollinger.BollingerBandsUpperIndicator
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
 import org.ta4j.core.indicators.statistics.StandardDeviationIndicator
-import org.ta4j.core.indicators.volume.OnBalanceVolumeIndicator
 
 class Strategy(
     private val output: OutputWriter,
@@ -45,6 +47,7 @@ class Strategy(
     // Strategy config
     companion object {
         val requiredInput = mapOf(
+            "strategy.model" to "",
             "strategy.openTradesCount" to 5,
             "strategy.tradeExpiry" to 12*5,
             "strategy.buyCooldown" to 5,
@@ -60,6 +63,7 @@ class Strategy(
         )
     }
 
+    private val modelName = input.getValue("strategy.model")
     private val tradeExpiry = input.getValue("strategy.tradeExpiry").toInt() // give up if can't meet the margin
     private val buyCooldown = input.getValue("strategy.buyCooldown").toInt() // 4h. During cooldown won't buy anything
     private val topLoss = input.getValue("strategy.topLoss").toFloat()
@@ -110,11 +114,18 @@ class Strategy(
     private val stochasticIndicatorK = StochasticOscillatorKIndicator(series, input.getValue("strategy.rsiPeriod").toInt())
     private val stochasticIndicatorD = StochasticOscillatorDIndicator(stochasticIndicatorK)
     private val stochasticRSIIndicator = StochasticRSIIndicator(series, input.getValue("strategy.rsiPeriod").toInt())
+    private lateinit var model: MultiLayerNetwork
+
+    fun init() {
+        val path = "data/models/[train]$modelName.h5"
+        model = KerasModelImport.importKerasSequentialModelAndWeights(path);
+    }
 
     private fun shouldOpen(i: Int, epoch: Long): Boolean {
-        val prob = ImportKerasModel.predict(close[i], stochasticIndicatorK[i], stochasticIndicatorD[i], macd[i], obvIndicatorNormal[i])
-        println("prob: $prob")
-        return prob > mlBuyValue//macd[i] < rsiBuy && obvIndicatorNormal[i] < obvBuy
+        val macd = macd[i]
+        val data = arrayOf(doubleArrayOf(rsi[i] / 100.0, macd))
+        val prediction = model.output(Nd4j.create(data)).getDouble(0)
+        return prediction > mlBuyValue
     }
 
     private fun shouldClose(i: Int, epoch: Long, trade: OpenTrade): Boolean {
