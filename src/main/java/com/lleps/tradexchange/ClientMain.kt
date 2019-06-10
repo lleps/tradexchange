@@ -21,6 +21,7 @@ import java.io.StringWriter
 import javafx.scene.control.ButtonType
 import javafx.scene.control.Alert
 import javafx.scene.image.ImageView
+import java.io.File
 
 class ClientMain : Application() {
     private lateinit var tabPane: TabPane
@@ -36,9 +37,12 @@ class ClientMain : Application() {
     private var chartVersion = mutableMapOf<String, Int>().withDefault { 0 }
     private lateinit var stage: Stage
 
+    private val configPath = "data/tradexchange_client.json"
+    
     override fun start(stage: Stage) {
+        File("data").mkdir()
         this.stage = stage
-        clientData = loadFrom<ClientData>("tradexchange_data.json") ?: ClientData()
+        clientData = loadFrom<ClientData>(configPath) ?: ClientData()
         connection = RESTClient(clientData.host)
         fetchCurrentInstanceDataThread()
 
@@ -54,7 +58,7 @@ class ClientMain : Application() {
                         clientData = ClientData(host = response)
                         stateVersion.clear()
                         chartVersion.clear()
-                        clientData.saveTo("tradexchange_data.json")
+                        clientData.saveTo(configPath)
                         connection.host = response
                         Platform.runLater {
                             stage.title = "Tradexchange (at ${clientData.host})"
