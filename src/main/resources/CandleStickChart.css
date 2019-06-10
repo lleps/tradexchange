@@ -77,16 +77,16 @@
     -fx-background-insets: 0,1,2;
 }
 .candlestick-line.close-above-open {
-    -fx-stroke: #555555;
-    -fx-stroke-width: 1px;
+    -fx-stroke: #4CAF50;
+    -fx-stroke-width: 2px;
 }
 .candlestick-line.open-above-close {
-    -fx-stroke: #555555;
-    -fx-stroke-width: 1px;
+    -fx-stroke: #F44336;
+    -fx-stroke-width: 2px;
 }
 .candlestick-bar.close-above-open {
-    -demo-bar-fill: #008b00;
+    -demo-bar-fill: #4CAF50;
 }
 .candlestick-bar.open-above-close {
-    -demo-bar-fill: #D50000;
+    -demo-bar-fill: #F44336;
 }

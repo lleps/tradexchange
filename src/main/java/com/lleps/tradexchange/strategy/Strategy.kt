@@ -145,11 +145,11 @@ class Strategy(
         //chart.priceIndicator("long MA", epoch, longMA[i])
 
         // RSI
-        //chart.extraIndicator("RSI", "rsi", epoch, rsi[i])
+        chart.extraIndicator("RSI", "rsi", epoch, rsi[i])
         //chart.extraIndicator("RSI", "line30", epoch, 30.0)
         //chart.extraIndicator("RSI", "line70", epoch, 70.0)
-        chart.extraIndicator("stochastic", "k", epoch, stochasticIndicatorK[i])
-        chart.extraIndicator("stochastic", "d", epoch, stochasticIndicatorD[i])
+        //chart.extraIndicator("stochastic", "k", epoch, stochasticIndicatorK[i])
+        //chart.extraIndicator("stochastic", "d", epoch, stochasticIndicatorD[i])
         //chart.extraIndicator("stochastic", "rsi", epoch, stochasticRSIIndicator[i])
 
         // MACD
@@ -158,7 +158,7 @@ class Strategy(
         //chart.extraIndicator("MACD", "histogram", epoch, macdHistogram[i])
 
         // OBV
-        chart.extraIndicator("OBV", "obv", epoch, obvIndicatorNormal[i])
+        //chart.extraIndicator("OBV", "obv", epoch, obvIndicatorNormal[i])
     }
 
     fun onTick(i: Int): List<Operation> {
