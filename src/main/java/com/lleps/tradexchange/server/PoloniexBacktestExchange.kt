@@ -13,36 +13,6 @@ import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
 
-/** Get market history from poloniex, using a local cache to speed it up. */
-private class ChartDataWrapper(val content: List<PoloniexChartData> = mutableListOf())
-fun getTicksFromPoloniex(pair: String, period: Int, daysBack: Int): List<Bar> {
-    val fromEpoch = (Instant.now().toEpochMilli() / 1000) - (daysBack * 24 * 3600)
-    File("data").mkdir()
-    File("data/cache").mkdir()
-    val file = "data/cache/pol-$pair-$period-${fromEpoch/3600}.json"
-    val cached = loadFrom<ChartDataWrapper>(file)
-    val poloniex = PoloniexExchangeService("", "")
-    val chartData = if (cached == null) {
-        val result = ChartDataWrapper(poloniex.returnChartData(pair, period.toLong(), fromEpoch).toList())
-        result.saveTo(file)
-        result.content
-    } else {
-        cached.content
-    }
-
-    return chartData.map {
-        BaseBar(
-            Duration.ofSeconds(period.toLong()),
-            Instant.ofEpochSecond(it.date.toEpochSecond()).atZone(ZoneOffset.UTC),
-            DoubleNum.valueOf(it.open.toDouble()),
-            DoubleNum.valueOf(it.high.toDouble()),
-            DoubleNum.valueOf(it.low.toDouble()),
-            DoubleNum.valueOf(it.close.toDouble()),
-            DoubleNum.valueOf(it.volume.toDouble()),
-            DoubleNum.valueOf(0)
-        )
-    }
-}
 
 class PoloniexBacktestExchange(
     initialMoney: Double = 0.0,
@@ -53,28 +23,36 @@ class PoloniexBacktestExchange(
         private val LOGGER = LoggerFactory.getLogger(PoloniexBacktestExchange::class.java)
     }
 
+    var marketPrice: Double = 0.0
+
+    override fun fetchTicker(): Exchange.Ticker {
+        return Exchange.Ticker(marketPrice, 0.0, 0.0)
+    }
+
     override var moneyBalance: Double = initialMoney
     override var coinBalance: Double = initialCoins
 
-    override fun buy(coins: Double, price: Double) {
-        if (moneyBalance < coins * price) {
-            LOGGER.error("Not enough balance to buy $coins coins at $price each.")
-            //return
-        }
-
-        moneyBalance -= coins * price
+    override fun buy(coins: Double): Double {
+        val price = marketPrice
+        val totalPrice = coins * price
+        if (moneyBalance < totalPrice) error("Not enough balance to buy $coins coins at $$price each (total price: $totalPrice)")
+        if (coins * price < 1.1) error("only orders of > 1 USD allowed. (tried to buy $$totalPrice of coins, coins: $coins, price: $price)")
+        // TODO: maybe simulate fees
+        // TODO: should buy at a simulated "lowest ask". 0.5% difference.
+        moneyBalance -= totalPrice
         coinBalance += coins
         LOGGER.debug("Buying $coins coins at $price (total: ${coins * price})")
+        return price
     }
 
-    override fun sell(coins: Double, price: Double) {
-        if (coinBalance < coins) {
-            LOGGER.error("Want to sell $coins coins at $price but got only $coinBalance coins.")
-            //return
-        }
-
-        moneyBalance += coins * price
+    override fun sell(coins: Double): Double {
+        val price = marketPrice
+        val totalPrice = coins * price
+        if (coinBalance < coins) error("Want to sell $coins coins at $price but got only $coinBalance coins.")
+        if (totalPrice < 1.1) error("only orders of > 1 USD allowed (tried to sell $coins coins at $price, total $totalPrice)")
+        moneyBalance += totalPrice
         coinBalance -= coins
         LOGGER.debug("Selling $coins coins at $price (total: ${coins * price})")
+        return price
     }
 }

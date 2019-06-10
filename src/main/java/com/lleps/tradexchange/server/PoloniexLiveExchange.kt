@@ -2,48 +2,14 @@ package com.lleps.tradexchange.server
 
 import com.cf.client.poloniex.PoloniexExchangeService
 import org.slf4j.LoggerFactory
-import org.ta4j.core.Bar
-import org.ta4j.core.BaseBar
-import org.ta4j.core.num.DoubleNum
 import java.math.BigDecimal
-import java.time.Duration
-import java.time.Instant
-import java.time.ZoneOffset
-import java.time.ZonedDateTime
 
 class PoloniexLiveExchange(
     private val pair: String,
-    private val period: Long,
-    warmUpPeriods: Int,
     apiKey: String = API_KEY,
     apiSecret: String = API_SECRET
 ) : Exchange {
     private val poloniex = PoloniexExchangeService(apiKey, apiSecret)
-    private val initialNowEpoch = ZonedDateTime.now(ZoneOffset.UTC).toEpochSecond()
-
-    companion object {
-        private val LOGGER = LoggerFactory.getLogger(PoloniexLiveExchange::class.java)
-        private const val API_KEY = "GW202H58-HQULS9AJ-SZDSHJZ1-FXRYESKK"
-        private const val API_SECRET = "7fe0d64f187fd333a9754085fa7a1e57c6a98345908f7c84dcbeed1465aa55a7adb7b36a276e95557a4598887673cbdbfbc8bacc0f9968f970bbe96fccb0745b"
-
-        @JvmStatic
-        fun main(args: Array<String>) {
-            // Try to sell immediately
-            val poloniex = PoloniexExchangeService(API_KEY, API_SECRET)
-            val pair = "USDT_ETH"
-            val ticker = poloniex.returnTicker(pair)
-            val ethsPerUsd = 1.1 / ticker.last.toDouble()
-            val buy = poloniex.buy("USDT_ETH", ticker.lowestAsk, BigDecimal(ethsPerUsd), true, true, false)
-            println("err: ${buy.error}")
-            println("num: ${buy.orderNumber}")
-            println("trades: ${buy.resultingTrades}")
-            println("return open orders...")
-            val orders = poloniex.returnOpenOrders(pair)
-            println(orders.toString())
-            println("return trade history...")
-            println(poloniex.returnTradeHistory(pair))
-        }
-    }
 
     override val moneyBalance: Double
         get() = poloniex.returnCurrencyBalance(pair.split("_")[0]).available.toDouble() // X_IGNORED
@@ -51,41 +17,74 @@ class PoloniexLiveExchange(
     override val coinBalance: Double
         get() = poloniex.returnCurrencyBalance(pair.split("_")[1]).available.toDouble() // IGNORED_X
 
-    fun fetchTicker(): Bar {
-        // Fetch ticker every few seconds, to grab max,min,open,close,etc and return as a candle
-        val tickExpire = System.currentTimeMillis() + period*1000
-        var high = 0.0
-        var low = Double.MAX_VALUE
-        var ticker = poloniex.returnTicker(pair)
-        val open = ticker.last.toDouble()
-        Thread.sleep(5000)
-        while (System.currentTimeMillis() < tickExpire) {
-            ticker = poloniex.returnTicker(pair)
-            val price = ticker.last.toDouble()
-            if (price > high) high = price
-            if (price < low) low = price
-            Thread.sleep(10*1000)
+    override fun fetchTicker(): Exchange.Ticker {
+        val ticker = poloniex.returnTicker(pair)
+        return Exchange.Ticker(ticker.last.toDouble(), ticker.baseVolume.toDouble(), ticker.quoteVolume.toDouble())
+    }
+
+    override fun buy(coins: Double): Double {
+        val maxAttempts = 5
+        var buyPrice: Double? = null
+        for (i in 1..maxAttempts) {
+            val lowestAsk = poloniex.returnTicker(pair).lowestAsk
+            val result = poloniex.buy(pair, lowestAsk, BigDecimal.valueOf(coins), true, true, false)
+            if (result.resultingTrades == null || result.resultingTrades.isEmpty()) {
+                LOGGER.info("Attempt $i/$maxAttempts to buy failed (ask: ${lowestAsk.toDouble()}). Wait 2 sec and try again.")
+                Thread.sleep(2000)
+            } else {
+                buyPrice = lowestAsk.toDouble()
+                break
+            }
         }
-        val close = ticker.last.toDouble()
-        return BaseBar(
-            Duration.ofSeconds(period),
-            Instant.now().atZone(ZoneOffset.UTC),
-            DoubleNum.valueOf(open), // open
-            DoubleNum.valueOf(high), // high
-            DoubleNum.valueOf(low), // low
-            DoubleNum.valueOf(close), // close
-            DoubleNum.valueOf(ticker.baseVolume.toDouble()),
-            DoubleNum.valueOf(0)
-        )
+        if (buyPrice == null) error("can't buy $coins at market price. Tried $maxAttempts timse and all failed.")
+        LOGGER.info("Bought $coins at $buyPrice on poloniex, for real.")
+        return buyPrice
     }
 
-    override fun buy(coins: Double, price: Double) {
-        LOGGER.info("Buy $coins coins at $price on poloniex.")
-        poloniex.buy(pair, BigDecimal.valueOf(price), BigDecimal.valueOf(coins), false, false, false)
+    override fun sell(coins: Double): Double {
+        val maxAttempts = 5
+        var sellPrice: Double? = null
+        for (i in 1..maxAttempts) {
+            val highestBid = poloniex.returnTicker(pair).highestBid
+            val result = poloniex.sell(pair, highestBid, BigDecimal.valueOf(coins), true, true, false)
+            if (result.resultingTrades == null || result.resultingTrades.isEmpty()) {
+                LOGGER.info("Attempt $i/$maxAttempts to sell failed (bid: ${highestBid.toDouble()}). Wait 2 sec and try again.")
+                Thread.sleep(2000)
+            } else {
+                sellPrice = highestBid.toDouble()
+                break
+            }
+        }
+        if (sellPrice == null) error("can't sell $coins at market price. Tried $maxAttempts times and all failed.")
+        LOGGER.info("Sold $coins at $sellPrice on poloniex, for real.")
+        return sellPrice
     }
 
-    override fun sell(coins: Double, price: Double) {
-        LOGGER.info("Sell $coins coins at $price on poloniex.")
-        poloniex.sell(pair, BigDecimal.valueOf(price), BigDecimal.valueOf(coins), false, false, false)
+    companion object {
+        private val LOGGER = LoggerFactory.getLogger(PoloniexLiveExchange::class.java)
+        private const val API_KEY = "GW202H58-HQULS9AJ-SZDSHJZ1-FXRYESKK"
+        private const val API_SECRET = "7fe0d64f187fd333a9754085fa7a1e57c6a98345908f7c84dcbeed1465aa55a7adb7b36a276e95557a4598887673cbdbfbc8bacc0f9968f970bbe96fccb0745b"
+
+        /**
+         * Test for the live exchange
+         */
+        @JvmStatic
+        fun main(args: Array<String>) {
+            val pol = PoloniexLiveExchange("USDT_ETH")
+            println(pol.fetchTicker())
+
+            // Buy test
+            /*val amount = 1.1 / 246.13
+            println("buy $amount ETH...")
+            pol.buy(amount)
+            println("ok!")
+            */
+
+            // Sell test
+            /*val amount = 0.00445
+            println("sell $amount ETH...")
+            pol.sell(amount)
+            println("sold!")*/
+        }
     }
 }

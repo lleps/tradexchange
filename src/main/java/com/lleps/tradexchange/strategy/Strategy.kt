@@ -185,8 +185,8 @@ class Strategy(
                 if (shouldOpen(i, epoch)) {
                     val amountOfMoney = (exchange.moneyBalance) / (openTradesCount - openTrades.size).toDouble()
                     val amountOfCoins = amountOfMoney / close[i]
-                    val trade = OpenTrade(close[i], amountOfCoins, epoch, buyNumber++)
-                    exchange.buy(amountOfCoins, close[i]) // TODO: the runner should do this
+                    val buyPrice = exchange.buy(amountOfCoins)
+                    val trade = OpenTrade(buyPrice, amountOfCoins, epoch, buyNumber++)
                     boughtSomething = true
                     openTrades = openTrades + trade
                     operations = operations + Operation(
@@ -202,24 +202,24 @@ class Strategy(
         if (!boughtSomething) {
             val closedTrades = openTrades.filter { shouldClose(i, epoch, it) }
             for (trade in closedTrades) {
-                exchange.sell(trade.amount * 0.99999, close[i]) // TODO: the runner should do this
-                val diff = close[i] - trade.buyPrice
+                val sellPrice = exchange.sell(trade.amount)
+                val diff = sellPrice - trade.buyPrice
                 val tradeStrLog =
                     "Trade %.03f'c    buy $%.03f    sell $%.03f    diff $%.03f    won $%.03f"
-                        .format(trade.amount, trade.buyPrice, close[i], diff, diff*trade.amount)
+                        .format(trade.amount, trade.buyPrice, sellPrice, diff, diff*trade.amount)
                 output.write(tradeStrLog)
                 val tooltip =
                     ("Close #%d: won $%.03f (diff $%.03f)\n" +
                     "Buy $%.03f   Sell $%.03f\n" +
                     "Time %d min (%d ticks)").format(
-                    trade.code,
-                    diff*trade.amount,
-                    diff,
-                    trade.buyPrice,
-                    close[i],
-                    (epoch - trade.epoch) / 60,
-                    (epoch - trade.epoch) / period
-                )
+                        trade.code,
+                        diff*trade.amount,
+                        diff,
+                        trade.buyPrice,
+                        sellPrice,
+                        (epoch - trade.epoch) / 60,
+                        (epoch - trade.epoch) / period
+                    )
                 operations = operations + Operation(OperationType.SELL, trade.amount, tooltip, trade.buyPrice, trade.code)
                 openTrades = openTrades - trade
                 tradeCount++

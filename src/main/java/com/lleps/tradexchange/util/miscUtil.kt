@@ -1,5 +1,7 @@
 package com.lleps.tradexchange.util
 
+import com.cf.client.poloniex.PoloniexExchangeService
+import com.cf.data.model.poloniex.PoloniexChartData
 import javafx.animation.KeyFrame
 import javafx.animation.Timeline
 import javafx.scene.control.Tooltip
@@ -9,6 +11,7 @@ import org.ta4j.core.BaseBar
 import org.ta4j.core.Indicator
 import org.ta4j.core.num.DoubleNum
 import org.ta4j.core.num.Num
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.time.Instant
@@ -17,9 +20,7 @@ import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import java.util.ArrayList
 
-operator fun Indicator<Num>.get(index: Int) = getValue(index).doubleValue()
-
-fun avg(vararg entries: Pair<Double, Int>) = entries.sumByDouble { it.first * it.second } / entries.sumBy { it.second }
+// JAVAFX UTIL
 
 fun hackTooltipStartTiming(tooltip: Tooltip = Tooltip()) {
     try {
@@ -37,6 +38,10 @@ fun hackTooltipStartTiming(tooltip: Tooltip = Tooltip()) {
         e.printStackTrace()
     }
 }
+
+// TA4J UTIL
+
+operator fun Indicator<Num>.get(index: Int) = getValue(index).doubleValue()
 
 fun Indicator<Num>.crossOver(other: Indicator<Num>, tick: Int): Boolean {
     return get(tick) > other[tick] && get(tick - 1) < other[tick - 1]
@@ -92,12 +97,37 @@ fun List<Double>.isLocalMinimum(periods: Int = 3): Boolean {
     return b < a && b < c
 }
 
-fun main() {
-    val ticks = parseCandlesFromCSV(
-        "../Bitfinex-historical-data/ETHUSD/Candles_1m/2019/merged.csv",
-        periodSeconds = 60
+// MARKET DATA UTIL
+
+/** Get market history from poloniex, using a local cache to speed it up. */
+private class ChartDataWrapper(val content: List<PoloniexChartData> = mutableListOf())
+fun getTicksFromPoloniex(pair: String, period: Int, daysBack: Int): List<Bar> {
+    val fromEpoch = (Instant.now().toEpochMilli() / 1000) - (daysBack * 24 * 3600)
+    File("data").mkdir()
+    File("data/cache").mkdir()
+    val file = "data/cache/pol-$pair-$period-${fromEpoch/3600}.json"
+    val cached = loadFrom<ChartDataWrapper>(file)
+    val poloniex = PoloniexExchangeService("", "")
+    val chartData = if (cached == null) {
+        val result = ChartDataWrapper(poloniex.returnChartData(pair, period.toLong(), fromEpoch).toList())
+        result.saveTo(file)
+        result.content
+    } else {
+        cached.content
+    }
+
+    return chartData.map {
+        BaseBar(
+            java.time.Duration.ofSeconds(period.toLong()),
+            Instant.ofEpochSecond(it.date.toEpochSecond()).atZone(ZoneOffset.UTC),
+            DoubleNum.valueOf(it.open.toDouble()),
+            DoubleNum.valueOf(it.high.toDouble()),
+            DoubleNum.valueOf(it.low.toDouble()),
+            DoubleNum.valueOf(it.close.toDouble()),
+            DoubleNum.valueOf(it.volume.toDouble()),
+            DoubleNum.valueOf(0)
         )
-    println(ticks)
+    }
 }
 
 fun parseCandlesFromCSV(
