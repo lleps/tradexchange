@@ -23,6 +23,9 @@ import java.time.*
 import java.time.format.DateTimeFormatter
 import java.util.*
 import kotlin.concurrent.thread
+import jdk.nashorn.internal.runtime.ScriptingFunctions.readLine
+import java.io.InputStreamReader
+import java.io.BufferedReader
 
 
 /** Server main class. Makes backtesting, handles http requests, etc. */
@@ -187,8 +190,11 @@ class RESTServer {
                         if (button == 1) {
                             loadTrainChart(instance, input, out)
                         } else {
+                            // Make file paths
                             File("data/trainings").mkdir()
+                            File("data/models").mkdir()
                             val path = "data/trainings/$instance.csv"
+                            val outModel = "data/models/$instance.h5"
                             out.write("Exporting to $path...")
                             val chartData = instanceChartData.getValue(instance)
                             val sb = StringBuilder()
@@ -209,7 +215,11 @@ class RESTServer {
                             }
                             // TODO: finish
                             Files.write(Paths.get(path), sb.toString().toByteArray(Charset.defaultCharset()))
-                            out.write("Exported!")
+                            val cmd = listOf("model/venv/bin/python", "model/buildmodel.py", path, outModel)
+                            out.write("Invoke '$cmd'...")
+                            val exit = runCommand(cmd, onStdOut = { outStr -> out.write(outStr)})
+                            out.write("Exit code: $exit.")
+                            if (exit != 0) out.write("Something went wrong. Check the output.")
                         }
                     }
                     InstanceType.LIVE -> TODO("live not implemented")
@@ -454,6 +464,21 @@ class RESTServer {
     private fun deleteInstanceFiles(instance: String) {
         Files.delete(Paths.get("data/instances/state-$instance.json"))
         Files.delete(Paths.get("data/instances/chartData-$instance.json"))
+    }
+
+    private fun runCommand(command: List<String>, onStdOut: (String) -> Unit): Int {
+        val pb = ProcessBuilder()
+            .command(*command.toTypedArray())
+            .redirectErrorStream(true)
+        val p = pb.start()
+        val reader = BufferedReader(InputStreamReader(p.inputStream))
+        while (true) {
+            val out = reader.readLine() ?: break
+            onStdOut(out)
+        }
+        val exitValue = p.exitValue()
+        p.destroy()
+        return exitValue
     }
 
     companion object {
