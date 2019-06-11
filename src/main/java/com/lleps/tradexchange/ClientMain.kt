@@ -257,7 +257,10 @@ class ClientMain : Application() {
         thread(start = true, name = "backendDataFetchThread", isDaemon = true) {
             var lastInstance = ""
             while (true) {
-                if (waitingToAcceptError) continue
+                if (waitingToAcceptError) {
+                    Thread.sleep(500)
+                    continue
+                }
 
                 val instance = tabs.entries.firstOrNull { it.value.isSelected }?.key
                 if (instance != null && views.containsKey(instance)) {
