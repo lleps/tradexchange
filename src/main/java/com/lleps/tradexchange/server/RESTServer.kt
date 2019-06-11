@@ -324,6 +324,7 @@ class RESTServer {
         for (i in warmupTicks..timeSeries.endIndex) {
             val tick = timeSeries.getBar(i)
             val epoch = tick.beginTime.toEpochSecond()
+            exchange.marketPrice = tick.closePrice.doubleValue()
             if (i >= sellOnlyTick) strategy.sellOnly = true
             val operations = strategy.onTick(i)
             strategy.onDrawChart(chartWriter, epoch, i)
