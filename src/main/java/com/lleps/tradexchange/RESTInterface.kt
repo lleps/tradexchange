@@ -27,7 +27,8 @@ data class InstanceState(
     var stateVersion: Int = 1, // those 2 should increase when a change occurs, so the client knows it needs the data
     var chartVersion: Int = 1,
     var action1: String = "",
-    var action2: String = ""
+    var action2: String = "",
+    var live: Boolean = false // trading in live mode
 )
 
 /** Chart data (separated since it's too big to bundle with regular state). */
