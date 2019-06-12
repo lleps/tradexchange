@@ -60,4 +60,5 @@ data class TradeEntry(
     val id: Int = 0,
     val buy: Double = 0.0,
     val sell: Double = 0.0,
-    val amount: Double = 0.0)
+    val amount: Double = 0.0
+)

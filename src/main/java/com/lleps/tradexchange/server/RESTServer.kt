@@ -10,23 +10,18 @@ import org.springframework.web.bind.annotation.*
 import org.ta4j.core.Bar
 import org.ta4j.core.BaseTimeSeries
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
-import java.io.File
-import java.io.IOException
-import java.io.PrintWriter
-import java.io.StringWriter
-import java.lang.StringBuilder
+import java.io.*
 import java.nio.charset.Charset
 import java.nio.file.Files
-import java.nio.file.OpenOption
 import java.nio.file.Paths
-import java.time.*
+import java.time.Duration
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.*
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.thread
-import jdk.nashorn.internal.runtime.ScriptingFunctions.readLine
-import org.ta4j.core.BaseBar
-import java.io.InputStreamReader
-import java.io.BufferedReader
 
 
 /** Server main class. Makes backtesting, handles http requests, etc. */
@@ -36,10 +31,10 @@ class RESTServer {
 
     // Server state
     private data class InstancesWrapper(var list: List<String> = emptyList())
-    private val loadedInstances = mutableMapOf<String, Unit>()
+    private val loadedInstances = ConcurrentHashMap<String, Unit>()
     private val instances: InstancesWrapper
-    private val instanceState = mutableMapOf<String, InstanceState>()
-    private val instanceChartData = mutableMapOf<String, InstanceChartData>()
+    private val instanceState = ConcurrentHashMap<String, InstanceState>()
+    private val instanceChartData = ConcurrentHashMap<String, InstanceChartData>()
     private val defaultInput = mutableMapOf(
         "pair" to "USDT_ETH",
         "period" to "300",
