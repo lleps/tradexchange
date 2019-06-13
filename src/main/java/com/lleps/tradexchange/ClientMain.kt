@@ -274,6 +274,7 @@ class ClientMain : Application() {
                             return@getInstanceVersion
                         }
                         if (newStateVersion > stateVersion.getValue(instance)) {
+                            println("[$newStateVersion] getInstanceState")
                             connection.getInstanceState(instance) { data, throwable2 ->
                                 if (throwable2 != null) {
                                     showError("getInstanceState", throwable2)
@@ -290,19 +291,20 @@ class ClientMain : Application() {
                                 view.setStatus(data.statusText, data.statusPositiveness)
                                 view.setAction1(data.action1)
                                 view.setAction2(data.action2)
-                                stateVersion[instance] = data.stateVersion
                             }
                         }
                         if (newChartVersion > chartVersion.getValue(instance)) {
+                            println("[$newChartVersion] getInstanceChartData")
                             connection.getInstanceChartData(instance) { data, throwable2 ->
                                 if (throwable2 != null) {
                                     showError("getInstanceChartData", throwable2)
                                     return@getInstanceChartData
                                 }
                                 view.setChart(data.candles, data.operations, data.priceIndicators, data.extraIndicators)
-                                chartVersion[instance] = newChartVersion
                             }
                         }
+                        stateVersion[instance] = newStateVersion
+                        chartVersion[instance] = newChartVersion
                     }
                 }
                 Thread.sleep(250)
