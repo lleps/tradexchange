@@ -9,7 +9,17 @@ class PoloniexLiveExchange(
     apiKey: String = API_KEY,
     apiSecret: String = API_SECRET
 ) : Exchange {
-    private val poloniex = PoloniexExchangeService(apiKey, apiSecret)
+    val poloniex = PoloniexExchangeService(apiKey, apiSecret)
+
+    override val pastTrades: List<Exchange.Trade>
+        get() = poloniex.returnTradeHistory(pair).map { polTrade ->
+            Exchange.Trade(
+                type = polTrade.type,
+                epoch = polTrade.date.toEpochSecond(),
+                coins = polTrade.amount.toDouble(),
+                price = polTrade.rate.toDouble(),
+                total = polTrade.total.toDouble())
+        }
 
     override val moneyBalance: Double
         get() = poloniex.returnCurrencyBalance(pair.split("_")[0]).available.toDouble() // X_IGNORED
@@ -73,9 +83,14 @@ class PoloniexLiveExchange(
             val pol = PoloniexLiveExchange("USDT_ETH")
             println(pol.fetchTicker())
 
+            println("coin balance: ${pol.coinBalance}")
+            println("money balance: ${pol.moneyBalance}")
+
+            println("trades: ${pol.pastTrades.joinToString(separator = "\n")}")
             // Buy test
             /*val amount = 1.1 / 246.13
             println("buy $amount ETH...")
+
             pol.buy(amount)
             println("ok!")
             */

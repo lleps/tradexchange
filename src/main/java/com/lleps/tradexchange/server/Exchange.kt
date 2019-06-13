@@ -1,9 +1,11 @@
 package com.lleps.tradexchange.server
 
-import org.ta4j.core.Bar
-
 /** A simple interface to buy, sell and fetch ticker from an exchange. */
 interface Exchange {
+    /** Get trades */
+    data class Trade(val type: String, val epoch: Long, val coins: Double, val price: Double, val total: Double)
+    val pastTrades: List<Trade>
+
     /** Balance in USD for the account */
     val moneyBalance: Double
 

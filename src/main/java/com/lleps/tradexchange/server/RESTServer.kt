@@ -211,7 +211,6 @@ class RESTServer {
                                 sb.append(features.joinToString(separator = ","))
                                 sb.append(",$action\n")
                             }
-                            // TODO: finish
                             Files.write(Paths.get(path), sb.toString().toByteArray(Charset.defaultCharset()))
                             val cmd = listOf("model/venv/bin/python", "model/buildmodel.py", path, outModel)
                             out.write("Invoke '$cmd'...")
@@ -222,15 +221,23 @@ class RESTServer {
                     }
                     InstanceType.LIVE -> {
                         if (button == 1) {
-                            if (state.live) {
-                                state.live = false
-                                state.action1 = "Start"
-                                out.write("Starting...")
-                                startLiveTradingThread(instance, input, out)
-                            } else {
+                            if (!state.live) {
                                 state.live = true
                                 state.action1 = "Stop"
-                                out.write("Stopping...")
+                                out.write("Starting live trading thread...")
+                                thread(start = true, isDaemon = false) {
+                                    try {
+                                        liveTradingInfiniteLoop(instance, input, out)
+                                    } catch (e: Exception) {
+                                        state.live = false
+                                        LOGGER.error("error in live trading thread", e)
+                                        out.write(StringWriter().let { sw -> e.printStackTrace(PrintWriter(sw)) }.toString())
+                                    }
+                                }
+                            } else {
+                                state.live = false
+                                state.action1 = "Start"
+                                out.write("Stop signal sent...")
                             }
                             state.stateVersion++
                         }
@@ -239,9 +246,7 @@ class RESTServer {
             } catch (e: Exception) {
                 LOGGER.info("$instance: error: $e", e)
                 out.write("error")
-                val sw = StringWriter()
-                e.printStackTrace(PrintWriter(sw))
-                out.write(sw.toString())
+                out.write(StringWriter().let { sw -> e.printStackTrace(PrintWriter(sw)) }.toString())
                 instanceState[instance]?.let { state ->
                     state.statusPositiveness = -1
                     state.statusText = "Error. check output"
@@ -252,7 +257,7 @@ class RESTServer {
         }
     }
 
-    private fun startLiveTradingThread(instance: String, input: Map<String, String>, out: Strategy.OutputWriter) {
+    private fun liveTradingInfiniteLoop(instance: String, input: Map<String, String>, out: Strategy.OutputWriter) {
         // Parse input
         val pair = input.getValue("pair")
         val period = input.getValue("period").toInt()
@@ -261,6 +266,7 @@ class RESTServer {
         val apiSecret = input.getValue("poloniex.apiSecret")
 
         // Fetch past ticks, create exchange and strategy instances
+        out.write("Fetch chart data from poloniex to initialize indicators...")
         val ticks = getTicksFromPoloniex(pair, period, daysBack = warmupTicks+2)
         val series = BaseTimeSeries(ticks)
         val exchange = PoloniexLiveExchange(
@@ -274,9 +280,11 @@ class RESTServer {
             exchange = exchange,
             period = period.toLong(),
             input = input)
+        out.write("Initialize model...")
         strategy.init()
 
         // init chart data. Should paint some past data to get better feedback
+        // also plot past trades reported by the exchange.
         val chartWriter = ChartWriterImpl()
         val state = instanceState.getValue(instance)
         val chartOperations = mutableListOf<Operation>()
@@ -284,12 +292,33 @@ class RESTServer {
 
         out.write("Plot ticks from 100 until ${ticks.size} for reference.")
         for (i in 100 until ticks.size) {
-            strategy.onDrawChart(chartWriter, ticks[i].endTime.toEpochSecond(), i)
+            val tick = series.getBar(i)
+            val epoch = tick.endTime.toEpochSecond()
+            strategy.onDrawChart(chartWriter, epoch, i)
+            candles.add(Candle(
+                epoch,
+                tick.openPrice.doubleValue(),
+                tick.closePrice.doubleValue(),
+                tick.maxPrice.doubleValue(),
+                tick.minPrice.doubleValue()))
+        }
+        // Add past trades as well
+        chartOperations.addAll(exchange.pastTrades.map { t ->
+            val type = if (t.type == "buy") OperationType.BUY else OperationType.SELL
+            Operation(t.epoch, type, t.price, "past ${t.type}.\ncoins: ${t.coins}\ntotal: ${t.total}")
+        })
+        instanceChartData.getValue(instance).let {
+            it.operations = chartOperations.toList()
+            it.candles = candles.toList()
+            it.priceIndicators = chartWriter.priceIndicators.toMap()
+            it.extraIndicators = chartWriter.extraIndicators.toMap()
+            state.chartVersion++
         }
 
+        out.write("Livemode thread working")
         while (true) {
             // step 1 - Fetch candle from the exchange
-            val nextCandle = System.currentTimeMillis()
+            var nextCandle = System.currentTimeMillis() + (period * 1000)
             var ticker = exchange.fetchTicker()
             val open = ticker.last
             var max = ticker.last
@@ -299,11 +328,13 @@ class RESTServer {
                 max = maxOf(max, ticker.last)
                 min = minOf(min, ticker.last)
                 if (!state.live) {
-                    out.write("Livemode stopped.")
+                    out.write("Livemode thread stopped.")
                     return
                 }
-                Thread.sleep(250)
+                out.write("[building candle] max: $max min: $min")
+                Thread.sleep(3000)
             }
+            nextCandle += (period * 1000)
 
             // now the candle is done. pass it to the strategy
             val close = exchange.fetchTicker().last
@@ -319,6 +350,7 @@ class RESTServer {
                 series.numOf(0.0) // amount
             )
             val tick = series.lastBar
+            out.write("Candle built: $tick")
 
             // Now, run the strategy
             val tickNumber = series.endIndex

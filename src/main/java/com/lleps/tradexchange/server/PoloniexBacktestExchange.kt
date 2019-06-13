@@ -25,6 +25,9 @@ class PoloniexBacktestExchange(
 
     var marketPrice: Double = 0.0
 
+    override val pastTrades: List<Exchange.Trade>
+        get() = emptyList() // may add fake trades on buy and sell calls. all of this shit may be used to make the program more "stateless"
+
     override fun fetchTicker(): Exchange.Ticker {
         return Exchange.Ticker(marketPrice, 0.0, 0.0)
     }

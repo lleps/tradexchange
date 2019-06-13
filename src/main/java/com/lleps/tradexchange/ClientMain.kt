@@ -258,7 +258,7 @@ class ClientMain : Application() {
             var lastInstance = ""
             while (true) {
                 if (waitingToAcceptError) {
-                    Thread.sleep(500)
+                    Thread.sleep(15000)
                     continue
                 }
 
