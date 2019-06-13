@@ -11,6 +11,7 @@ import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.concurrent.thread
 
 
 /** Server main class. This handles the instances at a higher level and takes care of persistence. */
@@ -55,16 +56,19 @@ class RESTServer {
         val state = instanceState.getValue(instance)
         val controller = instanceController.getValue(instance)
         state.input = input
-        if (input != state.input) state.stateVersion++
-        try {
-            controller.onExecute(input, button)
-        } catch (e: Exception) {
-            LOGGER.info("$instance: error: $e", e)
-            val logString = "\nError.\n" + StringWriter().let { sw -> e.printStackTrace(PrintWriter(sw)) }.toString()
-            state.output += logString
-            state.statusPositiveness = -1
-            state.statusText = "Error. check output"
-            state.stateVersion++
+        state.stateVersion++
+        thread(start = true, isDaemon = true) {
+            try {
+                controller.onExecute(input, button)
+            } catch (e: Exception) {
+                LOGGER.info("$instance: error: $e", e)
+                val logString = "\nError.\n" + StringWriter().also { sw -> e.printStackTrace(PrintWriter(sw)) }.toString()
+                state.output += logString
+                state.statusPositiveness = -1
+                state.statusText = "Error. check output"
+                state.stateVersion++
+            }
+            saveInstance(instance)
         }
         saveInstance(instance)
     }
