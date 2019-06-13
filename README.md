@@ -1,28 +1,16 @@
-# Implementación
-Modo: ./ live:<days>:
-    Hacer el grafico de eventos de <days>
-    Probar guardado y cargado del estado
+# Instalación
 
-Desincronización del grafico, es un problema?
-Añadir un log en archivos cuando se implemente en producción.
+Java, maven y OpenJFX (porque se necesita el jfxrt.jar)
+```
+sudo apt-get install openjdk-8-jdk
+sudo apt-get install openjfx
+sudo apt-get install maven
+sudo find / -iname jfxrt.jar # buscar el path
+mvn install:install-file -Dfile="/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/ext/jfxrt.jar" -DgroupId=com.oracle.javafx -DartifactId=javafx -Dversion=2.1 -Dpackaging=jar
+```
 
-# Estrategia
+Para instalar el modelo, ver `model/README.md`.
 
-* Simplificar
-* Definir politica de compra/venta
+# Ejecución
+Usar `mvn spring-boot:run` en el directorio principal. El backend escucha en `0.0.0.0:8080`.
 
-Esto no se trata de una estrategia genérica que siempre gana.
-
-Se trata de sacar provecho a las subidas y bajadas de las criptomonedas.
-
-Las criptomonedas estan subiendo. Y la estrategia se tiene que basar en eso, porque si no va a perder.
-
-Que debe hacer?
-
-Cuando baja, comprar.
-
-Cuando sube, ir vendiendo para recuperar y asi volver a comprar.
-
-Siempre tiene que mantener.
-
-La cantidad que compra depende del minimo, y del tiempo, se tiene que estabilizar.

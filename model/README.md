@@ -16,6 +16,7 @@ virtualenv --system-site-packages -p python3 ./venv
 source ./venv/bin/activate  # sh, bash, ksh, or zsh
 pip install --upgrade pip
 pip install --upgrade tensorflow
+pip install sklearn
 # probar
 python -c "import tensorflow as tf;print(tf.reduce_sum(tf.random.normal([1000, 1000])))"
 ```
