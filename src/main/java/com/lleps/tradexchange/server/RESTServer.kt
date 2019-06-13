@@ -2,29 +2,18 @@ package com.lleps.tradexchange.server
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.lleps.tradexchange.*
-import com.lleps.tradexchange.strategy.ChartWriterImpl
 import com.lleps.tradexchange.strategy.Strategy
 import com.lleps.tradexchange.util.*
 import org.slf4j.LoggerFactory
 import org.springframework.web.bind.annotation.*
-import org.ta4j.core.Bar
-import org.ta4j.core.BaseTimeSeries
-import org.ta4j.core.indicators.helpers.ClosePriceIndicator
 import java.io.*
-import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.time.Duration
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.concurrent.thread
 
 
-/** Server main class. Makes backtesting, handles http requests, etc. */
+/** Server main class. This handles the instances at a higher level and takes care of persistence. */
 @RestController
 class RESTServer {
     private val mapper = ObjectMapper()
@@ -34,25 +23,12 @@ class RESTServer {
     private val loadedInstances = ConcurrentHashMap<String, Unit>()
     private val instances: InstancesWrapper
     private val instanceState = ConcurrentHashMap<String, InstanceState>()
+    private val instanceController = ConcurrentHashMap<String, InstanceController>()
     private val instanceChartData = ConcurrentHashMap<String, InstanceChartData>()
-    private val defaultInput = mutableMapOf(
-        "pair" to "USDT_ETH",
-        "period" to "300",
-        "initialMoney" to "1000.0",
-        "initialCoins" to "0.0",
-        "warmupTicks" to "20",
-        "cooldownTicks" to "20",
-        "plotChart" to "3",
-        "poloniex.apiKey" to "",
-        "poloniex.apiSecret" to ""
-    )
 
     init {
         File("data").mkdir()
         File("data/instances").mkdir()
-        // add fetch ticks input
-        defaultInput.putAll(fetchTicksRequiredInput())
-        Strategy.requiredInput.forEach { key, value -> defaultInput[key] = value.toString() }
         instances = loadInstanceList()
     }
 
@@ -76,7 +52,21 @@ class RESTServer {
     @PostMapping("/updateInput/{instance}/{button}")
     fun updateInput(@PathVariable instance: String, @PathVariable button: Int, @RequestBody input: Map<String, String>) {
         loadInstanceIfNecessary(instance)
-        onClickButton(instance, input, button)
+        val state = instanceState.getValue(instance)
+        val controller = instanceController.getValue(instance)
+        state.input = input
+        if (input != state.input) state.stateVersion++
+        try {
+            controller.onExecute(input, button)
+        } catch (e: Exception) {
+            LOGGER.info("$instance: error: $e", e)
+            val logString = "\nError.\n" + StringWriter().let { sw -> e.printStackTrace(PrintWriter(sw)) }.toString()
+            state.output += logString
+            state.statusPositiveness = -1
+            state.statusText = "Error. check output"
+            state.stateVersion++
+        }
+        saveInstance(instance)
     }
 
     @PutMapping("/createInstance/{instanceQuery}")
@@ -85,28 +75,21 @@ class RESTServer {
         val parts = instanceQuery.split(":")
         if (parts.size < 2 || parts.size > 3) error("query should be <type>:<name>:<copyFrom?>")
         val instanceTypeStr = parts[0]
-        val instanceCopyFrom = if (parts.size == 3) parts[2] else null
         val instanceType = InstanceType.valueOf(instanceTypeStr.toUpperCase())
         val instanceName = "[${instanceType.toString().toLowerCase()}]${parts[1]}"
-
-        // try to get the input if copied from somewhere
-        val inputData = if (instanceCopyFrom != null) instanceState.getValue(instanceCopyFrom).input else defaultInput
         if (instanceState.containsKey(instanceName)) error("instance with name '$instanceName' already exists.")
-        val action1 = when (instanceType) {
-            InstanceType.BACKTEST -> "Run"
-            InstanceType.LIVE -> "Start"
-            InstanceType.TRAIN -> "Reset"
-        }
-        val action2 = if (instanceType == InstanceType.TRAIN) "Export" else ""
 
-        // create the instance
-        instanceState[instanceName] = InstanceState(
-            type = instanceType,
-            input = inputData,
-            action1 = action1,
-            action2 = action2
-        )
-        instanceChartData[instanceName] = InstanceChartData()
+        // build instance
+        val state = InstanceState(instanceType)
+        val chartData = InstanceChartData()
+        val controller = makeControllerForInstance(instanceName, state, chartData)
+        controller.onCreated()
+        state.input = controller.getRequiredInput() // overwrite input, only when its created.
+
+        // Save
+        instanceState[instanceName] = state
+        instanceChartData[instanceName] = chartData
+        instanceController[instanceName] = controller
         instances.list = instances.list + instanceName
         loadedInstances[instanceName] = Unit
         saveInstance(instanceName)
@@ -117,8 +100,10 @@ class RESTServer {
     @DeleteMapping("/deleteInstance/{instance}")
     fun deleteInstance(@PathVariable instance: String) {
         loadInstanceIfNecessary(instance)
+        instanceController.getValue(instance).onDeleted()
         instanceState.remove(instance)
         instanceChartData.remove(instance)
+        instanceController.remove(instance)
         instances.list = instances.list - instance
         loadedInstances.remove(instance)
         deleteInstanceFiles(instance)
@@ -139,455 +124,29 @@ class RESTServer {
         @PathVariable toggle: Boolean
     ) {
         loadInstanceIfNecessary(instance)
-        val state = instanceState.getValue(instance)
-        val chartData = instanceChartData.getValue(instance)
-        val candleAtThisEpoch = chartData.candles.firstOrNull { it.timestamp == candleEpoch } ?: error("can't find candle")
-        if (toggle) {
-            // build tick description, with all the useful info
-            val tickDescription = buildString {
-                append("Price: $${candleAtThisEpoch.close}\n")
-                for ((chartName, chartSeries) in chartData.extraIndicators) {
-                    for ((series, seriesPoints) in chartSeries) {
-                        for ((epoch, value) in seriesPoints) {
-                            if (epoch == candleEpoch) {
-                                append("$chartName:$series: $value\n")
-                            }
-                        }
-                    }
-                }
-            }
-            // add tick to the chart
-            chartData.operations += Operation(candleEpoch, OperationType.BUY, candleAtThisEpoch.close, tickDescription)
-        } else {
-            // remove tick from the chart
-            val op = chartData.operations.firstOrNull { it.timestamp == candleEpoch } ?: error("cant find op")
-            chartData.operations -= op
-        }
-        state.chartVersion++
+        instanceController.getValue(instance).onToggleCandle(candleEpoch, toggle)
         saveInstance(instance)
     }
 
-    private fun onClickButton(instance: String, input: Map<String, String>, button: Int) {
-        LOGGER.info("Input: $input")
+    private fun makeControllerForInstance(instanceName: String, state: InstanceState, chartData: InstanceChartData): InstanceController {
         val out = object : Strategy.OutputWriter {
             override fun write(string: String) {
-                LOGGER.info("$instance: $string")
-                val state = instanceState.getValue(instance)
+                LOGGER.info("$instanceName: $string")
                 state.output += "$string\n"
                 state.stateVersion++
             }
         }
-        thread(start = true, isDaemon = true) {
-            try {
-                val state = instanceState.getValue(instance)
-                state.input = input
-                state.stateVersion++
-                when (state.type) {
-                    InstanceType.BACKTEST -> runBacktest(instance, input, out)
-                    InstanceType.TRAIN -> {
-                        if (button == 1) {
-                            loadTrainChart(instance, input, out)
-                        } else {
-                            // Make file paths
-                            File("data/trainings").mkdir()
-                            File("data/models").mkdir()
-                            val path = "data/trainings/$instance.csv"
-                            val outModel = "data/models/$instance.h5"
-                            out.write("Exporting to $path...")
-                            val chartData = instanceChartData.getValue(instance)
-                            val sb = StringBuilder()
-                            repeat(chartData.candles.size) { i ->
-                                val features = mutableListOf<Double>()
-                                val tickTimestamp = chartData.candles[i].timestamp
-                                features.add(chartData.candles[i].close)
-                                for ((_, extraChartData) in chartData.extraIndicators) {
-                                    for ((_, series) in extraChartData) {
-                                        val sorted = series.entries.sortedBy { it.key }.map { it.value }.toList()
-                                        features.add(sorted[i])
-                                    }
-                                }
-                                val buy = chartData.operations.firstOrNull { it.timestamp == tickTimestamp }
-                                val action = if (buy != null) 1 else 0
-                                sb.append(features.joinToString(separator = ","))
-                                sb.append(",$action\n")
-                            }
-                            Files.write(Paths.get(path), sb.toString().toByteArray(Charset.defaultCharset()))
-                            val cmd = listOf("model/venv/bin/python", "model/buildmodel.py", path, outModel)
-                            out.write("Invoke '$cmd'...")
-                            val exit = runCommand(cmd, onStdOut = { outStr -> out.write(outStr)})
-                            out.write("Exit code: $exit.")
-                            if (exit != 0) out.write("Something went wrong. Check the output.")
-                        }
-                    }
-                    InstanceType.LIVE -> {
-                        if (button == 1) {
-                            if (!state.live) {
-                                state.live = true
-                                state.action1 = "Stop"
-                                out.write("Starting live trading thread...")
-                                thread(start = true, isDaemon = false) {
-                                    try {
-                                        liveTradingInfiniteLoop(instance, input, out)
-                                    } catch (e: Exception) {
-                                        state.live = false
-                                        LOGGER.error("error in live trading thread", e)
-                                        out.write(StringWriter().let { sw -> e.printStackTrace(PrintWriter(sw)) }.toString())
-                                    }
-                                }
-                            } else {
-                                state.live = false
-                                state.action1 = "Start"
-                                out.write("Stop signal sent...")
-                            }
-                            state.stateVersion++
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                LOGGER.info("$instance: error: $e", e)
-                out.write("error")
-                out.write(StringWriter().let { sw -> e.printStackTrace(PrintWriter(sw)) }.toString())
-                instanceState[instance]?.let { state ->
-                    state.statusPositiveness = -1
-                    state.statusText = "Error. check output"
-                    state.stateVersion++
-                }
-            }
-            saveInstance(instance)
+        val result = when (state.type) {
+            InstanceType.BACKTEST -> BacktestInstanceController(instanceName, state, chartData, out)
+            InstanceType.LIVE -> LiveInstanceController(instanceName, state, chartData, out)
+            InstanceType.TRAIN -> TrainInstanceController(instanceName, state, chartData, out)
         }
-    }
-
-    private fun liveTradingInfiniteLoop(instance: String, input: Map<String, String>, out: Strategy.OutputWriter) {
-        // Parse input
-        val pair = input.getValue("pair")
-        val period = input.getValue("period").toInt()
-        val warmupTicks = input.getValue("warmupTicks").toInt()
-        val apiKey = input.getValue("poloniex.apiKey")
-        val apiSecret = input.getValue("poloniex.apiSecret")
-
-        // Fetch past ticks, create exchange and strategy instances
-        out.write("Fetch chart data from poloniex to initialize indicators...")
-        val ticks = getTicksFromPoloniex(pair, period, daysBack = warmupTicks+2)
-        val series = BaseTimeSeries(ticks)
-        val exchange = PoloniexLiveExchange(
-            pair = pair,
-            apiKey = apiKey,
-            apiSecret = apiSecret)
-        val strategy = Strategy(
-            output = out,
-            series = series,
-            training = false,
-            exchange = exchange,
-            period = period.toLong(),
-            input = input)
-        out.write("Initialize model...")
-        strategy.init()
-
-        // init chart data. Should paint some past data to get better feedback
-        // also plot past trades reported by the exchange.
-        val chartWriter = ChartWriterImpl()
-        val state = instanceState.getValue(instance)
-        val chartOperations = mutableListOf<Operation>()
-        val candles = mutableListOf<Candle>()
-
-        out.write("Plot ticks from 100 until ${ticks.size} for reference.")
-        for (i in 100 until ticks.size) {
-            val tick = series.getBar(i)
-            val epoch = tick.endTime.toEpochSecond()
-            strategy.onDrawChart(chartWriter, epoch, i)
-            candles.add(Candle(
-                epoch,
-                tick.openPrice.doubleValue(),
-                tick.closePrice.doubleValue(),
-                tick.maxPrice.doubleValue(),
-                tick.minPrice.doubleValue()))
-        }
-        // Add past trades as well
-        chartOperations.addAll(exchange.pastTrades.map { t ->
-            val type = if (t.type == "buy") OperationType.BUY else OperationType.SELL
-            Operation(t.epoch, type, t.price, "past ${t.type}.\ncoins: ${t.coins}\ntotal: ${t.total}")
-        })
-        instanceChartData.getValue(instance).let {
-            it.operations = chartOperations.toList()
-            it.candles = candles.toList()
-            it.priceIndicators = chartWriter.priceIndicators.toMap()
-            it.extraIndicators = chartWriter.extraIndicators.toMap()
-            state.chartVersion++
-        }
-
-        out.write("Livemode thread working")
-        while (true) {
-            // step 1 - Fetch candle from the exchange
-            var nextCandle = System.currentTimeMillis() + (period * 1000)
-            var ticker = exchange.fetchTicker()
-            val open = ticker.last
-            var max = ticker.last
-            var min = ticker.last
-            while (System.currentTimeMillis() < nextCandle) { // keep building the candle
-                ticker = exchange.fetchTicker()
-                max = maxOf(max, ticker.last)
-                min = minOf(min, ticker.last)
-                if (!state.live) {
-                    out.write("Livemode thread stopped.")
-                    return
-                }
-                out.write("[building candle] max: $max min: $min")
-                Thread.sleep(3000)
-            }
-            nextCandle += (period * 1000)
-
-            // now the candle is done. pass it to the strategy
-            val close = exchange.fetchTicker().last
-            val epoch = Instant.now().atOffset(ZoneOffset.UTC).toEpochSecond()
-            series.addBar(
-                Duration.ofSeconds(period.toLong()),
-                Instant.now().atOffset(ZoneOffset.UTC).toZonedDateTime(),
-                series.numOf(open),
-                series.numOf(max),
-                series.numOf(min),
-                series.numOf(close), // close
-                series.numOf(0.0), // volume
-                series.numOf(0.0) // amount
-            )
-            val tick = series.lastBar
-            out.write("Candle built: $tick")
-
-            // Now, run the strategy
-            val tickNumber = series.endIndex
-            val operations = strategy.onTick(tickNumber)
-            strategy.onDrawChart(chartWriter, epoch, tickNumber)
-
-            // Update local candles and operation list, and pass copies of it to the chart
-            candles.add(Candle(
-                epoch,
-                tick.openPrice.doubleValue(),
-                tick.closePrice.doubleValue(),
-                tick.maxPrice.doubleValue(),
-                tick.minPrice.doubleValue()))
-            chartOperations.addAll(operations.map { op ->
-                val type = if (op.type == Strategy.OperationType.BUY)
-                    OperationType.BUY
-                else
-                    OperationType.SELL
-                Operation(epoch, type, tick.closePrice.doubleValue(), op.description)
-            })
-            val chartData = instanceChartData.getValue(instance)
-            chartData.operations = chartOperations.toList()
-            chartData.candles = candles.toList()
-            chartData.priceIndicators = chartWriter.priceIndicators.toMap()
-            chartData.extraIndicators = chartWriter.extraIndicators.toMap()
-            state.chartVersion++
-
-            // Update trades table in the instance state. Also print closed trades
-            val trades = state.trades.toMutableList()
-            for (op in operations) {
-                if (op.type == Strategy.OperationType.SELL) {
-                    trades.add(TradeEntry(op.code, op.buyPrice, tick.closePrice.doubleValue(), op.amount))
-                    out.write("Close trade #${op.code}. buy: ${op.buyPrice} sell: ${tick.closePrice.doubleValue()}. amount: ${op.amount}")
-                }
-            }
-            state.trades = trades
-            state.stateVersion++
-        }
-    }
-
-    private fun loadTrainChart(instance: String, input: Map<String, String>, out: Strategy.OutputWriter) {
-        val state = instanceState.getValue(instance)
-        state.output = ""
-
-        val period = input.getValue("period").toInt()
-        val warmupTicks = input.getValue("warmupTicks").toInt()
-        val ticks = fetchTicks(input, out)
-
-        // Set up
-        out.write("Chart data loaded (period: ${period/60} min, ${ticks.size} ticks)")
-        val candles = mutableListOf<Candle>()
-        val chartWriter = ChartWriterImpl()
-        val timeSeries = BaseTimeSeries(ticks)
-        val strategy = Strategy(
-            output = out,
-            series = timeSeries,
-            period = period.toLong(),
-            training = false,
-            exchange = PoloniexBacktestExchange(),
-            input = input
-        )
-        for (i in warmupTicks..timeSeries.endIndex) {
-            val tick = timeSeries.getBar(i)
-            val epoch = tick.beginTime.toEpochSecond()
-            strategy.onDrawChart(chartWriter, epoch, i)
-            candles.add(Candle(
-                epoch,
-                tick.openPrice.doubleValue(),
-                tick.closePrice.doubleValue(),
-                tick.maxPrice.doubleValue(),
-                tick.minPrice.doubleValue()))
-        }
-
-        out.write("Indicators plotted. Click the buy candles and press Export")
-
-        val chartData = instanceChartData.getOrPut(instance) { InstanceChartData() }
-        chartData.candles = candles
-        chartData.operations = emptyList()
-        chartData.priceIndicators = chartWriter.priceIndicators
-        chartData.extraIndicators = chartWriter.extraIndicators
-        state.chartVersion++
-        state.statusText = "Train mode"
-        state.statusPositiveness = 1
-        state.stateVersion++
-    }
-
-    private fun runBacktest(instance: String, input: Map<String, String>, out: Strategy.OutputWriter) {
-        val state = instanceState.getValue(instance)
-        state.output = ""
-
-        // read input
-        val period = input.getValue("period").toInt()
-        val warmupTicks = input.getValue("warmupTicks").toInt()
-        val cooldownTicks = input.getValue("cooldownTicks").toInt()
-        val plotChart = input["plotChart"]?.toInt() ?: error("plotIndicators")
-        val initialMoney = input.getValue("initialMoney").toDouble()
-        val initialCoins = input.getValue("initialCoins").toDouble()
-
-        // Get market ticks
-        val ticks = fetchTicks(input, out)
-
-        // Set up
-        out.write("Starting... (period: ${period/60} min, ${ticks.size} ticks)")
-        val chartOperations = mutableListOf<Operation>()
-        val candles = mutableListOf<Candle>()
-        val chartWriter = ChartWriterImpl(plotChart)
-
-        // Execute strategy
-        val trades = mutableListOf<TradeEntry>()
-        val exchange = PoloniexBacktestExchange(initialMoney, initialCoins)
-        val timeSeries = BaseTimeSeries(ticks)
-        val strategy = Strategy(
-            output = out,
-            series = timeSeries,
-            period = period.toLong(),
-            training = false,
-            exchange = exchange,
-            input = input
-        )
-        strategy.init()
-        val sellOnlyTick = timeSeries.endIndex - cooldownTicks
-        for (i in warmupTicks..timeSeries.endIndex) {
-            val tick = timeSeries.getBar(i)
-            val epoch = tick.beginTime.toEpochSecond()
-            exchange.marketPrice = tick.closePrice.doubleValue()
-            if (i >= sellOnlyTick) strategy.sellOnly = true
-            val operations = strategy.onTick(i)
-            strategy.onDrawChart(chartWriter, epoch, i)
-            candles.add(Candle(
-                epoch,
-                tick.openPrice.doubleValue(),
-                tick.closePrice.doubleValue(),
-                tick.maxPrice.doubleValue(),
-                tick.minPrice.doubleValue()))
-            chartOperations.addAll(operations.map { op ->
-                val type = if (op.type == Strategy.OperationType.BUY)
-                    OperationType.BUY
-                else
-                    OperationType.SELL
-                Operation(epoch, type, tick.closePrice.doubleValue(), op.description)
-            })
-            for (op in operations) {
-                if (op.type == Strategy.OperationType.SELL) {
-                    trades.add(TradeEntry(op.code, op.buyPrice, tick.closePrice.doubleValue(), op.amount))
-                    // intermediate updates while the strategy is running
-                    val tradeSum = trades.sumByDouble { (it.sell-it.buy)*it.amount }
-                    state.statusText = "%d trades sum \$%.2f".format(trades.size, tradeSum)
-                    state.statusPositiveness = if (tradeSum > 0.0) 1 else -1
-                    state.stateVersion++
-                }
-            }
-        }
-
-        // Print resume
-        val firstPrice = ClosePriceIndicator(timeSeries)[warmupTicks]
-        val latestPrice = ClosePriceIndicator(timeSeries)[timeSeries.endIndex]
-        out.write("  ______________________________________________________ ")
-        out.write("                   RESULTS                               ")
-        out.write(" Initial balance        %.03f'c $%.03f"
-            .format(initialCoins, initialMoney))
-        out.write(" Final balance          %.03f'c $%.03f (net %.03f'c \$%.03f)"
-            .format(exchange.coinBalance, exchange.moneyBalance,
-                exchange.coinBalance - initialCoins,
-                exchange.moneyBalance - initialMoney))
-        out.write(" Coin start/end value   $%.03f / $%.03f (net $%.03f)"
-            .format(firstPrice, latestPrice, latestPrice - firstPrice))
-        out.write(" Trades: ${strategy.tradeCount}")
-        out.write("  ______________________________________________________ ")
-
-        // Update view
-        val chartData = instanceChartData.getOrPut(instance) { InstanceChartData() }
-        chartData.candles = if (plotChart >= 1) candles else emptyList()
-        chartData.operations = if (plotChart >= 1) chartOperations else emptyList()
-        chartData.priceIndicators = if (plotChart >= 1) chartWriter.priceIndicators else emptyMap()
-        chartData.extraIndicators = if (plotChart >= 1) chartWriter.extraIndicators else emptyMap()
-        state.chartVersion++
-
-        // Update trades
-        state.trades = trades.toList()
-        state.stateVersion++
-
-        // Update status text
-        val bhDifference = latestPrice - firstPrice
-        val bhCoinPercent = bhDifference * 100.0 / firstPrice
-        val tradeDifference = exchange.moneyBalance - initialMoney
-        val tradePercent = tradeDifference * 100.0 / initialMoney
-        val tradeSum = state.trades.sumByDouble { (it.sell-it.buy)*it.amount }
-        val tradesString = "%d trades sum \$%.2f".format(state.trades.size, tradeSum)
-        val tradingVsHoldingString = "(%.1f%s vs %.1f%s)".format(tradePercent, "%", bhCoinPercent, "%")
-        state.statusText = "$tradesString $tradingVsHoldingString"
-        state.statusPositiveness = if (tradePercent > 0) 1 else -1
-        state.stateVersion++
-    }
-
-    private fun fetchTicksRequiredInput() = mapOf(
-        "pair" to "USDT_ETH",
-        "period" to "300",
-        "bt.source" to "poloniex",
-        "bt.csv.file" to "../Bitfinex-historical-data/ETHUSD/Candles_1m/2019/merged.csv",
-        "bt.csv.startDate" to "2019-01-01",
-        "bt.csv.endDate" to "2019-01-04",
-        "bt.poloniex.dayRange" to "7-0"
-    )
-
-    /** Parse ticks from the given input. May throw anything. */
-    private fun fetchTicks(input: Map<String, String>, out: Strategy.OutputWriter): List<Bar> {
-        val pair = input["pair"] ?: error("pair")
-        val period = input["period"]?.toLong() ?: error("period")
-        val btSource = input.getValue("bt.source")
-        val btCsvFile = input.getValue("bt.csv.file")
-        val btCsvDateStart = input.getValue("bt.csv.startDate")
-        val btCsvDateEnd = input.getValue("bt.csv.endDate")
-        val btPolDays0 = input.getValue("bt.poloniex.dayRange").split("-")[0].toInt()
-        val btPolDays1 = input.getValue("bt.poloniex.dayRange").split("-")[1].toInt()
-
-        return when (btSource) {
-            "csv" -> {
-                out.write("Parse ticks from $btCsvFile at period ${period.toInt()}")
-                val ticks = parseCandlesFromCSV(
-                    file = btCsvFile,
-                    periodSeconds = period.toInt(),
-                    startDate = LocalDate.parse(btCsvDateStart, DateTimeFormatter.ISO_DATE).atStartOfDay(),
-                    endDate = LocalDate.parse(btCsvDateEnd, DateTimeFormatter.ISO_DATE).atStartOfDay())
-                ticks
-            }
-            "poloniex" -> {
-                out.write("Using data from poloniex server...")
-                val limit = (Instant.now().toEpochMilli() / 1000) - (btPolDays1 * 24 * 3600)
-                val ticks = getTicksFromPoloniex(pair, period.toInt(), btPolDays0)
-                    .filter { it.endTime.toEpochSecond() < limit }
-                ticks
-            }
-            else -> error("invalid bt.source. Valid: 'csv' or 'poloniex'")
-        }
+        result.onLoaded()
+        return result
     }
 
     // Persistence
+
     private fun loadInstanceList(): InstancesWrapper {
         return loadFrom<InstancesWrapper>("data/instances/list.json") ?: InstancesWrapper()
     }
@@ -600,8 +159,10 @@ class RESTServer {
         if (!loadedInstances.containsKey(instance)) {
             val state = loadFrom<InstanceState>("data/instances/state-$instance.json") ?: error("instance: $instance")
             val chartData = loadFrom<InstanceChartData>("data/instances/chartData-$instance.json") ?: error("instance: $instance")
+            val controller = makeControllerForInstance(instance, state, chartData)
             instanceState[instance] = state
             instanceChartData[instance] = chartData
+            instanceController[instance] = controller
             loadedInstances[instance] = Unit
         }
     }
@@ -618,34 +179,7 @@ class RESTServer {
         Files.delete(Paths.get("data/instances/chartData-$instance.json"))
     }
 
-    private fun runCommand(command: List<String>, onStdOut: (String) -> Unit): Int {
-        val pb = ProcessBuilder()
-            .command(*command.toTypedArray())
-            .redirectErrorStream(true)
-        val p = pb.start()
-        val reader = BufferedReader(InputStreamReader(p.inputStream))
-        while (true) {
-            val out = reader.readLine() ?: break
-            onStdOut(out)
-        }
-        val exitValue = p.exitValue()
-        p.destroy()
-        return exitValue
-    }
-
     companion object {
         private val LOGGER = LoggerFactory.getLogger(RESTServer::class.java)
-
-        @JvmStatic
-        fun main(args: Array<String>) {
-            val candles = parseCandlesFromCSV(
-                file = "../Bitfinex-historical-data/BTCUSD/Candles_1m/2018/merged.csv",
-                periodSeconds = 60/*,
-                startDate = LocalDateTime.of(2018, 5, 1, 0, 0),
-                endDate = LocalDateTime.of(2018, 10, 2, 0, 0)*/
-            )
-            println("candles size: ${candles.size}")
-            //println(candles.map { it.endTime })
-        }
     }
 }

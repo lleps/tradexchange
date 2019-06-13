@@ -48,18 +48,18 @@ class Strategy(
     companion object {
         val requiredInput = mapOf(
             "strategy.model" to "",
-            "strategy.openTradesCount" to 5,
-            "strategy.tradeExpiry" to 12*5,
-            "strategy.buyCooldown" to 5,
-            "strategy.topLoss" to -10,
-            "strategy.sellBarrier1" to 1.0,
-            "strategy.sellBarrier2" to 3.0,
-            "strategy.rsiBuy" to 30,
-            "strategy.rsiBuy" to 30,
-            "strategy.rsiPeriod" to 14,
-            "strategy.obvBuy" to .25,
-            "strategy.obvNormalPeriod" to 120,
-            "strategy.mlBuyValue" to 0.7
+            "strategy.openTradesCount" to "5",
+            "strategy.tradeExpiry" to "300",
+            "strategy.buyCooldown" to "5",
+            "strategy.topLoss" to "-10",
+            "strategy.sellBarrier1" to "1.0",
+            "strategy.sellBarrier2" to "3.0",
+            "strategy.rsiBuy" to "30",
+            "strategy.rsiBuy" to "30",
+            "strategy.rsiPeriod" to "14",
+            "strategy.obvBuy" to "0.25",
+            "strategy.obvNormalPeriod" to "120",
+            "strategy.mlBuyValue" to "0.7"
         )
     }
 
