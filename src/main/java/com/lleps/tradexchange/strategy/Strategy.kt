@@ -48,6 +48,7 @@ class Strategy(
     companion object {
         val requiredInput = mapOf(
             "strategy.model" to "",
+            "strategy.balanceMultiplier" to "0.8",
             "strategy.openTradesCount" to "5",
             "strategy.tradeExpiry" to "300",
             "strategy.buyCooldown" to "5",
@@ -73,6 +74,7 @@ class Strategy(
     private val rsiBuy = input.getValue("strategy.rsiBuy").toFloat()
     private val obvBuy = input.getValue("strategy.obvBuy").toFloat()
     private val obvNormalPeriod = input.getValue("strategy.obvNormalPeriod").toInt()
+    private val balanceMultiplier = input.getValue("strategy.balanceMultiplier").toFloat()
 
     var tradeCount = 0
         private set
@@ -183,7 +185,7 @@ class Strategy(
                 actionLock--
             } else {
                 if (shouldOpen(i, epoch)) {
-                    val amountOfMoney = (exchange.moneyBalance) / (openTradesCount - openTrades.size).toDouble()
+                    val amountOfMoney = (exchange.moneyBalance) / (openTradesCount - openTrades.size).toDouble() * balanceMultiplier
                     val amountOfCoins = amountOfMoney / close[i]
                     val buyPrice = exchange.buy(amountOfCoins)
                     val trade = OpenTrade(buyPrice, amountOfCoins, epoch, buyNumber++)
@@ -202,7 +204,7 @@ class Strategy(
         if (!boughtSomething) {
             val closedTrades = openTrades.filter { shouldClose(i, epoch, it) }
             for (trade in closedTrades) {
-                val sellPrice = exchange.sell(trade.amount)
+                val sellPrice = exchange.sell(trade.amount * 0.9999)
                 val diff = sellPrice - trade.buyPrice
                 val tradeStrLog =
                     "Trade %.03f'c    buy $%.03f    sell $%.03f    diff $%.03f    won $%.03f"
