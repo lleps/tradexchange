@@ -26,7 +26,7 @@ class LiveInstanceController(
             "warmupDays" to "5",
             "poloniex.apiKey" to "",
             "poloniex.apiSecret" to "") +
-            Strategy.requiredInput
+            Strategy.REQUIRED_INPUT
     }
 
     override fun onLoaded() {

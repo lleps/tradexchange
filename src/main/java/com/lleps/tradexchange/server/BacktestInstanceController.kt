@@ -24,7 +24,7 @@ class BacktestInstanceController(
             "initialMoney" to "1000",
             "initialCoins" to "0") +
             fetchTicksRequiredInput() +
-            Strategy.requiredInput
+            Strategy.REQUIRED_INPUT
     }
 
     override fun onLoaded() {

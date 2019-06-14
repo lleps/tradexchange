@@ -24,7 +24,7 @@ class TrainInstanceController(
             "period" to "300",
             "warmupTicks" to "300") +
             fetchTicksRequiredInput() +
-            Strategy.requiredInput
+            Strategy.REQUIRED_INPUT
     }
 
     override fun onLoaded() {
@@ -90,10 +90,11 @@ class TrainInstanceController(
             output = out,
             series = timeSeries,
             period = period.toLong(),
-            training = false,
+            training = true,
             exchange = PoloniexBacktestExchange(),
             input = input
         )
+        strategy.init()
         for (i in warmupTicks..timeSeries.endIndex) {
             val tick = timeSeries.getBar(i)
             val epoch = tick.beginTime.toEpochSecond()

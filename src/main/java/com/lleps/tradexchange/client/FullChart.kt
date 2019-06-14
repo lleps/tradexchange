@@ -49,6 +49,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
     }
 
     private val nodeHBox = VBox(-10.0)
+    private val extraChartsHBox = VBox(-15.0)
     private lateinit var priceChart: CandleStickChart
     private lateinit var chartNavToolbar: HBox
     private lateinit var operationSeries: XYChart.Series<Number, Number>
@@ -167,6 +168,9 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
             nodeHBox.children[0] = anchor
         } else {
             nodeHBox.children.add(anchor)
+        }
+        if (nodeHBox.children.size == 1) {
+            nodeHBox.children.add(extraChartsHBox)
         }
     }
 
@@ -316,7 +320,6 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
                 val chart = LineChart(xAxis, yAxis)
                 chart.createSymbols = false
                 chart.isLegendVisible = false
-                chart.prefHeightProperty().bind(Bindings.divide(priceChart.heightProperty(), 5.0))
 
                 val chartData = FXCollections.observableArrayList<XYChart.Series<Number, Number>>()
                 var minExtraVal = Double.MAX_VALUE
@@ -338,17 +341,27 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
                 }
                 yAxis.lowerBound = minExtraVal
                 yAxis.upperBound = maxExtraVal
-                yAxis.tickUnit = (maxExtraVal - minExtraVal) / 4.0
+                yAxis.tickUnit = (maxExtraVal - minExtraVal) / 2
                 chart.data = chartData
                 newExtraCharts.add(chart)
             }
 
             // Plot extra charts
             Platform.runLater {
-                nodeHBox.children.removeAll(extraCharts)
+                println("nec: $newExtraCharts")
+                if (newExtraCharts.isNotEmpty()) {// maybe priceChart.height?
+                    val heightPerChart = (maxOf(priceChart.height, nodeHBox.height / 2.0, extraChartsHBox.height) / newExtraCharts.size) * 1.0
+                    for (c in newExtraCharts) {
+                        c.minHeight = heightPerChart
+                        c.maxHeight = heightPerChart
+                        c.prefHeight = heightPerChart
+                        println("apply to $c $heightPerChart")
+                    }
+                }
+                extraChartsHBox.children.removeAll(extraCharts)
                 extraCharts.clear()
                 extraCharts.addAll(newExtraCharts)
-                nodeHBox.children.addAll(newExtraCharts)
+                extraChartsHBox.children.addAll(newExtraCharts)
             }
         }
     }
