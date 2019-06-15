@@ -15,6 +15,7 @@ import org.ta4j.core.indicators.*
 import org.ta4j.core.indicators.bollinger.PercentBIndicator
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
 import org.ta4j.core.num.Num
+import java.util.*
 
 class Strategy(
     private val output: OutputWriter,
@@ -143,8 +144,18 @@ class Strategy(
     }
 
     private fun shouldOpen(i: Int, epoch: Long): Boolean {
-        val features = DoubleArray(usedIndicators.size) { index -> usedIndicators[index].second[i] }
-        val data = arrayOf(features)
+        val timesteps = 25
+        /*val timestepsArray = Array(timesteps) { index ->
+            DoubleArray(usedIndicators.size) { indicatorIndex ->
+                usedIndicators[indicatorIndex].second[i - (timesteps - index - 1)]
+            }
+        }*/
+        val timestepsArray = Array(usedIndicators.size) { indicatorIndex ->
+            DoubleArray(timesteps) { index ->
+                usedIndicators[indicatorIndex].second[i - (timesteps - index - 1)]
+            }
+        }
+        val data = arrayOf(timestepsArray)
         val prediction = model.output(Nd4j.create(data)).getDouble(0)
         return prediction > mlBuyValue
     }
