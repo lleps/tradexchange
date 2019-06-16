@@ -38,7 +38,7 @@ class BacktestInstanceController(
     override fun onDeleted() {
     }
 
-    override fun onToggleCandle(candleEpoch: Long, toggle: Boolean) {
+    override fun onToggleCandle(candleEpoch: Long, toggle: Int) {
     }
 
     override fun onExecute(input: Map<String, String>, button: Int) {

@@ -15,7 +15,7 @@ interface InstanceController {
     fun onCreated()
     fun onDeleted()
     fun onExecute(input: Map<String, String>, button: Int)
-    fun onToggleCandle(candleEpoch: Long, toggle: Boolean)
+    fun onToggleCandle(candleEpoch: Long, toggle: Int)
 }
 
 fun fetchTicksRequiredInput() = mapOf(

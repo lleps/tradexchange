@@ -125,7 +125,7 @@ class RESTServer {
     fun toggleCandleState(
         @PathVariable instance: String,
         @PathVariable candleEpoch: Long,
-        @PathVariable toggle: Boolean
+        @PathVariable toggle: Int
     ) {
         loadInstanceIfNecessary(instance)
         instanceController.getValue(instance).onToggleCandle(candleEpoch, toggle)

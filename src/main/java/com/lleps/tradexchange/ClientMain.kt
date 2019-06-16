@@ -21,6 +21,7 @@ import java.io.StringWriter
 import javafx.scene.control.ButtonType
 import javafx.scene.control.Alert
 import javafx.scene.image.ImageView
+import javafx.scene.input.MouseButton
 import java.io.File
 
 class ClientMain : Application() {
@@ -154,9 +155,15 @@ class ClientMain : Application() {
             if (img != null) {
                 tab.graphic = ImageView(Image(img, true))
             }
-            view.onSelectCandle { candle ->
+            view.onSelectCandle { candle, button ->
                 val op = view.chart.operations.firstOrNull { op -> op.timestamp == candle.timestamp }
-                connection.toggleCandleState(instance, candle.timestamp, toggle = op == null) { _, throwable3 ->
+                val toggleId = when {
+                    op != null -> 0
+                    button == MouseButton.PRIMARY -> -1
+                    else -> 1
+                }
+                val type = if (toggleId == -1) OperationType.BUY else OperationType.SELL
+                connection.toggleCandleState(instance, candle.timestamp, toggle = toggleId) { _, throwable3 ->
                     if (throwable3 != null) {
                         showError("toggleCandleState", throwable3)
                         return@toggleCandleState
@@ -166,9 +173,9 @@ class ClientMain : Application() {
                     if (op == null) {
                         val newOp = Operation(
                             candle.timestamp,
-                            OperationType.BUY,
+                            type,
                             candle.close,
-                            "buy train point")
+                            "train point")
                         view.chart.operations += newOp
                     } else {
                         view.chart.operations -= op

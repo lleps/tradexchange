@@ -11,6 +11,7 @@ import javafx.geometry.Pos
 import javafx.scene.Parent
 import javafx.scene.control.*
 import javafx.scene.control.cell.PropertyValueFactory
+import javafx.scene.input.MouseButton
 import javafx.scene.layout.BorderPane
 import javafx.scene.layout.HBox
 import javafx.scene.layout.VBox
@@ -34,12 +35,12 @@ class MainView {
     private var onAction1: (Map<String, String>) -> Unit = {}
     private var onAction2: (Map<String, String>) -> Unit = {}
     private val paneWidth = 300.0
-    private var onSelectCandle: ((Candle) -> Unit)? = null
+    private var onSelectCandle: ((Candle, MouseButton) -> Unit)? = null
 
     fun initJavaFxContent(): Parent {
         // Main components
         chart = FullChart(useCandles = true)
-        chart.onSelectCandle { onSelectCandle?.invoke(it) }
+        chart.onSelectCandle { c, b -> onSelectCandle?.invoke(c, b) }
         val controlPane = VBox(15.0).apply { this.padding = Insets(5.0, 10.0, 1.0, 1.0) }
         controlPane.prefWidth = paneWidth
         val mainPane = BorderPane(chart, null, controlPane, null, null)
@@ -71,7 +72,7 @@ class MainView {
         return mainPane
     }
 
-    fun onSelectCandle(callback: (Candle) -> Unit) {
+    fun onSelectCandle(callback: (Candle, MouseButton) -> Unit) {
         onSelectCandle = callback
     }
 

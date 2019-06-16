@@ -134,7 +134,7 @@ class RESTClient(var host: String = "http://localhost:8080") : RESTInterface {
         )
     }
 
-    override fun toggleCandleState(instance: String, candleEpoch: Long, toggle: Boolean, onResult: (Unit, Throwable?) -> Unit) {
+    override fun toggleCandleState(instance: String, candleEpoch: Long, toggle: Int, onResult: (Unit, Throwable?) -> Unit) {
         makeRequest(
             request = {
                 val response = Unirest.post("$host/toggleCandleState/$instance/$candleEpoch/$toggle").asString()

@@ -66,7 +66,7 @@ class LiveInstanceController(
         state.stateVersion++
     }
 
-    override fun onToggleCandle(candleEpoch: Long, toggle: Boolean) {
+    override fun onToggleCandle(candleEpoch: Long, toggle: Int) {
     }
 
     private fun liveTradingInfiniteLoop(input: Map<String, String>) {

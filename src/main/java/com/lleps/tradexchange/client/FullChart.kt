@@ -3,7 +3,6 @@ package com.lleps.tradexchange.client
 import com.lleps.tradexchange.Candle
 import com.lleps.tradexchange.Operation
 import com.lleps.tradexchange.OperationType
-import com.lleps.tradexchange.server.PoloniexBacktestExchange
 import com.lleps.tradexchange.util.hackTooltipStartTiming
 import javafx.application.Application
 import javafx.application.Platform
@@ -16,8 +15,8 @@ import javafx.scene.chart.LineChart
 import javafx.scene.chart.NumberAxis
 import javafx.scene.chart.XYChart
 import javafx.scene.control.Button
-import javafx.scene.control.ScrollPane
 import javafx.scene.control.Tooltip
+import javafx.scene.input.MouseButton
 import javafx.scene.layout.AnchorPane
 import javafx.scene.layout.BorderPane
 import javafx.scene.layout.HBox
@@ -28,10 +27,8 @@ import javafx.stage.Stage
 import javafx.util.StringConverter
 import java.time.Instant
 import java.time.ZoneOffset
-import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.Executors
-import kotlin.concurrent.thread
 
 class FullChart(val useCandles: Boolean = true) : BorderPane() {
     companion object {
@@ -58,8 +55,8 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
     private var minTimestamp = 0L
     private var maxTimestamp = 0L
 
-    private var onSelectCandleCallback: (Candle) -> Unit = {}
-    fun onSelectCandle(onSelect: (Candle) -> Unit) {
+    private var onSelectCandleCallback: (Candle, MouseButton) -> Unit = { _, _ -> }
+    fun onSelectCandle(onSelect: (Candle, MouseButton) -> Unit) {
         onSelectCandleCallback = onSelect
     }
 
@@ -154,7 +151,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
                 lastX = it.x
                 adjustYRangeByXBounds(this)
             }
-            setOnSelectCandle { onSelectCandleCallback(it) }
+            setOnSelectCandle { c, b -> onSelectCandleCallback(c, b) }
         }
         val anchor = AnchorPane()
         anchor.children.addAll(priceChart, chartNavToolbar)
@@ -349,7 +346,6 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
 
             // Plot extra charts
             Platform.runLater {
-                println("nec: $newExtraCharts")
                 if (newExtraCharts.isNotEmpty()) {// maybe priceChart.height?
                     val heightPerChart = (maxOf(priceChart.height, nodeHBox.height / 2.0, extraChartsHBox.height) / newExtraCharts.size)
                     for (c in newExtraCharts) {

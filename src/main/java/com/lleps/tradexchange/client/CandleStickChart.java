@@ -32,6 +32,7 @@
 package com.lleps.tradexchange.client;
 
 import java.util.Iterator;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -43,6 +44,8 @@ import javafx.scene.Node;
 import javafx.scene.chart.Axis;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.XYChart;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
 import javafx.scene.shape.LineTo;
 import javafx.scene.shape.MoveTo;
 import javafx.scene.shape.Path;
@@ -60,7 +63,7 @@ public class CandleStickChart extends XYChart<Number, Number> {
 
     public enum PriceType { CANDLES, LINE }
 
-    private Consumer<Candle> onSelectCandle = (Candle c) -> {};
+    private BiConsumer<Candle, MouseButton> onSelectCandle = (Candle c, MouseButton b) -> {};
 
     private PriceType priceType = PriceType.LINE;
 
@@ -72,7 +75,7 @@ public class CandleStickChart extends XYChart<Number, Number> {
         return priceType;
     }
 
-    public void setOnSelectCandle(Consumer<Candle> onSelectCandle) {
+    public void setOnSelectCandle(BiConsumer<Candle, MouseButton> onSelectCandle) {
         this.onSelectCandle = onSelectCandle;
     }
 
@@ -296,7 +299,7 @@ public class CandleStickChart extends XYChart<Number, Number> {
         } else {
             candle = new CandleNode("series" + seriesIndex, "data" + itemIndex);
             item.setNode(candle);
-            candle.setOnMouseClicked(e -> onSelectCandle.accept((Candle)item.getExtraValue()));
+            candle.setOnMouseClicked(e -> onSelectCandle.accept((Candle)item.getExtraValue(), e.getButton()));
             if (priceType == PriceType.LINE) candle.setVisible(false);
         }
         return candle;

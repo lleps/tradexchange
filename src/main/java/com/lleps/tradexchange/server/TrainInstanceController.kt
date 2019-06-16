@@ -45,12 +45,8 @@ class TrainInstanceController(
         else exportAndBuildModel(input)
     }
 
-    private fun exportAndBuildModel(input: Map<String, String>) {
-        File("data/trainings").mkdir()
-        File("data/models").mkdir()
-        val path = "data/trainings/$instance.csv"
-        val outModel = "data/models/$instance.h5"
-        out.write("Exporting to $path...")
+    private fun exportAndBuildModelType(type: OperationType, csvPath: String, modelPath: String) {
+        out.write("$type: Exporting to $csvPath...")
         val sb = StringBuilder()
         repeat(chartData.candles.size) { i ->
             val features = mutableListOf<Double>()
@@ -62,17 +58,28 @@ class TrainInstanceController(
                     features.add(sorted[i])
                 }
             }
-            val buy = chartData.operations.firstOrNull { it.timestamp == tickTimestamp }
-            val action = if (buy != null) 1 else 0
+            val op = chartData.operations.firstOrNull { it.timestamp == tickTimestamp && it.type == type }
+            val action = if (op != null) 1 else 0
             sb.append(features.joinToString(separator = ","))
             sb.append(",$action\n")
         }
-        Files.write(Paths.get(path), sb.toString().toByteArray(Charset.defaultCharset()))
-        val cmd = listOf("model/venv/bin/python", "model/buildmodel.py", path, outModel)
-        out.write("Invoke '$cmd'...")
+        Files.write(Paths.get(csvPath), sb.toString().toByteArray(Charset.defaultCharset()))
+        val cmd = listOf("model/venv/bin/python", "model/buildmodel.py", csvPath, modelPath)
+        out.write("$type: Invoke '$cmd'...")
         val exit = runCommand(cmd, onStdOut = { outStr -> out.write(outStr)})
-        out.write("Exit code: $exit.")
-        if (exit != 0) out.write("Something went wrong. Check the output.")
+        out.write("$type: Exit code: $exit.")
+        if (exit != 0) out.write("$type: Something went wrong. Check the output.")
+    }
+
+    private fun exportAndBuildModel(input: Map<String, String>) {
+        File("data/trainings").mkdir()
+        File("data/models").mkdir()
+        val buysCsv = "data/trainings/$instance-open.csv"
+        val sellsCsv = "data/trainings/$instance.close.csv"
+        val buysModel = "data/models/$instance-open.h5"
+        val sellsModel = "data/models/$instance-close.h5"
+        exportAndBuildModelType(OperationType.BUY, buysCsv, buysModel)
+        exportAndBuildModelType(OperationType.SELL, sellsCsv, sellsModel)
     }
 
     private fun resetTrain(input: Map<String, String>) {
@@ -149,9 +156,9 @@ class TrainInstanceController(
         state.stateVersion++
     }
 
-    override fun onToggleCandle(candleEpoch: Long, toggle: Boolean) {
+    override fun onToggleCandle(candleEpoch: Long, toggle: Int) {
         val candleAtThisEpoch = chartData.candles.firstOrNull { it.timestamp == candleEpoch } ?: error("can't find candle")
-        if (toggle) {
+        if (toggle != 0) {
             // build tick description, with all the useful info
             val tickDescription = buildString {
                 append("Price: $${candleAtThisEpoch.close}\n")
@@ -166,7 +173,8 @@ class TrainInstanceController(
                 }
             }
             // add tick to the chart
-            chartData.operations += Operation(candleEpoch, OperationType.BUY, candleAtThisEpoch.close, tickDescription)
+            val type = if (toggle == -1) OperationType.BUY else OperationType.SELL
+            chartData.operations += Operation(candleEpoch, type, candleAtThisEpoch.close, tickDescription)
         } else {
             // remove tick from the chart
             val op = chartData.operations.firstOrNull { it.timestamp == candleEpoch } ?: error("cant find op")
