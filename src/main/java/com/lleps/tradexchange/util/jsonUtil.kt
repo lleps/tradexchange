@@ -7,6 +7,7 @@ import java.nio.file.Files
 import java.nio.file.Paths
 
 val INTERNAL_MAPPER = ObjectMapper()
+val INTERNAL_PRETTY_MAPPER = ObjectMapper().writerWithDefaultPrettyPrinter()!!
 
 // JSON TO/FROM FILES
 fun Any.saveTo(fileName: String) {
@@ -22,8 +23,12 @@ inline fun <reified T> loadFrom(fileName: String): T? {
 }
 
 // JSON TO/FROM STRINGS
-fun Any.toJsonString(): String {
-    return INTERNAL_MAPPER.writeValueAsString(this)
+fun Any.toJsonString(prettyPrinting: Boolean = false): String {
+    return if (!prettyPrinting) {
+        INTERNAL_MAPPER.writeValueAsString(this)
+    } else {
+        INTERNAL_PRETTY_MAPPER.writeValueAsString(this)
+    }
 }
 
 inline fun <reified T> parseJson(string: String): T {

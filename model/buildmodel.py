@@ -65,7 +65,7 @@ model.add(tf.keras.layers.Dense(32, activation='relu'))
 model.add(tf.keras.layers.Dense(1, activation='sigmoid'))
 
 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-model.fit(X, y, epochs=80, batch_size=32, verbose=2)
+model.fit(X, y, epochs=10, batch_size=32, verbose=2)
 model.save(output_model)
 
 scores = model.evaluate(X, y)

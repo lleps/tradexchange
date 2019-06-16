@@ -16,6 +16,7 @@ import javafx.scene.chart.LineChart
 import javafx.scene.chart.NumberAxis
 import javafx.scene.chart.XYChart
 import javafx.scene.control.Button
+import javafx.scene.control.ScrollPane
 import javafx.scene.control.Tooltip
 import javafx.scene.layout.AnchorPane
 import javafx.scene.layout.BorderPane
@@ -49,7 +50,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
     }
 
     private val nodeHBox = VBox(-10.0)
-    private val extraChartsHBox = VBox(-15.0)
+    private val extraChartsHBox = VBox(-20.0)
     private lateinit var priceChart: CandleStickChart
     private lateinit var chartNavToolbar: HBox
     private lateinit var operationSeries: XYChart.Series<Number, Number>
@@ -350,12 +351,11 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
             Platform.runLater {
                 println("nec: $newExtraCharts")
                 if (newExtraCharts.isNotEmpty()) {// maybe priceChart.height?
-                    val heightPerChart = (maxOf(priceChart.height, nodeHBox.height / 2.0, extraChartsHBox.height) / newExtraCharts.size) * 1.0
+                    val heightPerChart = (maxOf(priceChart.height, nodeHBox.height / 2.0, extraChartsHBox.height) / newExtraCharts.size)
                     for (c in newExtraCharts) {
                         c.minHeight = heightPerChart
                         c.maxHeight = heightPerChart
                         c.prefHeight = heightPerChart
-                        println("apply to $c $heightPerChart")
                     }
                 }
                 extraChartsHBox.children.removeAll(extraCharts)

@@ -1,9 +1,6 @@
 package com.lleps.tradexchange.strategy
 
-import com.lleps.tradexchange.indicator.MappingIndicator
-import com.lleps.tradexchange.indicator.NormalizationIndicator
-import com.lleps.tradexchange.indicator.PercentBIndicatorFixed
-import com.lleps.tradexchange.indicator.WilliamsRIndicatorFixed
+import com.lleps.tradexchange.indicator.*
 import com.lleps.tradexchange.server.Exchange
 import com.lleps.tradexchange.util.get
 import org.deeplearning4j.nn.modelimport.keras.KerasModelImport
@@ -12,10 +9,8 @@ import org.nd4j.linalg.factory.Nd4j
 import org.ta4j.core.Indicator
 import org.ta4j.core.TimeSeries
 import org.ta4j.core.indicators.*
-import org.ta4j.core.indicators.bollinger.PercentBIndicator
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
 import org.ta4j.core.num.Num
-import java.util.*
 
 class Strategy(
     private val output: OutputWriter,
@@ -73,11 +68,15 @@ class Strategy(
             },
             IndicatorType("macd", "12,26,300") { _, indicator, input ->
                 NormalizationIndicator(MACDIndicator(indicator, input[0], input[1]), input[2])
+            },
+            IndicatorType("obv-o", "24,300") { series, _, input ->
+                NormalizationIndicator(OBVOscillatorIndicator(series, input[0]), input[1])
             }
         )
 
         val REQUIRED_INPUT = mapOf(
             "strategy.model" to "",
+            "strategy.periodMultiplier" to "1",
             "strategy.balanceMultiplier" to "0.8",
             "strategy.openTradesCount" to "5",
             "strategy.tradeExpiry" to "300",
@@ -91,6 +90,7 @@ class Strategy(
 
     // Parse input
     private val modelName = input.getValue("strategy.model")
+    private val periodMultiplier = input.getValue("strategy.periodMultiplier").toFloat()
     private val balanceMultiplier = input.getValue("strategy.balanceMultiplier").toFloat()
     private val openTradesCount = input.getValue("strategy.openTradesCount").toInt()
     private val tradeExpiry = input.getValue("strategy.tradeExpiry").toInt() // give up if can't meet the margin
@@ -99,7 +99,6 @@ class Strategy(
     private val sellBarrier1 = input.getValue("strategy.sellBarrier1").toFloat()
     private val sellBarrier2 = input.getValue("strategy.sellBarrier2").toFloat()
     private val mlBuyValue = input.getValue("strategy.mlBuyValue").toFloat()
-
 
     // State classes
     private class OpenTrade(
@@ -117,6 +116,8 @@ class Strategy(
     private var buyNumber = 1
     private var openTrades = listOf<OpenTrade>()
     private var actionLock = 0
+    private var predictionValue = 0.0
+    private var tradeSum = 0.0
 
     // Indicators
     private val usedIndicators = mutableListOf<Pair<String, Indicator<Num>>>()
@@ -124,7 +125,7 @@ class Strategy(
     private fun parseIndicators(input: Map<String, String>) {
         for (type in INDICATOR_TYPES) {
             val key = "strategy.ind.${type.name}"
-            val paramsArray = input.getValue(key).split(",").map { it.toInt() }
+            val paramsArray = input.getValue(key).split(",").map { (it.toInt() * periodMultiplier).toInt() }
             if (paramsArray[0] == 0) continue // indicator ignored
             val indicator = type.factory(series, close, paramsArray)
             usedIndicators.add(type.name to indicator)
@@ -145,19 +146,14 @@ class Strategy(
 
     private fun shouldOpen(i: Int, epoch: Long): Boolean {
         val timesteps = 25
-        /*val timestepsArray = Array(timesteps) { index ->
-            DoubleArray(usedIndicators.size) { indicatorIndex ->
-                usedIndicators[indicatorIndex].second[i - (timesteps - index - 1)]
-            }
-        }*/
         val timestepsArray = Array(usedIndicators.size) { indicatorIndex ->
             DoubleArray(timesteps) { index ->
                 usedIndicators[indicatorIndex].second[i - (timesteps - index - 1)]
             }
         }
         val data = arrayOf(timestepsArray)
-        val prediction = model.output(Nd4j.create(data)).getDouble(0)
-        return prediction > mlBuyValue
+        predictionValue = model.output(Nd4j.create(data)).getDouble(0)
+        return predictionValue > mlBuyValue
     }
 
     private fun shouldClose(i: Int, epoch: Long, trade: OpenTrade): Boolean {
@@ -181,9 +177,22 @@ class Strategy(
         return false
     }
 
+
     fun onDrawChart(chart: ChartWriter, epoch: Long, i: Int) {
+        var drawCount = 0
+        if (!training) {
+            //chart.priceIndicator("bbUp", epoch, bbUp[i])
+            //chart.priceIndicator("bbDown", epoch, bbDown[i])
+            //chart.priceIndicator("bbMa", epoch, bbMa[i])
+            chart.extraIndicator("ml", "ml", epoch, predictionValue)
+            chart.extraIndicator("ml", "buyvalue", epoch, mlBuyValue.toDouble())
+            chart.extraIndicator("$", "$", epoch, tradeSum)
+            drawCount += 2
+        }
         for (indicator in usedIndicators) {
             chart.extraIndicator(indicator.first, indicator.first, epoch, indicator.second[i])
+            drawCount++
+            if (!training && drawCount >= 5) break
         }
     }
 
@@ -235,6 +244,7 @@ class Strategy(
                         (epoch - trade.epoch) / 60,
                         (epoch - trade.epoch) / period
                     )
+                tradeSum += diff*trade.amount
                 operations = operations + Operation(OperationType.SELL, trade.amount, tooltip, trade.buyPrice, trade.code)
                 openTrades = openTrades - trade
                 tradeCount++

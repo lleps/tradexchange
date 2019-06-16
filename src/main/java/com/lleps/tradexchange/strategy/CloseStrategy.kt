@@ -18,10 +18,13 @@ import org.ta4j.core.BaseTimeSeries
 import org.ta4j.core.Indicator
 import org.ta4j.core.TimeSeries
 import org.ta4j.core.indicators.EMAIndicator
-import org.ta4j.core.indicators.RSIIndicator
 import org.ta4j.core.indicators.SMAIndicator
-import org.ta4j.core.indicators.StochasticRSIIndicator
+import org.ta4j.core.indicators.bollinger.BollingerBandsLowerIndicator
+import org.ta4j.core.indicators.bollinger.BollingerBandsMiddleIndicator
+import org.ta4j.core.indicators.bollinger.BollingerBandsUpperIndicator
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
+import org.ta4j.core.indicators.statistics.StandardDeviationIndicator
+import org.ta4j.core.num.DoubleNum
 import org.ta4j.core.num.Num
 import kotlin.random.Random
 
@@ -29,9 +32,12 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
 
     companion object {
 
-        private lateinit var emaLong: EMAIndicator
-        private lateinit var emaShort: EMAIndicator // to smooth the price. very few ticks
-        private lateinit var rsi: RSIIndicator
+        private lateinit var ema: EMAIndicator
+        private lateinit var avg14: EMAIndicator
+        private lateinit var sd14: StandardDeviationIndicator
+        private lateinit var middleBBand: BollingerBandsMiddleIndicator
+        private lateinit var lowBBand: BollingerBandsLowerIndicator
+        private lateinit var upBBand: BollingerBandsUpperIndicator
         private lateinit var close: ClosePriceIndicator
 
         private var inited = false
@@ -45,6 +51,9 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
         var timeWeightTop: Double = 2.0,
         var priceWeightBottom: Double = 2.0,
         var timeWeightBottom: Double = 2.0,
+        val bbk: Int = 2,
+        val avgPeriod: Int = 14,
+        val sdPeriod: Int = 14,
         val longEmaPeriod: Int = 20,
         val shortEmaPeriod: Int = 3,
         val rsiPeriod: Int = 14,
@@ -60,9 +69,12 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
         }
         if (!inited) {
             close = ClosePriceIndicator(timeSeries)
-            emaLong = EMAIndicator(close, cfg.longEmaPeriod) // To detect market trend change
-            emaShort = EMAIndicator(close, cfg.shortEmaPeriod)
-            rsi = RSIIndicator(close, cfg.rsiPeriod)
+            ema = EMAIndicator(close, cfg.longEmaPeriod) // To detect market trend change
+            avg14 = EMAIndicator(close, cfg.avgPeriod)
+            sd14 = StandardDeviationIndicator(close, cfg.sdPeriod)
+            middleBBand = BollingerBandsMiddleIndicator(avg14)
+            lowBBand = BollingerBandsLowerIndicator(middleBBand, sd14, DoubleNum.valueOf(cfg.bbk))
+            upBBand = BollingerBandsUpperIndicator(middleBBand, sd14, DoubleNum.valueOf(cfg.bbk))
             inited = true
         }
     }
@@ -83,7 +95,7 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
         val priceIncreasePct = priceToPct(price - buyPrice)
 
         if (firstTick) {
-            startedDowntrend = close[i] < emaLong[i]
+            startedDowntrend = close[i] < ema[i]
             firstTick = false
         }
 
@@ -92,18 +104,22 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
         bottomBarrier += priceIncreasePct.coerceAtLeast(0.0)*cfg.priceWeightBottom + timePassed*cfg.timeWeightBottom
 
         if (chart != null) {
-            chart.priceIndicator("ema", epoch, emaLong[i])
-            chart.priceIndicator("topBarrier", epoch, topBarrier)
-            chart.priceIndicator("bottomBarrier", epoch, bottomBarrier)
-            chart.priceIndicator("emaShort", epoch, emaShort[i])
-            chart.extraIndicator("rsi", "rsi", epoch, rsi[i])
+            chart.priceIndicator("ema", epoch, ema[i])
+            chart.priceIndicator("bb", epoch, middleBBand[i])
+            chart.priceIndicator("low", epoch, lowBBand[i])
+            chart.priceIndicator("up", epoch, upBBand[i])
+            //chart.priceIndicator("topBarrier", epoch, topBarrier)
+            //chart.priceIndicator("bottomBarrier", epoch, bottomBarrier)
             //chart.priceIndicator("minWin", epoch, minWin)
         }
 
-        if (price > topBarrier) return true // for extreme gains
-        if (price < bottomBarrier) return true // for extreme losses
+        if (ema.crossUnder(middleBBand, i) ||
+            ema.crossUnder(upBBand, i) ||
+            (ema.crossUnder(lowBBand, i) || ema.crossOver(lowBBand, i))) return true
+        //if (price > topBarrier) return true // for extreme gains
+        //if (price < bottomBarrier) return true // for extreme losses
         if (timePassed >= 145.0) return true
-        //if (emaShort.crossUnder(emaLong, i)) return true // for general downtrend
+        //if (emaShort.crossUnder(ema, i)) return true // for general downtrend
         return false
     }
 
@@ -128,7 +144,8 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
                 while (true) {
                     initialTick = Random.nextInt(series.barCount - 200)
                     finalTick = initialTick + 200
-                    if (selectionIndicator[initialTick + 50] < selectionIndicator[finalTick]) break
+                    break
+                    //if (selectionIndicator[initialTick + 50] < selectionIndicator[finalTick]) break
                 }
             }
             val initialTick = initialTick + 50
@@ -222,7 +239,7 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
             println("loaded.")
 
             val initialRunConfig = loadFrom<Config>("CloseStrategyTestConfig.json") ?: Config()
-            val jsonTextArea = TextArea(initialRunConfig.toJsonString())
+            val jsonTextArea = TextArea(initialRunConfig.toJsonString(true))
             val runButton = Button("Run").apply {
                 setOnAction {
                     val cfg = parseJson<Config>(jsonTextArea.text)

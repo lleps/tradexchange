@@ -22,6 +22,8 @@ class TrainInstanceController(
         return mapOf(
             "pair" to "USDT_ETH",
             "period" to "300",
+            "autobuyPeriod" to "100",
+            "autobuyBatch" to "3",
             "warmupTicks" to "300") +
             fetchTicksRequiredInput() +
             Strategy.REQUIRED_INPUT
@@ -79,6 +81,8 @@ class TrainInstanceController(
         val pair = input.getValue("pair")
         val period = input.getValue("period").toInt()
         val warmupTicks = input.getValue("warmupTicks").toInt()
+        val autobuyPeriod = input.getValue("autobuyPeriod").toInt()
+        val autobuyBatch = input.getValue("autobuyBatch").toInt()
         val ticks = fetchTicks(pair, period.toLong(), input, out)
 
         // Set up
@@ -95,7 +99,33 @@ class TrainInstanceController(
             input = input
         )
         strategy.init()
+        val operations = mutableListOf<Operation>()
+        var buyCount = 0
         for (i in warmupTicks..timeSeries.endIndex) {
+            if (i > warmupTicks && autobuyPeriod != 0 && (i % autobuyPeriod) == 0) {
+                // find the lowest point and add autobuyBatch buys
+                var minIndex = i
+                var minValue = timeSeries.getBar(i - autobuyPeriod).closePrice.doubleValue()
+                for (j in (i - autobuyPeriod) until i) {
+                    val valueHere = timeSeries.getBar(j).closePrice.doubleValue()
+                    if (valueHere < minValue) {
+                        minIndex = j
+                        minValue = valueHere
+                    }
+                }
+                // add a buy point at j
+                val autoBuyBatchSide = autobuyBatch/2
+                for (k in (minIndex - autoBuyBatchSide)..(minIndex + autoBuyBatchSide)) {
+                    val tick = timeSeries.getBar(k)
+                    operations.add(
+                        Operation(
+                            tick.endTime.toEpochSecond(),
+                            OperationType.BUY,
+                            tick.closePrice.doubleValue(),
+                            "autobuy #${++buyCount}"
+                        ))
+                }
+            }
             val tick = timeSeries.getBar(i)
             val epoch = tick.beginTime.toEpochSecond()
             strategy.onDrawChart(chartWriter, epoch, i)
@@ -110,7 +140,7 @@ class TrainInstanceController(
         out.write("Indicators plotted. Click the buy candles and press Export")
 
         chartData.candles = candles
-        chartData.operations = emptyList()
+        chartData.operations = operations
         chartData.priceIndicators = chartWriter.priceIndicators
         chartData.extraIndicators = chartWriter.extraIndicators
         state.chartVersion++
