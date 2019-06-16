@@ -116,6 +116,7 @@ class Strategy(
     private var buyNumber = 1
     private var openTrades = listOf<OpenTrade>()
     private var actionLock = 0
+    private var sellLock = 0
     private var buyPrediction = 0.0
     private var sellPrediction = 0.0
     private var tradeSum = 0.0
@@ -166,6 +167,8 @@ class Strategy(
 
     private fun shouldClose(i: Int, epoch: Long, trade: OpenTrade): Boolean {
         if (epoch - trade.epoch > tradeExpiry * period) return true
+
+        if (sellPrediction > mlBuyValue) return true
 
         val diff = close[i] - trade.buyPrice
         val pct = diff * 100.0 / close[i]
@@ -233,12 +236,15 @@ class Strategy(
             }
         }
 
+        if (sellLock > 0) sellLock--
+
         // Try to sell
-        if (!boughtSomething) {
-            val closedTrades = openTrades.filter { shouldClose(i, epoch, it) }
-            for (trade in closedTrades) {
+        if (!boughtSomething && sellLock == 0) {
+            val closedTrades = openTrades.firstOrNull { shouldClose(i, epoch, it) }
+            for (trade in if (closedTrades != null) listOf(closedTrades) else emptyList()) {
                 val sellPrice = exchange.sell(trade.amount * 0.9999)
                 val diff = sellPrice - trade.buyPrice
+                sellLock = buyCooldown
                 val tradeStrLog =
                     "Trade %.03f'c    buy $%.03f    sell $%.03f    diff $%.03f    won $%.03f"
                         .format(trade.amount, trade.buyPrice, sellPrice, diff, diff*trade.amount)

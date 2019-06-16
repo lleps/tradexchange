@@ -34,7 +34,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
     companion object {
         private val chartPlotExecutor = Executors.newCachedThreadPool()
         private val BUY_COLOR = Paint.valueOf("#0000e4")
-        private val SELL_COLOR = Paint.valueOf("#EF6C00")
+        private val SELL_COLOR = Paint.valueOf("#6D4C41")
         private val DATE_FORMATTER = DateTimeFormatter.ofPattern("MM-dd HH:mm")
         private val TICK_LABEL_FORMATTER = object : StringConverter<Number>() {
             override fun toString(t: Number) = Instant
