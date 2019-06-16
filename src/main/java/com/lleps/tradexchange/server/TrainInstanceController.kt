@@ -75,7 +75,7 @@ class TrainInstanceController(
         File("data/trainings").mkdir()
         File("data/models").mkdir()
         val buysCsv = "data/trainings/$instance-open.csv"
-        val sellsCsv = "data/trainings/$instance.close.csv"
+        val sellsCsv = "data/trainings/$instance-close.csv"
         val buysModel = "data/models/$instance-open.h5"
         val sellsModel = "data/models/$instance-close.h5"
         exportAndBuildModelType(OperationType.BUY, buysCsv, buysModel)

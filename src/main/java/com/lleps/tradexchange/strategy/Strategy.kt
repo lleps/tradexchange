@@ -116,7 +116,8 @@ class Strategy(
     private var buyNumber = 1
     private var openTrades = listOf<OpenTrade>()
     private var actionLock = 0
-    private var predictionValue = 0.0
+    private var buyPrediction = 0.0
+    private var sellPrediction = 0.0
     private var tradeSum = 0.0
 
     // Indicators
@@ -133,18 +134,21 @@ class Strategy(
     }
 
     // Model for ML predictions
-    private lateinit var model: MultiLayerNetwork
+    private lateinit var buyModel: MultiLayerNetwork
+    private lateinit var sellModel: MultiLayerNetwork
 
     // Functions
     fun init() {
         if (!training) {
-            val path = "data/models/[train]$modelName.h5"
-            model = KerasModelImport.importKerasSequentialModelAndWeights(path);
+            val buyPath = "data/models/[train]$modelName-open.h5"
+            val sellPath = "data/models/[train]$modelName-close.h5"
+            buyModel = KerasModelImport.importKerasSequentialModelAndWeights(buyPath)
+            sellModel = KerasModelImport.importKerasSequentialModelAndWeights(sellPath)
         }
         parseIndicators(this.input)
     }
 
-    private fun shouldOpen(i: Int, epoch: Long): Boolean {
+    private fun calculatePredictions(i: Int) {
         val timesteps = 25
         val timestepsArray = Array(usedIndicators.size) { indicatorIndex ->
             DoubleArray(timesteps) { index ->
@@ -152,8 +156,12 @@ class Strategy(
             }
         }
         val data = arrayOf(timestepsArray)
-        predictionValue = model.output(Nd4j.create(data)).getDouble(0)
-        return predictionValue > mlBuyValue
+        buyPrediction = buyModel.output(Nd4j.create(data)).getDouble(0)
+        sellPrediction = sellModel.output(Nd4j.create(data)).getDouble(0)
+    }
+
+    private fun shouldOpen(i: Int, epoch: Long): Boolean {
+        return buyPrediction > mlBuyValue
     }
 
     private fun shouldClose(i: Int, epoch: Long, trade: OpenTrade): Boolean {
@@ -184,8 +192,9 @@ class Strategy(
             //chart.priceIndicator("bbUp", epoch, bbUp[i])
             //chart.priceIndicator("bbDown", epoch, bbDown[i])
             //chart.priceIndicator("bbMa", epoch, bbMa[i])
-            chart.extraIndicator("ml", "ml", epoch, predictionValue)
+            chart.extraIndicator("ml", "buy", epoch, buyPrediction)
             chart.extraIndicator("ml", "buyvalue", epoch, mlBuyValue.toDouble())
+            chart.extraIndicator("ml", "sell", epoch, sellPrediction)
             chart.extraIndicator("$", "$", epoch, tradeSum)
             drawCount += 2
         }
@@ -200,6 +209,8 @@ class Strategy(
         val epoch = series.getBar(i).endTime.toEpochSecond()
         var boughtSomething = false
         var operations = emptyList<Operation>()
+
+        calculatePredictions(i)
 
         // Try to buy
         if (!sellOnly && openTrades.size < openTradesCount) { // BUY
