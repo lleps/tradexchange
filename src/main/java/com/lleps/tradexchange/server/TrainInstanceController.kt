@@ -23,7 +23,6 @@ class TrainInstanceController(
             "pair" to "USDT_ETH",
             "period" to "300",
             "autobuyPeriod" to "100",
-            "autobuyBatch" to "3",
             "warmupTicks" to "300") +
             fetchTicksRequiredInput() +
             Strategy.REQUIRED_INPUT
@@ -89,7 +88,7 @@ class TrainInstanceController(
         val period = input.getValue("period").toInt()
         val warmupTicks = input.getValue("warmupTicks").toInt()
         val autobuyPeriod = input.getValue("autobuyPeriod").toInt()
-        val autobuyBatch = input.getValue("autobuyBatch").toInt()
+        val autobuyBatch = (input["autobuyBatch"] ?: "1").toInt()
         val ticks = fetchTicks(pair, period.toLong(), input, out)
 
         // Set up
@@ -108,16 +107,23 @@ class TrainInstanceController(
         strategy.init()
         val operations = mutableListOf<Operation>()
         var buyCount = 0
+        var sellCount = 0
         for (i in warmupTicks..timeSeries.endIndex) {
             if (i > warmupTicks && autobuyPeriod != 0 && (i % autobuyPeriod) == 0) {
                 // find the lowest point and add autobuyBatch buys
                 var minIndex = i
                 var minValue = timeSeries.getBar(i - autobuyPeriod).closePrice.doubleValue()
+                var maxIndex = i
+                var maxValue = timeSeries.getBar(i - autobuyPeriod).closePrice.doubleValue()
                 for (j in (i - autobuyPeriod) until i) {
                     val valueHere = timeSeries.getBar(j).closePrice.doubleValue()
                     if (valueHere < minValue) {
                         minIndex = j
                         minValue = valueHere
+                    }
+                    if (valueHere > maxValue) {
+                        maxIndex = j
+                        maxValue = valueHere
                     }
                 }
                 // add a buy point at j
@@ -129,7 +135,17 @@ class TrainInstanceController(
                             tick.endTime.toEpochSecond(),
                             OperationType.BUY,
                             tick.closePrice.doubleValue(),
-                            "autobuy #${++buyCount}"
+                            "buy #${++buyCount}"
+                        ))
+                }
+                for (k in (maxIndex - autoBuyBatchSide)..(maxIndex + autoBuyBatchSide)) {
+                    val tick = timeSeries.getBar(k)
+                    operations.add(
+                        Operation(
+                            tick.endTime.toEpochSecond(),
+                            OperationType.SELL,
+                            tick.closePrice.doubleValue(),
+                            "sell #${++sellCount}"
                         ))
                 }
             }

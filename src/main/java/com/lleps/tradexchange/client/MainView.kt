@@ -141,7 +141,7 @@ class MainView {
                 paneToAdd.children.add(BorderPane(null, null, field, null, label))
             }
             inputPane.children.clear()
-            inputPane.children.addAll(mainInput, TitledPane("Strategy", strategyInput))
+            inputPane.children.addAll(mainInput, TitledPane("Strategy", ScrollPane(strategyInput)))
             updateInput()
         }
     }
