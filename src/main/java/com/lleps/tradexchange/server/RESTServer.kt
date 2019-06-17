@@ -94,7 +94,7 @@ class RESTServer {
         instanceState[instanceName] = state
         instanceChartData[instanceName] = chartData
         instanceController[instanceName] = controller
-        instances.list = instances.list + instanceName
+        instances.list = listOf(instanceName) + instances.list // at the beginning
         loadedInstances[instanceName] = Unit
         saveInstance(instanceName)
         saveInstanceList()

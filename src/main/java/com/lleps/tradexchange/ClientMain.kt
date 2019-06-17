@@ -206,8 +206,13 @@ class ClientMain : Application() {
             }
             tabs[instance] = tab
             views[instance] = view
-            tabPane.tabs.add(tab)
-            if (select) tabPane.selectionModel.select(tab)
+
+            if (select) {
+                tabPane.tabs.add(0, tab)
+                tabPane.selectionModel.select(tab)
+            } else {
+                tabPane.tabs.add(tab)
+            }
             view.onAction1 {
                 connection.updateInput(instance, it, 1) { _, throwable ->
                     if (throwable != null) showError("updateInput", throwable)
