@@ -160,9 +160,9 @@ public class CandleStickChart extends XYChart<Number, Number> {
                     // update candle
                     CandleNode candle = (CandleNode)itemNode;
                     candle.update(close - y, high - y, low - y, candleWidth);
-                    candle.updateTooltip(item.getYValue().doubleValue(),
-                            extra.getClose(), extra.getHigh(),
-                            extra.getLow());
+                    //candle.updateTooltip(item.getYValue().doubleValue(),
+                    //        extra.getClose(), extra.getHigh(),
+                    //        extra.getLow());
                 }
                 if (itemNode != null) {
                     // position the candle (or any other node)

@@ -43,7 +43,7 @@ public class CandleNode extends Group {
     private String seriesStyleClass;
     private String dataStyleClass;
     private boolean openAboveClose = true;
-    private Tooltip tooltip = new Tooltip();
+    //private Tooltip tooltip = new Tooltip();
 
     CandleNode(String seriesStyleClass, String dataStyleClass) {
         setAutoSizeChildren(false);
@@ -51,8 +51,8 @@ public class CandleNode extends Group {
         this.seriesStyleClass = seriesStyleClass;
         this.dataStyleClass = dataStyleClass;
         updateStyleClasses();
-        tooltip.setGraphic(new TooltipContent());
-        Tooltip.install(bar, tooltip);
+        //tooltip.setGraphic(new TooltipContent());
+        //Tooltip.install(bar, tooltip);
     }
 
     public void setSeriesAndDataStyleClasses(String seriesStyleClass,
@@ -81,8 +81,8 @@ public class CandleNode extends Group {
     }
 
     public void updateTooltip(double open, double close, double high, double low) {
-        TooltipContent tooltipContent = (TooltipContent) tooltip.getGraphic();
-        tooltipContent.update(open, close, high, low);
+        //TooltipContent tooltipContent = (TooltipContent) tooltip.getGraphic();
+        //tooltipContent.update(open, close, high, low);
     }
 
     private void updateStyleClasses() {

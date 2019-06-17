@@ -34,7 +34,8 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
     companion object {
         private val chartPlotExecutor = Executors.newCachedThreadPool()
         private val BUY_COLOR = Paint.valueOf("#0000e4")
-        private val SELL_COLOR = Paint.valueOf("#6D4C41")
+        private val SELL_COLOR = Paint.valueOf("#1B5E20")
+        private val NEGATIVE_SELL_COLOR = Paint.valueOf("#B71C1C")
         private val DATE_FORMATTER = DateTimeFormatter.ofPattern("MM-dd HH:mm")
         private val TICK_LABEL_FORMATTER = object : StringConverter<Number>() {
             override fun toString(t: Number) = Instant
@@ -192,7 +193,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
                         .apply { fill = BUY_COLOR }
                 } else {
                     Polygon( 5.0,+offsetY,  10.0,-15.0+offsetY, 0.0,-15.0+offsetY)
-                        .apply { fill = SELL_COLOR }
+                        .apply { fill = sellColor(operation) }
                 }
                 if (operation.description != null) {
                     Tooltip.install(node, Tooltip(operation.description))
@@ -205,7 +206,11 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
         }
     }
 
-    private fun plotChart(minTimestamp: Long, maxTimestamp: Long, maxTicks: Int = 400) {
+    private fun sellColor(op: Operation): Paint {
+        return if (op.description?.contains("-") == true) NEGATIVE_SELL_COLOR else SELL_COLOR
+    }
+
+    private fun plotChart(minTimestamp: Long, maxTimestamp: Long, maxTicks: Int = 800) {
         chartPlotExecutor.execute {
             var minValue = Double.MAX_VALUE
             var maxValue = 0.0
@@ -252,7 +257,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
                         .apply { fill = BUY_COLOR }
                 } else {
                     Polygon( 5.0,+offsetY,  10.0,-15.0+offsetY, 0.0,-15.0+offsetY)
-                        .apply { fill = SELL_COLOR }
+                        .apply { fill = sellColor(operation) }
                 }
                 if (operation.description != null) {
                     Tooltip.install(node, Tooltip(operation.description))
