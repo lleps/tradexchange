@@ -86,7 +86,8 @@ class Strategy(
             "strategy.sellBarrier2" to "3.0",
             "strategy.mlBuyValue" to "0.7",
             "strategy.closeSDPeriod" to "20",
-            "strategy.closeMAPeriod" to "20"
+            "strategy.closeMAPeriod" to "20",
+            "strategy.emaPeriods" to "12,26"
         ) + INDICATOR_TYPES.map { type -> "strategy.ind.${type.name}" to type.defaultValue }
     }
 
@@ -103,6 +104,9 @@ class Strategy(
     private val mlBuyValue = input.getValue("strategy.mlBuyValue").toFloat()
     private val closeSDPeriod = input.getValue("strategy.closeSDPeriod").toInt()
     private val closeMAPeriod = input.getValue("strategy.closeMAPeriod").toInt()
+    private val emaPeriods = input.getValue("strategy.emaPeriods").split(",").map { it.toInt() }
+    private val emaShort = EMAIndicator(ClosePriceIndicator(series), emaPeriods[0])
+    private val emaLong = EMAIndicator(ClosePriceIndicator(series), emaPeriods[1])
 
     // State classes
     private class OpenTrade(
@@ -175,42 +179,44 @@ class Strategy(
         sellPrediction = sellModel.output(Nd4j.create(data)).getDouble(0)
     }
 
-    private fun shouldOpen(i: Int, epoch: Long): Boolean {
-        return buyPrediction > mlBuyValue
+    private fun shouldOpen(i: Int, epoch: Long): String? {
+        if (buyPrediction > mlBuyValue) return "$buyPrediction>$mlBuyValue"
+        return null
     }
 
-    private fun shouldClose(i: Int, epoch: Long, trade: OpenTrade): Boolean {
-        if (epoch - trade.epoch > tradeExpiry * period) return true
+    private fun shouldClose(i: Int, epoch: Long, trade: OpenTrade): String? {
+        if (epoch - trade.epoch > tradeExpiry * period) return "expiryclose"
 
         if (closeConfig != null) {
             return trade.closeStrategy!!.doTick(i, null)
         }
-        if (sellPrediction > mlBuyValue) return true
+        if (sellPrediction > mlBuyValue) return "prediction: $sellPrediction>$mlBuyValue"
 
         // todo: use this too? ye. you can disable it from cfg
         val diff = close[i] - trade.buyPrice
         val pct = diff * 100.0 / close[i]
         if (pct < topLoss) {
-            return true // panic - sell.
+            return "panic ($pct% < $topLoss)" // panic - sell.
         }
 
         if (pct > sellBarrier1) {
             trade.passed1Barrier = true
             if (pct > sellBarrier2) {
-                return true
+                return "sellBarrier2 ($pct%>$sellBarrier2)%"
             }
         } else if (pct < sellBarrier1 && trade.passed1Barrier) {
-            return true
+            return "sellBarrier1 ($pct%>$sellBarrier1%)"
         }
 
-        return false
+        return null
     }
 
 
     fun onDrawChart(chart: ChartWriter, epoch: Long, i: Int) {
         var drawCount = 0
         if (!training) {
-            //chart.priceIndicator("bbUp", epoch, bbUp[i])
+            chart.priceIndicator("emaShort", epoch, emaShort[i])
+            chart.priceIndicator("emaLong", epoch, emaLong[i])
             //chart.priceIndicator("bbDown", epoch, bbDown[i])
             //chart.priceIndicator("bbMa", epoch, bbMa[i])
             chart.extraIndicator("ml", "buy", epoch, buyPrediction)
@@ -238,7 +244,8 @@ class Strategy(
             if (actionLock > 0) {
                 actionLock--
             } else {
-                if (shouldOpen(i, epoch)) {
+                val open = shouldOpen(i, epoch)
+                if (open != null) {
                     val amountOfMoney = (exchange.moneyBalance) / (openTradesCount - openTrades.size).toDouble() * balanceMultiplier
                     val amountOfCoins = amountOfMoney / close[i]
                     val buyPrice = exchange.buy(amountOfCoins)
@@ -251,7 +258,7 @@ class Strategy(
                     operations = operations + Operation(
                         OperationType.BUY,
                         trade.amount,
-                        "Open #%d at $%.03f".format(trade.code, trade.buyPrice))
+                        "$open\nOpen #%d at $%.03f".format(trade.code, trade.buyPrice))
                     actionLock = buyCooldown
                 }
             }
@@ -261,8 +268,8 @@ class Strategy(
 
         // Try to sell
         if (!boughtSomething && sellLock == 0) {
-            val closedTrades = openTrades.firstOrNull { shouldClose(i, epoch, it) }
-            for (trade in if (closedTrades != null) listOf(closedTrades) else emptyList()) {
+            for (trade in openTrades) {
+                val shouldClose = shouldClose(i, epoch, trade) ?: continue
                 val sellPrice = exchange.sell(trade.amount * 0.9999)
                 val diff = sellPrice - trade.buyPrice
                 sellLock = buyCooldown
@@ -283,7 +290,7 @@ class Strategy(
                         (epoch - trade.epoch) / period
                     )
                 tradeSum += diff*trade.amount
-                operations = operations + Operation(OperationType.SELL, trade.amount, tooltip, trade.buyPrice, trade.code)
+                operations = operations + Operation(OperationType.SELL, trade.amount, shouldClose + "\n" + tooltip, trade.buyPrice, trade.code)
                 openTrades = openTrades - trade
                 tradeCount++
             }

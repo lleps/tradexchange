@@ -91,6 +91,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
             "6H" to 3600*6,
             "12H" to 3600*12,
             "1D" to 3600*24,
+            "3D" to 3600*24*3,
             "7D" to 3600*24*7,
             "14D" to 3600*24*14,
             "30D" to 3600*24*30
@@ -157,8 +158,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
         val anchor = AnchorPane()
         anchor.children.addAll(priceChart, chartNavToolbar)
         AnchorPane.setTopAnchor(chartNavToolbar, 18.0)
-        AnchorPane.setRightAnchor(chartNavToolbar, 100.0)
-        AnchorPane.setLeftAnchor(chartNavToolbar, 100.0)
+        AnchorPane.setLeftAnchor(chartNavToolbar, 18.0)
         AnchorPane.setTopAnchor(priceChart, 1.0)
         AnchorPane.setRightAnchor(priceChart, 1.0)
         AnchorPane.setLeftAnchor(priceChart, 1.0)

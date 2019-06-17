@@ -89,7 +89,7 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
     private var minWin = 0.0// how much win is secured
 
     /** Process the tick. Returns true if should close, false otherwise. */
-    fun doTick(i: Int, chart: Strategy.ChartWriter?): Boolean {
+    fun doTick(i: Int, chart: Strategy.ChartWriter?): String? {
         val price = close[i]
         val epoch = timeSeries.getBar(i).endTime.toEpochSecond()
         val timePassed = (this.timePassed++).toDouble()
@@ -114,14 +114,11 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
             //chart.priceIndicator("minWin", epoch, minWin)
         }
 
-        if ((timePassed >= 10.0 && ema.crossUnder(middleBBand, i)) || // for mid bband use a small time frame at the begin
-            ema.crossUnder(upBBand, i) ||
-            ema.crossUnder(lowBBand, i)) return true
-        //if (price > topBarrier) return true // for extreme gains
-        //if (price < bottomBarrier) return true // for extreme losses
-        if (timePassed >= 145.0) return true
-        //if (emaShort.crossUnder(ema, i)) return true // for general downtrend
-        return false
+        if ((timePassed >= 10.0 && ema.crossUnder(middleBBand, i))) return "middle"
+        if (ema.crossUnder(upBBand, i)) return "upbband"
+        if (ema.crossUnder(lowBBand, i)) return "lowbband"
+        if (timePassed >= 145.0) return "expiry"
+        return null
     }
 
     private fun pctToPrice(pct: Double) = buyPrice * (pct / 100.0)
@@ -162,11 +159,13 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
                 val tickPrice = series.getBar(i).closePrice.doubleValue()
                 maxPrice = maxOf(maxPrice, tickPrice)
                 minPrice = minOf(minPrice, tickPrice)
-                if (closeStrategy.doTick(i, chartWriter)) {
+                val result = closeStrategy.doTick(i, chartWriter)
+                if (result != null) {
                     operations.add(Operation(
                         series.getBar(i).endTime.toEpochSecond(),
                         OperationType.SELL,
-                        tickPrice)
+                        tickPrice,
+                        result)
                     )
                     sellPrice = tickPrice
                     break
