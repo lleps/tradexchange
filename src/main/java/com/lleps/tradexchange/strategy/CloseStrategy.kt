@@ -40,7 +40,7 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
         private lateinit var upBBand: BollingerBandsUpperIndicator
         private lateinit var close: ClosePriceIndicator
 
-        private var inited = false
+        var inited = false
         private var lastCfg: Config = Config()
     }
 
@@ -63,6 +63,7 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
     )
 
     init {
+        // if the series change, should change too.
         if (inited && lastCfg != cfg) {
             inited = false
             lastCfg = cfg.copy()
@@ -113,9 +114,9 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
             //chart.priceIndicator("minWin", epoch, minWin)
         }
 
-        if (ema.crossUnder(middleBBand, i) ||
+        if ((timePassed >= 10.0 && ema.crossUnder(middleBBand, i)) || // for mid bband use a small time frame at the begin
             ema.crossUnder(upBBand, i) ||
-            (ema.crossUnder(lowBBand, i) || ema.crossOver(lowBBand, i))) return true
+            ema.crossUnder(lowBBand, i)) return true
         //if (price > topBarrier) return true // for extreme gains
         //if (price < bottomBarrier) return true // for extreme losses
         if (timePassed >= 145.0) return true

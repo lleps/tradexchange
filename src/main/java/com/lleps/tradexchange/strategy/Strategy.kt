@@ -84,7 +84,9 @@ class Strategy(
             "strategy.topLoss" to "-10",
             "strategy.sellBarrier1" to "1.0",
             "strategy.sellBarrier2" to "3.0",
-            "strategy.mlBuyValue" to "0.7"
+            "strategy.mlBuyValue" to "0.7",
+            "strategy.closeSDPeriod" to "20",
+            "strategy.closeMAPeriod" to "20"
         ) + INDICATOR_TYPES.map { type -> "strategy.ind.${type.name}" to type.defaultValue }
     }
 
@@ -99,6 +101,8 @@ class Strategy(
     private val sellBarrier1 = input.getValue("strategy.sellBarrier1").toFloat()
     private val sellBarrier2 = input.getValue("strategy.sellBarrier2").toFloat()
     private val mlBuyValue = input.getValue("strategy.mlBuyValue").toFloat()
+    private val closeSDPeriod = input.getValue("strategy.closeSDPeriod").toInt()
+    private val closeMAPeriod = input.getValue("strategy.closeMAPeriod").toInt()
 
     // State classes
     private class OpenTrade(
@@ -106,7 +110,8 @@ class Strategy(
             val amount: Double,
             val epoch: Long,
             val code: Int,
-            var passed1Barrier: Boolean = false
+            var passed1Barrier: Boolean = false,
+            val closeStrategy: CloseStrategy?
     )
 
     // Strategy state. This should be persisted
@@ -137,6 +142,7 @@ class Strategy(
     // Model for ML predictions
     private lateinit var buyModel: MultiLayerNetwork
     private lateinit var sellModel: MultiLayerNetwork
+    private var closeConfig: CloseStrategy.Config? = null
 
     // Functions
     fun init() {
@@ -145,6 +151,14 @@ class Strategy(
             val sellPath = "data/models/[train]$modelName-close.h5"
             buyModel = KerasModelImport.importKerasSequentialModelAndWeights(buyPath)
             sellModel = KerasModelImport.importKerasSequentialModelAndWeights(sellPath)
+            if (closeMAPeriod != 0 && closeSDPeriod != 0) {
+                closeConfig = CloseStrategy.Config(
+                    avgPeriod = closeMAPeriod,
+                    sdPeriod = closeSDPeriod,
+                    shortEmaPeriod = 3
+                )
+            }
+            CloseStrategy.inited = false // cache trick. to rebuild the indicators on the new timeseries.
         }
         parseIndicators(this.input)
     }
@@ -168,8 +182,12 @@ class Strategy(
     private fun shouldClose(i: Int, epoch: Long, trade: OpenTrade): Boolean {
         if (epoch - trade.epoch > tradeExpiry * period) return true
 
+        if (closeConfig != null) {
+            return trade.closeStrategy!!.doTick(i, null)
+        }
         if (sellPrediction > mlBuyValue) return true
 
+        // todo: use this too? ye. you can disable it from cfg
         val diff = close[i] - trade.buyPrice
         val pct = diff * 100.0 / close[i]
         if (pct < topLoss) {
@@ -224,7 +242,10 @@ class Strategy(
                     val amountOfMoney = (exchange.moneyBalance) / (openTradesCount - openTrades.size).toDouble() * balanceMultiplier
                     val amountOfCoins = amountOfMoney / close[i]
                     val buyPrice = exchange.buy(amountOfCoins)
-                    val trade = OpenTrade(buyPrice, amountOfCoins, epoch, buyNumber++)
+                    val closeStrategy = if (closeConfig != null) {
+                        CloseStrategy(closeConfig!!, series, i, buyPrice)
+                    } else null
+                    val trade = OpenTrade(buyPrice, amountOfCoins, epoch, buyNumber++, closeStrategy = closeStrategy)
                     boughtSomething = true
                     openTrades = openTrades + trade
                     operations = operations + Operation(
