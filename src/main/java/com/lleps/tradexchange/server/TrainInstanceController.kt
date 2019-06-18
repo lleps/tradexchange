@@ -47,18 +47,32 @@ class TrainInstanceController(
     private fun exportAndBuildModelType(type: OperationType, csvPath: String, modelPath: String) {
         out.write("$type: Exporting to $csvPath...")
         val sb = StringBuilder()
+        val opsByTimestamp = hashMapOf<Long, Operation>()
+        for (op in chartData.operations) opsByTimestamp[op.timestamp] = op
+        // Convert indicator points to list to access them by index.
+        val extraIndicatorsList = mutableListOf<List<Double>>()
+        for (chartDataEntry in chartData.extraIndicators.entries) {
+            for (seriesDataEntry in chartDataEntry.value.entries) {
+                // ensure indicator series size match the candles
+                check(seriesDataEntry.value.size == chartData.candles.size) {
+                    "size of indicator series (${seriesDataEntry.value.size} != candles size (${chartData.candles.size})"
+                }
+                val list = mutableListOf<Double>()
+                extraIndicatorsList.add(list)
+                for (pointDataEntry in seriesDataEntry.value.entries) {
+                    list.add(pointDataEntry.value)
+                }
+            }
+        }
         repeat(chartData.candles.size) { i ->
             val features = mutableListOf<Double>()
             val tickTimestamp = chartData.candles[i].timestamp
             features.add(chartData.candles[i].close)
-            for ((_, extraChartData) in chartData.extraIndicators) {
-                for ((_, series) in extraChartData) {
-                    val sorted = series.entries.sortedBy { it.key }.map { it.value }.toList()
-                    features.add(sorted[i])
-                }
+            for (indicator in extraIndicatorsList) {
+                features.add(indicator[i])
             }
-            val op = chartData.operations.firstOrNull { it.timestamp == tickTimestamp && it.type == type }
-            val action = if (op != null) 1 else 0
+            val op = opsByTimestamp[tickTimestamp]
+            val action = if (op != null && op.type == type) 1 else 0
             sb.append(features.joinToString(separator = ","))
             sb.append(",$action\n")
         }
