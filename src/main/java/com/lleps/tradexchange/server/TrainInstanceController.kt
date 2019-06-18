@@ -150,7 +150,7 @@ class TrainInstanceController(
                 }
             }
             val tick = timeSeries.getBar(i)
-            val epoch = tick.beginTime.toEpochSecond()
+            val epoch = tick.endTime.toEpochSecond()
             strategy.onDrawChart(chartWriter, epoch, i)
             candles.add(Candle(
                 epoch,

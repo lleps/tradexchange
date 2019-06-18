@@ -39,6 +39,16 @@ class RESTServer {
     @GetMapping("/instanceState/{instance}")
     fun getInstanceState(@PathVariable instance: String): InstanceState {
         loadInstanceIfNecessary(instance)
+        val state = instanceState.getValue(instance)
+        val controller = instanceController.getValue(instance)
+        // Sanitize input. Inject new required keys to the input and drop deleted ones.
+        val currentInput = state.input
+        val newInput = controller.getRequiredInput().toMutableMap()
+        for ((k, v) in currentInput) {
+            // drop deleted variables
+            if (k in newInput) newInput[k] = v
+        }
+        state.input = newInput
         return instanceState.getValue(instance).copy()
     }
 

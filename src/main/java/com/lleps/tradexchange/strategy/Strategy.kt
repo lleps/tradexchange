@@ -168,7 +168,7 @@ class Strategy(
     }
 
     private fun calculatePredictions(i: Int) {
-        val timesteps = 25
+        val timesteps = 7
         val timestepsArray = Array(usedIndicators.size) { indicatorIndex ->
             DoubleArray(timesteps) { index ->
                 usedIndicators[indicatorIndex].second[i - (timesteps - index - 1)]

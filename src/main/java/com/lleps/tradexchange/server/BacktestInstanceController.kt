@@ -78,7 +78,7 @@ class BacktestInstanceController(
         val sellOnlyTick = timeSeries.endIndex - cooldownTicks
         for (i in warmupTicks..timeSeries.endIndex) {
             val tick = timeSeries.getBar(i)
-            val epoch = tick.beginTime.toEpochSecond()
+            val epoch = tick.endTime.toEpochSecond()
             exchange.marketPrice = tick.closePrice.doubleValue()
             if (i >= sellOnlyTick) strategy.sellOnly = true
             val operations = strategy.onTick(i)

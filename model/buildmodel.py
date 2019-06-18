@@ -46,7 +46,7 @@ output_model = sys.argv[2]
 
 dataset = numpy.loadtxt(input_csv, delimiter=",")
 feature_count = dataset[0].size - 1
-num_timesteps = 25
+num_timesteps = 7
 
 X = dataset[:, 1:-1] # ignore price
 y = dataset[:, -1:]
