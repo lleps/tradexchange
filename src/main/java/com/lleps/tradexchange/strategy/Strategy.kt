@@ -126,7 +126,13 @@ class Strategy(
     private var openTrades = listOf<OpenTrade>()
     private var actionLock = 0
     private var sellLock = 0
+    private var boughtInCrest = false
+    private var buyPredictionLastLast = 0.0
+    private var buyPredictionLast = 0.0
     private var buyPrediction = 0.0
+    private var soldInCrest = false
+    private var sellPredictionLastLast = 0.0
+    private var sellPredictionLast = 0.0
     private var sellPrediction = 0.0
     private var tradeSum = 0.0
 
@@ -175,12 +181,35 @@ class Strategy(
             }
         }
         val data = arrayOf(timestepsArray)
+        buyPredictionLastLast = buyPredictionLast
+        buyPredictionLast = buyPrediction
+        sellPredictionLastLast = sellPredictionLast
+        sellPredictionLast = sellPrediction
         buyPrediction = buyModel.output(Nd4j.create(data)).getDouble(0)
         sellPrediction = sellModel.output(Nd4j.create(data)).getDouble(0)
     }
 
+    private fun checkCrossOver(barrier: Float, last: Double, current: Double): Boolean {
+        return last < barrier && current > barrier
+    }
+
+    private fun checkCrossUnder(barrier: Float, last: Double, current: Double): Boolean {
+        return last > barrier && current < barrier
+    }
+
+    private fun checkAfterCrest(barrier: Float, lastLast: Double, last: Double, current: Double): Boolean {
+        return last > barrier && last > lastLast && last > current
+    }
+
     private fun shouldOpen(i: Int, epoch: Long): String? {
-        if (buyPrediction > mlBuyValue) return "$buyPrediction>$mlBuyValue"
+        // 3 types of close:
+        if (checkAfterCrest(mlBuyValue, buyPredictionLastLast, buyPredictionLast, buyPrediction)) {
+            if (!boughtInCrest) {
+                boughtInCrest = true
+                return "$buyPredictionLastLast,$buyPredictionLast. ($buyPrediction>$mlBuyValue)"
+            }
+        }
+        if (buyPrediction < mlBuyValue) boughtInCrest = false
         return null
     }
 
@@ -190,7 +219,13 @@ class Strategy(
         if (closeConfig != null) {
             return trade.closeStrategy!!.doTick(i, null)
         }
-        if (sellPrediction > mlBuyValue) return "prediction: $sellPrediction>$mlBuyValue"
+        if (checkAfterCrest(mlBuyValue, sellPredictionLastLast, sellPredictionLast, sellPrediction)) {
+            if (!soldInCrest) {
+                soldInCrest = true
+                return "$sellPredictionLastLast $sellPredictionLast. ($sellPrediction>$mlBuyValue)"
+            }
+        }
+        if (sellPrediction < mlBuyValue) soldInCrest = false
 
         // todo: use this too? ye. you can disable it from cfg
         val diff = close[i] - trade.buyPrice
