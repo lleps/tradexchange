@@ -140,7 +140,7 @@ class LiveInstanceController(
                     out.write("Livemode thread stopped.")
                     return
                 }
-                out.write("[building candle] max: $max min: $min")
+                //out.write("[building candle] max: $max min: $min")
                 Thread.sleep(3000)
             }
             nextCandle += (period * 1000)
@@ -159,7 +159,7 @@ class LiveInstanceController(
                 series.numOf(0.0) // amount
             )
             val tick = series.lastBar
-            out.write("Candle built: $tick")
+            //out.write("Candle built: $tick")
 
             // Now, run the strategy
             val tickNumber = series.endIndex
