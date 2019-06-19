@@ -98,7 +98,7 @@ class BacktestInstanceController(
                     OperationType.BUY
                 else
                     OperationType.SELL
-                Operation(epoch, type, tick.closePrice.doubleValue(), op.description)
+                Operation(epoch, type, tick.closePrice.doubleValue(), op.description, op.code)
             })
             for (op in operations) {
                 if (op.type == Strategy.OperationType.SELL) {

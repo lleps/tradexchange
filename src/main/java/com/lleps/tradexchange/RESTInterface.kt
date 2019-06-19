@@ -10,6 +10,7 @@ interface RESTInterface {
     fun deleteInstance(instance: String, onResult: (Unit, Throwable?) -> Unit)
     fun getInstanceVersion(instance: String, onResult: (Pair<Int, Int>, Throwable?) -> Unit)
     fun toggleCandleState(instance: String, candleEpoch: Long, toggle: Int, onResult: (Unit, Throwable?) -> Unit)
+    fun getOperationChartData(instance: String, operationCode: Int, onResult: (InstanceChartData, Throwable?) -> Unit)
 }
 
 // Shared data
@@ -53,7 +54,8 @@ data class Operation(
     val timestamp: Long = 0L,
     val type: OperationType = OperationType.BUY,
     val price: Double = 0.0,
-    val description: String? = null
+    val description: String? = null,
+    val code: Int = 0
 )
 
 data class TradeEntry(

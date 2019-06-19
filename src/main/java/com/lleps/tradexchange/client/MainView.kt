@@ -36,11 +36,13 @@ class MainView {
     private var onAction2: (Map<String, String>) -> Unit = {}
     private val paneWidth = 300.0
     private var onSelectCandle: ((Candle, MouseButton) -> Unit)? = null
+    private var onSelectOperation: ((Operation) -> Unit)? = null
 
     fun initJavaFxContent(): Parent {
         // Main components
         chart = FullChart(useCandles = true)
         chart.onSelectCandle { c, b -> onSelectCandle?.invoke(c, b) }
+        chart.onSelectOperation { op -> onSelectOperation?.invoke(op) }
         val controlPane = VBox(15.0).apply { this.padding = Insets(5.0, 10.0, 1.0, 1.0) }
         controlPane.prefWidth = paneWidth
         val mainPane = BorderPane(chart, null, controlPane, null, null)
@@ -74,6 +76,10 @@ class MainView {
 
     fun onSelectCandle(callback: (Candle, MouseButton) -> Unit) {
         onSelectCandle = callback
+    }
+
+    fun onSelectOperation(callback: (Operation) -> Unit) {
+        onSelectOperation = callback
     }
 
     private fun readInput(): Map<String, String>{

@@ -145,4 +145,16 @@ class RESTClient(var host: String = "http://localhost:8080") : RESTInterface {
             resultCallback = onResult
         )
     }
+
+    override fun getOperationChartData(instance: String, operationCode: Int, onResult: (InstanceChartData, Throwable?) -> Unit) {
+        makeRequest<InstanceChartData>(
+            request = {
+                val response = Unirest.get("$host/operationChartData/$instance/$operationCode").asString()
+                checkResponse(response)
+                jacksonMapper.readValue(response.body, InstanceChartData::class.java)
+            },
+            errorValue = InstanceChartData(),
+            resultCallback = onResult
+        )
+    }
 }

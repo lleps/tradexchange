@@ -10,6 +10,7 @@ import javafx.beans.binding.Bindings
 import javafx.collections.FXCollections
 import javafx.geometry.Pos
 import javafx.geometry.Side
+import javafx.scene.Node
 import javafx.scene.Scene
 import javafx.scene.chart.LineChart
 import javafx.scene.chart.NumberAxis
@@ -57,8 +58,14 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
     private var maxTimestamp = 0L
 
     private var onSelectCandleCallback: (Candle, MouseButton) -> Unit = { _, _ -> }
+    private var onSelectOperationCallback: (Operation) -> Unit = { }
+
     fun onSelectCandle(onSelect: (Candle, MouseButton) -> Unit) {
         onSelectCandleCallback = onSelect
+    }
+
+    fun onSelectOperation(onSelect: (Operation) -> Unit) {
+        onSelectOperationCallback = onSelect
     }
 
     init {
@@ -179,6 +186,27 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
     var priceIndicators = emptyMap<String, Map<Long, Double>>()
     var extraIndicators = emptyMap<String, Map<String, Map<Long, Double>>>()
 
+    private fun createOperationNode(operation: Operation): Node {
+        val offsetY = 15.0/2.0
+        val node = if (operation.type == OperationType.BUY) {
+            Polygon( 5.0,-offsetY,  10.0,15.0-offsetY, 0.0,15.0-offsetY)
+                .apply {
+                    fill = BUY_COLOR
+                    setOnMouseClicked { onSelectOperationCallback(operation) }
+                }
+        } else {
+            Polygon( 5.0,+offsetY,  10.0,-15.0+offsetY, 0.0,-15.0+offsetY)
+                .apply {
+                    fill = sellColor(operation)
+                    setOnMouseClicked { onSelectOperationCallback(operation) }
+                }
+        }
+        if (operation.description != null) {
+            Tooltip.install(node, Tooltip(operation.description))
+        }
+        return node
+    }
+
     // provide a method to update operations since this is needed for candle clicks.
     // You can't rebuild the chart, lose the interval, etc at each click.
     fun updateOperations() {
@@ -187,18 +215,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
             for (operation in operations) { // operations are not parsed with RR in mind
                 if (operation.timestamp < minTimestamp) continue
                 else if (operation.timestamp > maxTimestamp) break
-
-                val offsetY = 15.0/2.0
-                val node = if (operation.type == OperationType.BUY) {
-                    Polygon( 5.0,-offsetY,  10.0,15.0-offsetY, 0.0,15.0-offsetY)
-                        .apply { fill = BUY_COLOR }
-                } else {
-                    Polygon( 5.0,+offsetY,  10.0,-15.0+offsetY, 0.0,-15.0+offsetY)
-                        .apply { fill = sellColor(operation) }
-                }
-                if (operation.description != null) {
-                    Tooltip.install(node, Tooltip(operation.description))
-                }
+                val node = createOperationNode(operation)
                 operationSeries.data.add(
                     XYChart.Data<Number, Number>(operation.timestamp, operation.price)
                         .also { it.node = node }
@@ -251,18 +268,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
             for (operation in operations) { // operations are not parsed with RR in mind
                 if (operation.timestamp < minTimestamp) continue
                 else if (operation.timestamp > maxTimestamp) break
-
-                val offsetY = 15.0/2.0
-                val node = if (operation.type == OperationType.BUY) {
-                    Polygon( 5.0,-offsetY,  10.0,15.0-offsetY, 0.0,15.0-offsetY)
-                        .apply { fill = BUY_COLOR }
-                } else {
-                    Polygon( 5.0,+offsetY,  10.0,-15.0+offsetY, 0.0,-15.0+offsetY)
-                        .apply { fill = sellColor(operation) }
-                }
-                if (operation.description != null) {
-                    Tooltip.install(node, Tooltip(operation.description))
-                }
+                val node = createOperationNode(operation)
                 operationSeries.data.add(
                     XYChart.Data<Number, Number>(operation.timestamp, operation.price)
                         .also { it.node = node }

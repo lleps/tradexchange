@@ -1,5 +1,6 @@
 package com.lleps.tradexchange
 
+import com.lleps.tradexchange.client.FullChart
 import com.lleps.tradexchange.client.MainView
 import com.lleps.tradexchange.client.RESTClient
 import com.lleps.tradexchange.util.loadFrom
@@ -154,6 +155,15 @@ class ClientMain : Application() {
             if (img != null) {
                 tab.graphic = ImageView(Image(img, true))
             }
+            view.onSelectOperation { operation ->
+                connection.getOperationChartData(instance, operation.code) { data, throwable ->
+                    if (throwable != null) {
+                        showError("getOperationChartData", throwable)
+                        return@getOperationChartData
+                    }
+                    showIsolatedTradeWindow(operation.code, data)
+                }
+            }
             view.onSelectCandle { candle, button ->
                 val op = view.chart.operations.firstOrNull { op -> op.timestamp == candle.timestamp }
                 val toggleId = when {
@@ -222,6 +232,26 @@ class ClientMain : Application() {
                     if (throwable != null) showError("updateInput", throwable)
                 }
             }
+        }
+    }
+
+    private fun showIsolatedTradeWindow(code: Int, data: InstanceChartData) {
+        Platform.runLater {
+            val chart = FullChart()
+            chart.priceData = data.candles
+            val firstCandle = data.candles.first()
+            val lastCandle = data.candles.last()
+            chart.operations = listOf(
+                Operation(firstCandle.timestamp, OperationType.BUY, firstCandle.close, "open"),
+                Operation(lastCandle.timestamp, OperationType.SELL, lastCandle.close, "close")
+            )
+            chart.extraIndicators = data.extraIndicators
+            chart.priceIndicators = data.priceIndicators
+            val stage = Stage()
+            stage.scene = Scene(chart)
+            stage.title = "Operation #$code"
+            chart.fill()
+            stage.show()
         }
     }
 
