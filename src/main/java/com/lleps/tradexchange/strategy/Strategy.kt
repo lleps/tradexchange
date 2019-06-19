@@ -84,7 +84,7 @@ class Strategy(
             "strategy.buyCooldown" to "5",
             "strategy.mlBuyTrigger" to "over:0.5",
             "strategy.emaPeriods" to "12,26",
-            "strategy.atrPeriod" to "24",
+            "strategy.close.atrPeriod" to "24",
             "strategy.close.tradeExpiry" to "300",
             "strategy.close.topLoss" to "-10",
             "strategy.close.sellBarrier1" to "1.0",
@@ -102,8 +102,8 @@ class Strategy(
     private val buyCooldown = input.getValue("strategy.buyCooldown").toInt() // 4h. During cooldown won't buy anything
     private val mlBuyTrigger = input.getValue("strategy.mlBuyTrigger")
     private val emaPeriods = input.getValue("strategy.emaPeriods").split(",").map { it.toInt() }
-    private val atrPeriod = input.getValue("strategy.atrPeriod").toInt()
     // Parse close input
+    private val atrPeriod = input.getValue("strategy.close.atrPeriod").toInt()
     private val tradeExpiry = input.getValue("strategy.close.tradeExpiry").toInt() // give up if can't meet the margin
     private val topLoss = input.getValue("strategy.close.topLoss").toFloat()
     private val sellBarrier1 = input.getValue("strategy.close.sellBarrier1").toFloat()
@@ -252,6 +252,19 @@ class Strategy(
         }
     }
 
+    // Depending on volatility, should be close/open barriers
+    private fun rebuildCloseConfigByATR(i: Int) {
+        val atrPct = atr[i] / close[i]
+        closeConfig = CloseStrategy.Config(
+            topBarrierInitial = atrPct * sellBarrier1.toDouble(),
+            bottomBarrierInitial = atrPct * topLoss.toDouble(),
+            avgPeriod = closeBBPeriod,
+            sdPeriod = closeBBPeriod,
+            shortEmaPeriod = 3,
+            expiry = tradeExpiry
+        )
+    }
+
     fun onTick(i: Int): List<Operation> {
         val epoch = series.getBar(i).endTime.toEpochSecond()
         var operations = emptyList<Operation>()
@@ -264,6 +277,7 @@ class Strategy(
             bar.minPrice.doubleValue())
 
         calculatePredictions(i)
+        rebuildCloseConfigByATR(i)
 
         // Try to buy
         if (!sellOnly && (buyOnly || openTrades.size < openTradesCount)) { // BUY

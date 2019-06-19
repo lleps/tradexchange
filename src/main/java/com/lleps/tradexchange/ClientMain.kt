@@ -238,7 +238,7 @@ class ClientMain : Application() {
 
     private fun showIsolatedTradeWindow(operation: Operation, data: InstanceChartData) {
         Platform.runLater {
-            val chart = FullChart()
+            val chart = FullChart(false)
             chart.priceData = data.candles
             val firstCandle = data.candles.first()
             val lastCandle = data.candles.last()
@@ -255,7 +255,7 @@ class ClientMain : Application() {
                 label.textFill = javafx.scene.paint.Color.GREEN
             }
             val stage = Stage()
-            stage.scene = Scene(VBox(label, chart))
+            stage.scene = Scene(HBox(chart, label))
             stage.title = "Operation #${operation.code}"
             chart.fill()
             stage.show()

@@ -105,13 +105,16 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
         bottomBarrier += priceIncreasePct.coerceAtLeast(0.0)*cfg.priceWeightBottom + timePassed*cfg.timeWeightBottom
 
         if (chart != null) {
-            chart.priceIndicator("ema", epoch, ema[i])
-            //chart.priceIndicator("bb", epoch, middleBBand[i])
-            //chart.priceIndicator("low", epoch, lowBBand[i])
-            //chart.priceIndicator("up", epoch, upBBand[i])
+            //chart.priceIndicator("ema", epoch, ema[i])
+            if (cfg.sdPeriod != 0 && cfg.avgPeriod != 0) {
+                chart.priceIndicator("bb", epoch, middleBBand[i])
+                chart.priceIndicator("low", epoch, lowBBand[i])
+                chart.priceIndicator("up", epoch, upBBand[i])
+            }
             chart.priceIndicator("topBarrier", epoch, topBarrier)
             chart.priceIndicator("bottomBarrier", epoch, bottomBarrier)
             //chart.priceIndicator("minWin", epoch, minWin)
+            chart.extraIndicator("ml", "ml", epoch, globalSellPrediction)
         }
 
         if (price > topBarrier) return "topBarrier"
