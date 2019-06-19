@@ -65,7 +65,7 @@ class MainView {
         tabPane.prefWidth = paneWidth
 
         outputPane.prefWidth = paneWidth
-        controlPane.children.add(inputPane)
+        controlPane.children.add(ScrollPane(inputPane))
         controlPane.children.add(HBox(statusLabel).apply { alignment = Pos.CENTER_RIGHT; prefWidth = paneWidth })
         controlPane.children.add(HBox(5.0, action2Button, action1Button).apply { alignment = Pos.CENTER_RIGHT; prefWidth = paneWidth })
         controlPane.children.add(tabPane)
@@ -147,8 +147,11 @@ class MainView {
                 paneToAdd.children.add(BorderPane(null, null, field, null, label))
             }
             inputPane.children.clear()
-            inputPane.children.addAll(mainInput, TitledPane("Strategy", ScrollPane(strategyInput)))
-            inputPane.children.addAll(mainInput, TitledPane("Indicators", ScrollPane(indicatorsInput)))
+            inputPane.children.addAll(
+                mainInput,
+                TitledPane("Strategy", strategyInput),
+                TitledPane("Indicators", indicatorsInput)
+            )
             updateInput()
         }
     }

@@ -76,6 +76,7 @@ class Strategy(
 
         val REQUIRED_INPUT = mapOf(
             "strategy.model" to "",
+            "strategy.buyOnly" to "0",
             "strategy.periodMultiplier" to "1",
             "strategy.balanceMultiplier" to "0.8",
             "strategy.openTradesCount" to "5",
@@ -93,6 +94,7 @@ class Strategy(
 
     // Parse input
     private val modelName = input.getValue("strategy.model")
+    private val buyOnly = input.getValue("strategy.buyOnly").toInt() != 0
     private val periodMultiplier = input.getValue("strategy.periodMultiplier").toFloat()
     private val balanceMultiplier = input.getValue("strategy.balanceMultiplier").toFloat()
     private val openTradesCount = input.getValue("strategy.openTradesCount").toInt()
@@ -104,7 +106,8 @@ class Strategy(
     private val mlBuyValue = input.getValue("strategy.mlBuyValue").toFloat()
     private val closeBBPeriod = input.getValue("strategy.closeBBPeriod").toInt()
     private val emaPeriods = input.getValue("strategy.emaPeriods").split(",").map { it.toInt() }
-    private val atr = ATRIndicator(series, input.getValue("strategy.atrPeriod").toInt())
+    private val atrPeriod = input.getValue("strategy.atrPeriod").toInt()
+    private val atr = EMAIndicator(ATRIndicator(series, atrPeriod), atrPeriod)
     private val emaShort = EMAIndicator(ClosePriceIndicator(series), emaPeriods[0])
     private val emaLong = EMAIndicator(ClosePriceIndicator(series), emaPeriods[1])
 
@@ -168,8 +171,10 @@ class Strategy(
                     shortEmaPeriod = 3,
                     expiry = tradeExpiry
                 )
+                output.write("Using CloseStrategy instance for sells, not ml nor stoploss")
             }
             CloseStrategy.inited = false // cache trick. to rebuild the indicators on the new timeseries.
+            if (buyOnly) output.write("Using buy only mode!")
         }
         parseIndicators(this.input)
     }
@@ -253,12 +258,11 @@ class Strategy(
             chart.priceIndicator("emaLong", epoch, emaLong[i])
             //chart.priceIndicator("bbDown", epoch, bbDown[i])
             //chart.priceIndicator("bbMa", epoch, bbMa[i])
-            chart.extraIndicator("atr", "atr", epoch, atr[i])
             chart.extraIndicator("ml", "buy", epoch, buyPrediction)
             chart.extraIndicator("ml", "buyvalue", epoch, mlBuyValue.toDouble())
             chart.extraIndicator("ml", "sell", epoch, sellPrediction)
-            chart.extraIndicator("$", "money", epoch, exchange.moneyBalance)
             chart.extraIndicator("$", "profit", epoch, tradeSum)
+            chart.extraIndicator("atr", "atr", epoch, atr[i])
             drawCount += 3
         }
         for (indicator in usedIndicators) {
@@ -276,13 +280,17 @@ class Strategy(
         calculatePredictions(i)
 
         // Try to buy
-        if (!sellOnly && openTrades.size < openTradesCount) { // BUY
+        if (!sellOnly && (buyOnly || openTrades.size < openTradesCount)) { // BUY
             if (actionLock > 0) {
                 actionLock--
             } else {
                 val open = shouldOpen(i, epoch)
                 if (open != null) {
-                    val amountOfMoney = (exchange.moneyBalance) / (openTradesCount - openTrades.size).toDouble() * balanceMultiplier
+                    var amountOfMoney = (exchange.moneyBalance) / (openTradesCount - openTrades.size).toDouble() * balanceMultiplier
+                    if (buyOnly) {
+                        output.write("Open buy position (buyOnly, always at 1.5usd)")
+                        amountOfMoney = 1.5
+                    }
                     val amountOfCoins = amountOfMoney / close[i]
                     val buyPrice = exchange.buy(amountOfCoins)
                     val closeStrategy = if (closeConfig != null) {
@@ -294,7 +302,7 @@ class Strategy(
                     operations = operations + Operation(
                         OperationType.BUY,
                         trade.amount,
-                        "$open\nOpen #%d at $%.03f".format(trade.code, trade.buyPrice))
+                        "Open #%d at $%.03f\n----------\n$open".format(trade.code, trade.buyPrice))
                     actionLock = buyCooldown
                 }
             }
@@ -303,30 +311,32 @@ class Strategy(
         if (sellLock > 0) sellLock--
 
         // Try to sell
-        if (!boughtSomething && sellLock == 0) {
+        if (!buyOnly && !boughtSomething && sellLock == 0) {
             for (trade in openTrades) {
                 val shouldClose = shouldClose(i, epoch, trade) ?: continue
                 val sellPrice = exchange.sell(trade.amount * 0.9999)
                 val diff = sellPrice - trade.buyPrice
+                val pct = diff * 100.0 / trade.buyPrice
                 sellLock = buyCooldown
                 val tradeStrLog =
                     "Trade %.03f'c    buy $%.03f    sell $%.03f    diff $%.03f    won $%.03f"
                         .format(trade.amount, trade.buyPrice, sellPrice, diff, diff*trade.amount)
                 output.write(tradeStrLog)
                 val tooltip =
-                    ("Close #%d: won $%.03f (diff $%.03f)\n" +
+                    ("Close #%d at %s%.03f (earnings $%.03f)\n" +
                     "Buy $%.03f   Sell $%.03f\n" +
                     "Time %d min (%d ticks)").format(
                         trade.code,
+                        "%",
+                        pct,
                         diff*trade.amount,
-                        diff,
                         trade.buyPrice,
                         sellPrice,
                         (epoch - trade.epoch) / 60,
                         (epoch - trade.epoch) / period
-                    )
+                    ) + "\n----------\n$shouldClose"
                 tradeSum += diff*trade.amount
-                operations = operations + Operation(OperationType.SELL, trade.amount, shouldClose + "\n" + tooltip, trade.buyPrice, trade.code)
+                operations = operations + Operation(OperationType.SELL, trade.amount, tooltip, trade.buyPrice, trade.code)
                 openTrades = openTrades - trade
                 tradeCount++
             }
