@@ -26,6 +26,8 @@ class RESTServer {
     private val instanceState = ConcurrentHashMap<String, InstanceState>()
     private val instanceController = ConcurrentHashMap<String, InstanceController>()
     private val instanceChartData = ConcurrentHashMap<String, InstanceChartData>()
+    private data class InstanceOperationCharts(val map: Map<Int, InstanceChartData> = emptyMap())
+    private val instanceOperationCharts = ConcurrentHashMap<String, InstanceOperationCharts>()
 
     init {
         File("data").mkdir()
@@ -58,6 +60,13 @@ class RESTServer {
         loadInstanceIfNecessary(instance)
         val fullString = mapper.writeValueAsString(instanceChartData.getValue(instance).copy())
         return Base64.getEncoder().encodeToString(GZIPCompression.compress(fullString))
+    }
+
+    @GetMapping("/operationChartData/{instance}/{operationCode}")
+    fun getInstanceOperationChartData(@PathVariable instance: String, @PathVariable operationCode: Int): InstanceChartData {
+        loadInstanceIfNecessary(instance)
+        val opChartData = instanceOperationCharts.getValue(instance)
+        return opChartData.map.getValue(operationCode)
     }
 
     @PostMapping("/updateInput/{instance}/{button}")
@@ -171,12 +180,17 @@ class RESTServer {
 
     private fun loadInstanceIfNecessary(instance: String) {
         if (!loadedInstances.containsKey(instance)) {
-            val state = loadFrom<InstanceState>("data/instances/state-$instance.json") ?: error("instance: $instance")
-            val chartData = loadFrom<InstanceChartData>("data/instances/chartData-$instance.json") ?: error("instance: $instance")
+            val state = loadFrom<InstanceState>("data/instances/state-$instance.json")
+                ?: error("cant read state: $instance")
+            val chartData = loadFrom<InstanceChartData>("data/instances/chartData-$instance.json")
+                ?: error("cant read chartData: $instance")
+            val operationChartsData = loadFrom<InstanceOperationCharts>("data/instances/operationChartData-$instance.json")
+                ?: error("cant read operationChartData: $instance")
             val controller = makeControllerForInstance(instance, state, chartData)
             instanceState[instance] = state
             instanceChartData[instance] = chartData
             instanceController[instance] = controller
+            instanceOperationCharts[instance] = operationChartsData
             loadedInstances[instance] = Unit
         }
     }
@@ -184,13 +198,16 @@ class RESTServer {
     private fun saveInstance(instance: String) {
         val state = instanceState.getValue(instance)
         val chartData = instanceChartData.getValue(instance)
+        val operationChartsData = instanceOperationCharts.getValue(instance)
         state.saveTo("data/instances/state-$instance.json")
         chartData.saveTo("data/instances/chartData-$instance.json")
+        operationChartsData.saveTo("data/instances/operationChartData-$instance.json")
     }
 
     private fun deleteInstanceFiles(instance: String) {
         Files.delete(Paths.get("data/instances/state-$instance.json"))
         Files.delete(Paths.get("data/instances/chartData-$instance.json"))
+        Files.delete(Paths.get("data/instances/operationChartData-$instance.json"))
     }
 
     companion object {
