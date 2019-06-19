@@ -54,6 +54,7 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
         val bbk: Int = 2,
         val avgPeriod: Int = 14,
         val sdPeriod: Int = 14,
+        val expiry: Int = 200,
         val longEmaPeriod: Int = 20,
         val shortEmaPeriod: Int = 3,
         val rsiPeriod: Int = 14,
@@ -88,7 +89,7 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
     private var firstTick = true
     private var minWin = 0.0// how much win is secured
 
-    /** Process the tick. Returns true if should close, false otherwise. */
+    /** Process the tick. Returns an string describing the trigger if should close, null otherwise. */
     fun doTick(i: Int, chart: Strategy.ChartWriter?): String? {
         val price = close[i]
         val epoch = timeSeries.getBar(i).endTime.toEpochSecond()
@@ -117,7 +118,7 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
         if ((timePassed >= 10.0 && ema.crossUnder(middleBBand, i))) return "middle"
         if (ema.crossUnder(upBBand, i)) return "upbband"
         if (ema.crossUnder(lowBBand, i)) return "lowbband"
-        if (timePassed >= 145.0) return "expiry"
+        if (timePassed >= cfg.expiry) return "expiry"
         return null
     }
 

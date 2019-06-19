@@ -69,7 +69,7 @@ class Strategy(
             IndicatorType("macd", "12,26,300") { _, indicator, input ->
                 NormalizationIndicator(MACDIndicator(indicator, input[0], input[1]), input[2])
             },
-            IndicatorType("obv-o", "24,300") { series, _, input ->
+            IndicatorType("obvo", "24,300") { series, _, input ->
                 NormalizationIndicator(OBVOscillatorIndicator(series, input[0]), input[1])
             }
         )
@@ -85,10 +85,10 @@ class Strategy(
             "strategy.sellBarrier1" to "1.0",
             "strategy.sellBarrier2" to "3.0",
             "strategy.mlBuyValue" to "0.7",
-            "strategy.closeSDPeriod" to "20",
-            "strategy.closeMAPeriod" to "20",
+            "strategy.closeBBPeriod" to "20",
+            "strategy.atrPeriod" to "24",
             "strategy.emaPeriods" to "12,26"
-        ) + INDICATOR_TYPES.map { type -> "strategy.ind.${type.name}" to type.defaultValue }
+        ) + INDICATOR_TYPES.map { type -> "indicator.${type.name}" to type.defaultValue }
     }
 
     // Parse input
@@ -102,9 +102,9 @@ class Strategy(
     private val sellBarrier1 = input.getValue("strategy.sellBarrier1").toFloat()
     private val sellBarrier2 = input.getValue("strategy.sellBarrier2").toFloat()
     private val mlBuyValue = input.getValue("strategy.mlBuyValue").toFloat()
-    private val closeSDPeriod = input.getValue("strategy.closeSDPeriod").toInt()
-    private val closeMAPeriod = input.getValue("strategy.closeMAPeriod").toInt()
+    private val closeBBPeriod = input.getValue("strategy.closeBBPeriod").toInt()
     private val emaPeriods = input.getValue("strategy.emaPeriods").split(",").map { it.toInt() }
+    private val atr = ATRIndicator(series, input.getValue("strategy.atrPeriod").toInt())
     private val emaShort = EMAIndicator(ClosePriceIndicator(series), emaPeriods[0])
     private val emaLong = EMAIndicator(ClosePriceIndicator(series), emaPeriods[1])
 
@@ -141,7 +141,7 @@ class Strategy(
     private val close = ClosePriceIndicator(series)
     private fun parseIndicators(input: Map<String, String>) {
         for (type in INDICATOR_TYPES) {
-            val key = "strategy.ind.${type.name}"
+            val key = "indicator.${type.name}"
             val paramsArray = input.getValue(key).split(",").map { (it.toInt() * periodMultiplier).toInt() }
             if (paramsArray[0] == 0) continue // indicator ignored
             val indicator = type.factory(series, close, paramsArray)
@@ -161,11 +161,12 @@ class Strategy(
             val sellPath = "data/models/[train]$modelName-close.h5"
             buyModel = KerasModelImport.importKerasSequentialModelAndWeights(buyPath)
             sellModel = KerasModelImport.importKerasSequentialModelAndWeights(sellPath)
-            if (closeMAPeriod != 0 && closeSDPeriod != 0) {
+            if (closeBBPeriod != 0) {
                 closeConfig = CloseStrategy.Config(
-                    avgPeriod = closeMAPeriod,
-                    sdPeriod = closeSDPeriod,
-                    shortEmaPeriod = 3
+                    avgPeriod = closeBBPeriod,
+                    sdPeriod = closeBBPeriod,
+                    shortEmaPeriod = 3,
+                    expiry = tradeExpiry
                 )
             }
             CloseStrategy.inited = false // cache trick. to rebuild the indicators on the new timeseries.
@@ -227,9 +228,8 @@ class Strategy(
         }
         if (sellPrediction < mlBuyValue) soldInCrest = false
 
-        // todo: use this too? ye. you can disable it from cfg
         val diff = close[i] - trade.buyPrice
-        val pct = diff * 100.0 / close[i]
+        val pct = diff * 100.0 / trade.buyPrice
         if (pct < topLoss) {
             return "panic ($pct% < $topLoss)" // panic - sell.
         }
@@ -246,7 +246,6 @@ class Strategy(
         return null
     }
 
-
     fun onDrawChart(chart: ChartWriter, epoch: Long, i: Int) {
         var drawCount = 0
         if (!training) {
@@ -254,11 +253,13 @@ class Strategy(
             chart.priceIndicator("emaLong", epoch, emaLong[i])
             //chart.priceIndicator("bbDown", epoch, bbDown[i])
             //chart.priceIndicator("bbMa", epoch, bbMa[i])
+            chart.extraIndicator("atr", "atr", epoch, atr[i])
             chart.extraIndicator("ml", "buy", epoch, buyPrediction)
             chart.extraIndicator("ml", "buyvalue", epoch, mlBuyValue.toDouble())
             chart.extraIndicator("ml", "sell", epoch, sellPrediction)
-            chart.extraIndicator("$", "$", epoch, tradeSum)
-            drawCount += 2
+            chart.extraIndicator("$", "money", epoch, exchange.moneyBalance)
+            chart.extraIndicator("$", "profit", epoch, tradeSum)
+            drawCount += 3
         }
         for (indicator in usedIndicators) {
             chart.extraIndicator(indicator.first, indicator.first, epoch, indicator.second[i])

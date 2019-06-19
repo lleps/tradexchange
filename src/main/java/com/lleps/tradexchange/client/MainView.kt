@@ -131,17 +131,24 @@ class MainView {
         Platform.runLater {
             val mainInput = VBox(-3.0)
             val strategyInput = VBox(-3.0) // to group this in an accordition
+            val indicatorsInput = VBox(-3.0) // to group this in an accordition
             inputUIElements.clear()
             for ((itemName, itemDefaultValue) in input) {
                 val label = Label(itemName)
                 val field = TextField(itemDefaultValue.toString())
                 field.setOnKeyTyped { Platform.runLater { updateInput() } }
                 inputUIElements += Pair(label, field)
-                val paneToAdd = if (label.text.startsWith("strategy.")) strategyInput else mainInput
+                val paneToAdd =
+                    when {
+                        label.text.startsWith("strategy.") -> strategyInput
+                        label.text.startsWith("indicator.") -> indicatorsInput
+                        else -> mainInput
+                    }
                 paneToAdd.children.add(BorderPane(null, null, field, null, label))
             }
             inputPane.children.clear()
             inputPane.children.addAll(mainInput, TitledPane("Strategy", ScrollPane(strategyInput)))
+            inputPane.children.addAll(mainInput, TitledPane("Indicators", ScrollPane(indicatorsInput)))
             updateInput()
         }
     }
