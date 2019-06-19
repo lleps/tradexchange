@@ -23,6 +23,7 @@ import javafx.scene.control.ButtonType
 import javafx.scene.control.Alert
 import javafx.scene.image.ImageView
 import javafx.scene.input.MouseButton
+import java.awt.Color
 import java.io.File
 
 class ClientMain : Application() {
@@ -161,7 +162,7 @@ class ClientMain : Application() {
                         showError("getOperationChartData", throwable)
                         return@getOperationChartData
                     }
-                    showIsolatedTradeWindow(operation.code, data)
+                    showIsolatedTradeWindow(operation, data)
                 }
             }
             view.onSelectCandle { candle, button ->
@@ -235,21 +236,27 @@ class ClientMain : Application() {
         }
     }
 
-    private fun showIsolatedTradeWindow(code: Int, data: InstanceChartData) {
+    private fun showIsolatedTradeWindow(operation: Operation, data: InstanceChartData) {
         Platform.runLater {
             val chart = FullChart()
             chart.priceData = data.candles
             val firstCandle = data.candles.first()
             val lastCandle = data.candles.last()
             chart.operations = listOf(
-                Operation(firstCandle.timestamp, OperationType.BUY, firstCandle.close, "open"),
-                Operation(lastCandle.timestamp, OperationType.SELL, lastCandle.close, "close")
+                Operation(firstCandle.timestamp, OperationType.BUY, firstCandle.close, operation.description),
+                Operation(lastCandle.timestamp, OperationType.SELL, lastCandle.close, operation.description)
             )
             chart.extraIndicators = data.extraIndicators
             chart.priceIndicators = data.priceIndicators
+            val label = Label(operation.description ?: "")
+            if (operation.description?.contains("-") == true) {
+                label.textFill = javafx.scene.paint.Color.RED
+            } else {
+                label.textFill = javafx.scene.paint.Color.GREEN
+            }
             val stage = Stage()
-            stage.scene = Scene(chart)
-            stage.title = "Operation #$code"
+            stage.scene = Scene(VBox(label, chart))
+            stage.title = "Operation #${operation.code}"
             chart.fill()
             stage.show()
         }

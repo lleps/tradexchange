@@ -86,9 +86,13 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
         val yAxis = chart.yAxis as NumberAxis
         val max = pricesBetweenRange.max() ?: 0.0
         val min = pricesBetweenRange.min() ?: 0.0
-        val amplitude = max-min
-        yAxis.upperBound = max + amplitude*0.1
-        yAxis.lowerBound = min - amplitude*0.1
+        setBoundsWithSpacing(yAxis, max, min)
+    }
+
+    private fun setBoundsWithSpacing(axis: NumberAxis, upper: Double, lower: Double) {
+        val amplitude = upper-lower
+        axis.upperBound = upper + amplitude*0.15
+        axis.lowerBound = lower - amplitude*0.15
     }
 
     private fun createChartNavToolbar() {
@@ -302,8 +306,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
                 ya.tickUnit = (maxValue - minValue) / 10.0
                 xa.lowerBound = minTimestamp.toDouble()
                 xa.upperBound = maxTimestamp.toDouble()
-                ya.lowerBound = minValue
-                ya.upperBound = maxValue
+                setBoundsWithSpacing(ya, maxValue, minValue)
                 priceChart.data = allSeries
                 hackTooltipStartTiming()
             }
@@ -349,8 +352,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
                     }
                     chartData.add(series)
                 }
-                yAxis.lowerBound = minExtraVal
-                yAxis.upperBound = maxExtraVal
+                setBoundsWithSpacing(yAxis, maxExtraVal, minExtraVal)
                 yAxis.tickUnit = (maxExtraVal - minExtraVal) / 2
                 chart.data = chartData
                 newExtraCharts.add(chart)

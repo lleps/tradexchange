@@ -169,7 +169,7 @@ class Strategy(
             sellModel = KerasModelImport.importKerasSequentialModelAndWeights(sellPath)
             closeConfig = CloseStrategy.Config(
                 topBarrierInitial = sellBarrier1.toDouble(),
-                bottomBarrierInitial = -topLoss.toDouble(),
+                bottomBarrierInitial = topLoss.toDouble(),
                 avgPeriod = closeBBPeriod,
                 sdPeriod = closeBBPeriod,
                 shortEmaPeriod = 3,
@@ -226,7 +226,7 @@ class Strategy(
         if (checkTrigger(mlBuyTrigger, buyPredictionLastLast, buyPredictionLast, buyPrediction)) {
             if (!boughtInCrest) {
                 boughtInCrest = true
-                return "sell prediction: %.4f".format(buyPrediction)
+                return "prediction: %.4f".format(buyPrediction)
             }
         }
         if (buyPrediction < mlBuyTrigger.split(":")[1].toFloat()) boughtInCrest = false
@@ -254,8 +254,14 @@ class Strategy(
 
     fun onTick(i: Int): List<Operation> {
         val epoch = series.getBar(i).endTime.toEpochSecond()
-        var boughtSomething = false
         var operations = emptyList<Operation>()
+        val bar = series.getBar(i)
+        val candle = Candle(
+            bar.endTime.toEpochSecond(),
+            bar.openPrice.doubleValue(),
+            bar.closePrice.doubleValue(),
+            bar.maxPrice.doubleValue(),
+            bar.minPrice.doubleValue())
 
         calculatePredictions(i)
 
@@ -274,9 +280,9 @@ class Strategy(
                     val amountOfCoins = amountOfMoney / close[i]
                     val buyPrice = exchange.buy(amountOfCoins)
                     val chart = ChartWriterImpl()
+                    chart.candles.add(candle)
                     val closeStrategy = CloseStrategy(closeConfig, series, i, buyPrice)
                     val trade = OpenTrade(buyPrice, amountOfCoins, epoch, buyNumber++, closeStrategy, chart)
-                    boughtSomething = true
                     openTrades = openTrades + trade
                     operations = operations + Operation(
                         OperationType.BUY,
@@ -293,16 +299,8 @@ class Strategy(
         if (sellLock > 0) sellLock--
 
         // Try to sell
-        if (!buyOnly && !boughtSomething && sellLock == 0) {
+        if (!buyOnly) {
             for (trade in openTrades) {
-                // Add to the trade
-                val bar = series.getBar(i)
-                val candle = Candle(
-                    bar.endTime.toEpochSecond(),
-                    bar.openPrice.doubleValue(),
-                    bar.closePrice.doubleValue(),
-                    bar.maxPrice.doubleValue(),
-                    bar.minPrice.doubleValue())
                 trade.chartWriter.candles.add(candle)
                 val shouldClose = trade.closeStrategy.doTick(i, sellPrediction, trade.chartWriter) ?: continue
                 val sellPrice = exchange.sell(trade.amount * 0.9999)

@@ -31,7 +31,6 @@ import kotlin.random.Random
 class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: Int, val buyPrice: Double) {
 
     companion object {
-
         private lateinit var ema: EMAIndicator
         private lateinit var avg14: EMAIndicator
         private lateinit var sd14: StandardDeviationIndicator
@@ -47,10 +46,10 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
     data class Config(
         var topBarrierInitial: Double = 2.0,
         var bottomBarrierInitial: Double = 2.0,
-        var priceWeightTop: Double = 2.0,
-        var timeWeightTop: Double = 2.0,
-        var priceWeightBottom: Double = 2.0,
-        var timeWeightBottom: Double = 2.0,
+        var priceWeightTop: Double = 0.0,
+        var timeWeightTop: Double = 0.0,
+        var priceWeightBottom: Double = 0.0,
+        var timeWeightBottom: Double = 0.0,
         val bbk: Int = 2,
         val avgPeriod: Int = 14,
         val sdPeriod: Int = 14,
@@ -107,17 +106,19 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
 
         if (chart != null) {
             chart.priceIndicator("ema", epoch, ema[i])
-            chart.priceIndicator("bb", epoch, middleBBand[i])
-            chart.priceIndicator("low", epoch, lowBBand[i])
-            chart.priceIndicator("up", epoch, upBBand[i])
-            //chart.priceIndicator("topBarrier", epoch, topBarrier)
-            //chart.priceIndicator("bottomBarrier", epoch, bottomBarrier)
+            //chart.priceIndicator("bb", epoch, middleBBand[i])
+            //chart.priceIndicator("low", epoch, lowBBand[i])
+            //chart.priceIndicator("up", epoch, upBBand[i])
+            chart.priceIndicator("topBarrier", epoch, topBarrier)
+            chart.priceIndicator("bottomBarrier", epoch, bottomBarrier)
             //chart.priceIndicator("minWin", epoch, minWin)
         }
 
-        if ((timePassed >= 10.0 && ema.crossUnder(middleBBand, i))) return "middle"
-        if (ema.crossUnder(upBBand, i)) return "upbband"
-        if (ema.crossUnder(lowBBand, i)) return "lowbband"
+        if (price > topBarrier) return "topBarrier"
+        if (price < bottomBarrier) return "bottomBarrier"
+        //if ((timePassed >= 10.0 && ema.crossUnder(middleBBand, i))) return "middle"
+        //if (ema.crossUnder(upBBand, i)) return "upbband"
+        //if (ema.crossUnder(lowBBand, i)) return "lowbband"
         if (timePassed >= cfg.expiry) return "expiry"
         return null
     }
