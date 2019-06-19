@@ -1,5 +1,6 @@
 package com.lleps.tradexchange.strategy
 
+import com.lleps.tradexchange.Candle
 import com.lleps.tradexchange.indicator.*
 import com.lleps.tradexchange.server.Exchange
 import com.lleps.tradexchange.util.get
@@ -39,10 +40,10 @@ class Strategy(
                     val amount: Double,
                     val description: String? = null,
                     val buyPrice: Double = 0.0/* used only for Type.SELL to know the trade profit */,
-                    val code: Int = 0)
+                    val code: Int = 0,
+                    val chart: ChartWriterImpl)
 
     // Strategy config
-
     companion object {
         private class IndicatorType(
             val name: String,
@@ -80,45 +81,47 @@ class Strategy(
             "strategy.periodMultiplier" to "1",
             "strategy.balanceMultiplier" to "0.8",
             "strategy.openTradesCount" to "5",
-            "strategy.tradeExpiry" to "300",
             "strategy.buyCooldown" to "5",
-            "strategy.topLoss" to "-10",
-            "strategy.sellBarrier1" to "1.0",
-            "strategy.sellBarrier2" to "3.0",
             "strategy.mlBuyTrigger" to "over:0.5",
-            "strategy.closeBBPeriod" to "20",
+            "strategy.emaPeriods" to "12,26",
             "strategy.atrPeriod" to "24",
-            "strategy.emaPeriods" to "12,26"
+            "strategy.close.tradeExpiry" to "300",
+            "strategy.close.topLoss" to "-10",
+            "strategy.close.sellBarrier1" to "1.0",
+            "strategy.close.sellBarrier2" to "3.0",
+            "strategy.close.BBPeriod" to "20"
         ) + INDICATOR_TYPES.map { type -> "indicator.${type.name}" to type.defaultValue }
     }
 
-    // Parse input
+    // Parse open input
     private val modelName = input.getValue("strategy.model")
     private val buyOnly = input.getValue("strategy.buyOnly").toInt() != 0
     private val periodMultiplier = input.getValue("strategy.periodMultiplier").toFloat()
     private val balanceMultiplier = input.getValue("strategy.balanceMultiplier").toFloat()
     private val openTradesCount = input.getValue("strategy.openTradesCount").toInt()
-    private val tradeExpiry = input.getValue("strategy.tradeExpiry").toInt() // give up if can't meet the margin
     private val buyCooldown = input.getValue("strategy.buyCooldown").toInt() // 4h. During cooldown won't buy anything
-    private val topLoss = input.getValue("strategy.topLoss").toFloat()
-    private val sellBarrier1 = input.getValue("strategy.sellBarrier1").toFloat()
-    private val sellBarrier2 = input.getValue("strategy.sellBarrier2").toFloat()
     private val mlBuyTrigger = input.getValue("strategy.mlBuyTrigger")
-    private val closeBBPeriod = input.getValue("strategy.closeBBPeriod").toInt()
     private val emaPeriods = input.getValue("strategy.emaPeriods").split(",").map { it.toInt() }
     private val atrPeriod = input.getValue("strategy.atrPeriod").toInt()
+    // Parse close input
+    private val tradeExpiry = input.getValue("strategy.close.tradeExpiry").toInt() // give up if can't meet the margin
+    private val topLoss = input.getValue("strategy.close.topLoss").toFloat()
+    private val sellBarrier1 = input.getValue("strategy.close.sellBarrier1").toFloat()
+    private val sellBarrier2 = input.getValue("strategy.close.sellBarrier2").toFloat()
+    private val closeBBPeriod = input.getValue("strategy.close.BBPeriod").toInt()
+    // Indicators
     private val atr = EMAIndicator(ATRIndicator(series, atrPeriod), atrPeriod)
     private val emaShort = EMAIndicator(ClosePriceIndicator(series), emaPeriods[0])
     private val emaLong = EMAIndicator(ClosePriceIndicator(series), emaPeriods[1])
 
-    // State classes
+    // State for an open position
     private class OpenTrade(
             val buyPrice: Double,
             val amount: Double,
             val epoch: Long,
             val code: Int,
-            var passed1Barrier: Boolean = false,
-            val closeStrategy: CloseStrategy?
+            val closeStrategy: CloseStrategy,
+            val chartWriter: ChartWriterImpl
     )
 
     // Strategy state. This should be persisted
@@ -127,7 +130,7 @@ class Strategy(
     var sellOnly = false
     private var buyNumber = 1
     private var openTrades = listOf<OpenTrade>()
-    private var actionLock = 0
+    private var buyLock = 0
     private var sellLock = 0
     private var boughtInCrest = false
     private var buyPredictionLastLast = 0.0
@@ -155,7 +158,7 @@ class Strategy(
     // Model for ML predictions
     private lateinit var buyModel: MultiLayerNetwork
     private lateinit var sellModel: MultiLayerNetwork
-    private var closeConfig: CloseStrategy.Config? = null
+    private lateinit var closeConfig: CloseStrategy.Config
 
     // Functions
     fun init() {
@@ -164,15 +167,14 @@ class Strategy(
             val sellPath = "data/models/[train]$modelName-close.h5"
             buyModel = KerasModelImport.importKerasSequentialModelAndWeights(buyPath)
             sellModel = KerasModelImport.importKerasSequentialModelAndWeights(sellPath)
-            if (closeBBPeriod != 0) {
-                closeConfig = CloseStrategy.Config(
-                    avgPeriod = closeBBPeriod,
-                    sdPeriod = closeBBPeriod,
-                    shortEmaPeriod = 3,
-                    expiry = tradeExpiry
-                )
-                output.write("Using CloseStrategy instance for sells, not ml nor stoploss")
-            }
+            closeConfig = CloseStrategy.Config(
+                topBarrierInitial = sellBarrier1.toDouble(),
+                bottomBarrierInitial = -topLoss.toDouble(),
+                avgPeriod = closeBBPeriod,
+                sdPeriod = closeBBPeriod,
+                shortEmaPeriod = 3,
+                expiry = tradeExpiry
+            )
             CloseStrategy.inited = false // cache trick. to rebuild the indicators on the new timeseries.
             if (buyOnly) output.write("Using buy only mode!")
         }
@@ -231,45 +233,11 @@ class Strategy(
         return null
     }
 
-    private fun shouldClose(i: Int, epoch: Long, trade: OpenTrade): String? {
-        if (epoch - trade.epoch > tradeExpiry * period) return "expiryclose"
-
-        if (closeConfig != null) {
-            return trade.closeStrategy!!.doTick(i, null)
-        }
-        if (checkTrigger(mlBuyTrigger, sellPredictionLastLast, sellPredictionLast, sellPrediction)) {
-            if (!soldInCrest) {
-                soldInCrest = true
-                return "sell prediction: %.4f".format(sellPrediction)
-            }
-        }
-        if (sellPrediction < mlBuyTrigger.split(":")[1].toFloat()) soldInCrest = false
-
-        val diff = close[i] - trade.buyPrice
-        val pct = diff * 100.0 / trade.buyPrice
-        if (pct < topLoss) {
-            return "panic ($pct% < $topLoss)" // panic - sell.
-        }
-
-        if (pct > sellBarrier1) {
-            trade.passed1Barrier = true
-            if (pct > sellBarrier2) {
-                return "sellBarrier2 ($pct%>$sellBarrier2)%"
-            }
-        } else if (pct < sellBarrier1 && trade.passed1Barrier) {
-            return "sellBarrier1 ($pct%>$sellBarrier1%)"
-        }
-
-        return null
-    }
-
     fun onDrawChart(chart: ChartWriter, epoch: Long, i: Int) {
         var drawCount = 0
         if (!training) {
             chart.priceIndicator("emaShort", epoch, emaShort[i])
             chart.priceIndicator("emaLong", epoch, emaLong[i])
-            //chart.priceIndicator("bbDown", epoch, bbDown[i])
-            //chart.priceIndicator("bbMa", epoch, bbMa[i])
             chart.extraIndicator("ml", "buy", epoch, buyPrediction)
             chart.extraIndicator("ml", "sell", epoch, sellPrediction)
             chart.extraIndicator("ml", "buyvalue", epoch, mlBuyTrigger.split(":")[1].toDouble())
@@ -293,8 +261,8 @@ class Strategy(
 
         // Try to buy
         if (!sellOnly && (buyOnly || openTrades.size < openTradesCount)) { // BUY
-            if (actionLock > 0) {
-                actionLock--
+            if (buyLock > 0) {
+                buyLock--
             } else {
                 val open = shouldOpen(i, epoch)
                 if (open != null) {
@@ -305,17 +273,19 @@ class Strategy(
                     }
                     val amountOfCoins = amountOfMoney / close[i]
                     val buyPrice = exchange.buy(amountOfCoins)
-                    val closeStrategy = if (closeConfig != null) {
-                        CloseStrategy(closeConfig!!, series, i, buyPrice)
-                    } else null
-                    val trade = OpenTrade(buyPrice, amountOfCoins, epoch, buyNumber++, closeStrategy = closeStrategy)
+                    val chart = ChartWriterImpl()
+                    val closeStrategy = CloseStrategy(closeConfig, series, i, buyPrice)
+                    val trade = OpenTrade(buyPrice, amountOfCoins, epoch, buyNumber++, closeStrategy, chart)
                     boughtSomething = true
                     openTrades = openTrades + trade
                     operations = operations + Operation(
                         OperationType.BUY,
                         trade.amount,
-                        "Open #%d at $%.03f\n________\n$open".format(trade.code, trade.buyPrice))
-                    actionLock = buyCooldown
+                        "Open #%d at $%.03f\n________\n$open".format(trade.code, trade.buyPrice),
+                        0.0,
+                        trade.code,
+                        trade.chartWriter)
+                    buyLock = buyCooldown
                 }
             }
         }
@@ -325,7 +295,16 @@ class Strategy(
         // Try to sell
         if (!buyOnly && !boughtSomething && sellLock == 0) {
             for (trade in openTrades) {
-                val shouldClose = shouldClose(i, epoch, trade) ?: continue
+                // Add to the trade
+                val bar = series.getBar(i)
+                val candle = Candle(
+                    bar.endTime.toEpochSecond(),
+                    bar.openPrice.doubleValue(),
+                    bar.closePrice.doubleValue(),
+                    bar.maxPrice.doubleValue(),
+                    bar.minPrice.doubleValue())
+                trade.chartWriter.candles.add(candle)
+                val shouldClose = trade.closeStrategy.doTick(i, sellPrediction, trade.chartWriter) ?: continue
                 val sellPrice = exchange.sell(trade.amount * 0.9999)
                 val diff = sellPrice - trade.buyPrice
                 val pct = diff * 100.0 / trade.buyPrice
@@ -348,7 +327,7 @@ class Strategy(
                         (epoch - trade.epoch) / period
                     ) + "\n________\n$shouldClose"
                 tradeSum += diff*trade.amount
-                operations = operations + Operation(OperationType.SELL, trade.amount, tooltip, trade.buyPrice, trade.code)
+                operations = operations + Operation(OperationType.SELL, trade.amount, tooltip, trade.buyPrice, trade.code, trade.chartWriter)
                 openTrades = openTrades - trade
                 tradeCount++
             }

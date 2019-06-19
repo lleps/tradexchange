@@ -1,6 +1,9 @@
 package com.lleps.tradexchange.strategy
 
+import com.lleps.tradexchange.Candle
+
 class ChartWriterImpl(private val plotLevel: Int = 3) : Strategy.ChartWriter {
+    val candles = mutableListOf<Candle>() // just for convenience, not actually used
     val priceIndicators = mutableMapOf<String, MutableMap<Long, Double>>()
     val extraIndicators = mutableMapOf<String, MutableMap<String, MutableMap<Long, Double>>>()
 

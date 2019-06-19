@@ -90,7 +90,7 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
     private var minWin = 0.0// how much win is secured
 
     /** Process the tick. Returns an string describing the trigger if should close, null otherwise. */
-    fun doTick(i: Int, chart: Strategy.ChartWriter?): String? {
+    fun doTick(i: Int, globalSellPrediction: Double, chart: Strategy.ChartWriter?): String? {
         val price = close[i]
         val epoch = timeSeries.getBar(i).endTime.toEpochSecond()
         val timePassed = (this.timePassed++).toDouble()
@@ -160,7 +160,7 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
                 val tickPrice = series.getBar(i).closePrice.doubleValue()
                 maxPrice = maxOf(maxPrice, tickPrice)
                 minPrice = minOf(minPrice, tickPrice)
-                val result = closeStrategy.doTick(i, chartWriter)
+                val result = closeStrategy.doTick(i, 0.0, chartWriter)
                 if (result != null) {
                     operations.add(Operation(
                         series.getBar(i).endTime.toEpochSecond(),
