@@ -95,12 +95,16 @@ class RESTServer {
     @PutMapping("/createInstance/{instanceQuery}")
     fun createInstance(@PathVariable instanceQuery: String): String {
         // parse query
-        val parts = instanceQuery.split(":")
-        if (parts.size < 2 || parts.size > 3) error("query should be <type>:<name>:<copyFrom?>")
+        val bigParts = instanceQuery.split("<")
+        val query = bigParts[0]
+        val copyFrom = if (bigParts.size == 2) bigParts[1] else null
+        val parts = query.split(":")
+        if (parts.size < 2 || parts.size > 3) error("query should be type:name<copyFrom?")
         val instanceTypeStr = parts[0]
         val instanceType = InstanceType.valueOf(instanceTypeStr.toUpperCase())
         val instanceName = "[${instanceType.toString().toLowerCase()}]${parts[1]}"
         if (instanceState.containsKey(instanceName)) error("instance with name '$instanceName' already exists.")
+        if (copyFrom != null && !instanceState.containsKey(copyFrom)) error("instance with name '$copyFrom' does not exist.")
 
         // build instance
         val state = InstanceState(instanceType)
@@ -108,7 +112,8 @@ class RESTServer {
         val operationChartsData = InstanceOperationCharts()
         val controller = makeControllerForInstance(instanceName, state, chartData, operationChartsData)
         controller.onCreated()
-        state.input = controller.getRequiredInput() // overwrite input, only when its created.
+        val copyFromInstance = copyFrom?.let { instanceState.getValue(it) }
+        state.input = copyFromInstance?.input?.toMap() ?: controller.getRequiredInput()
 
         // Save
         instanceState[instanceName] = state

@@ -44,6 +44,7 @@ class BacktestInstanceController(
 
     override fun onExecute(input: Map<String, String>, button: Int) {
         state.output = ""
+        state.trades = emptyList()
 
         // read input
         val pair = input.getValue("pair")
