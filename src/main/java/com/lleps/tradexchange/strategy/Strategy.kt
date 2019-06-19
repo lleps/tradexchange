@@ -85,7 +85,7 @@ class Strategy(
             "strategy.topLoss" to "-10",
             "strategy.sellBarrier1" to "1.0",
             "strategy.sellBarrier2" to "3.0",
-            "strategy.mlBuyValue" to "0.7",
+            "strategy.mlBuyTrigger" to "over:0.5",
             "strategy.closeBBPeriod" to "20",
             "strategy.atrPeriod" to "24",
             "strategy.emaPeriods" to "12,26"
@@ -103,7 +103,7 @@ class Strategy(
     private val topLoss = input.getValue("strategy.topLoss").toFloat()
     private val sellBarrier1 = input.getValue("strategy.sellBarrier1").toFloat()
     private val sellBarrier2 = input.getValue("strategy.sellBarrier2").toFloat()
-    private val mlBuyValue = input.getValue("strategy.mlBuyValue").toFloat()
+    private val mlBuyTrigger = input.getValue("strategy.mlBuyTrigger")
     private val closeBBPeriod = input.getValue("strategy.closeBBPeriod").toInt()
     private val emaPeriods = input.getValue("strategy.emaPeriods").split(",").map { it.toInt() }
     private val atrPeriod = input.getValue("strategy.atrPeriod").toInt()
@@ -207,15 +207,27 @@ class Strategy(
         return last > barrier && last > lastLast && last > current
     }
 
+    /** To Generalize ML triggers (under:x, over:x, peak:x) */
+    private fun checkTrigger(trigger: String, lastLast: Double, last: Double, current: Double): Boolean {
+        val parts = trigger.split(":")
+        val barrier = parts[1].toFloat()
+        return when (parts[0]) {
+            "over" -> checkCrossOver(barrier, last, current)
+            "under" -> checkCrossUnder(barrier, last, current)
+            "peak" -> checkAfterCrest(barrier, lastLast, last, current)
+            else -> error("unsupported trigger: ${parts[0]}")
+        }
+    }
+
     private fun shouldOpen(i: Int, epoch: Long): String? {
         // 3 types of close:
-        if (checkAfterCrest(mlBuyValue, buyPredictionLastLast, buyPredictionLast, buyPrediction)) {
+        if (checkTrigger(mlBuyTrigger, buyPredictionLastLast, buyPredictionLast, buyPrediction)) {
             if (!boughtInCrest) {
                 boughtInCrest = true
-                return "$buyPredictionLastLast,$buyPredictionLast. ($buyPrediction>$mlBuyValue)"
+                return "sell prediction: %.4f".format(buyPrediction)
             }
         }
-        if (buyPrediction < mlBuyValue) boughtInCrest = false
+        if (buyPrediction < mlBuyTrigger.split(":")[1].toFloat()) boughtInCrest = false
         return null
     }
 
@@ -225,13 +237,13 @@ class Strategy(
         if (closeConfig != null) {
             return trade.closeStrategy!!.doTick(i, null)
         }
-        if (checkAfterCrest(mlBuyValue, sellPredictionLastLast, sellPredictionLast, sellPrediction)) {
+        if (checkTrigger(mlBuyTrigger, sellPredictionLastLast, sellPredictionLast, sellPrediction)) {
             if (!soldInCrest) {
                 soldInCrest = true
-                return "$sellPredictionLastLast $sellPredictionLast. ($sellPrediction>$mlBuyValue)"
+                return "sell prediction: %.4f".format(sellPrediction)
             }
         }
-        if (sellPrediction < mlBuyValue) soldInCrest = false
+        if (sellPrediction < mlBuyTrigger.split(":")[1].toFloat()) soldInCrest = false
 
         val diff = close[i] - trade.buyPrice
         val pct = diff * 100.0 / trade.buyPrice
@@ -259,8 +271,8 @@ class Strategy(
             //chart.priceIndicator("bbDown", epoch, bbDown[i])
             //chart.priceIndicator("bbMa", epoch, bbMa[i])
             chart.extraIndicator("ml", "buy", epoch, buyPrediction)
-            chart.extraIndicator("ml", "buyvalue", epoch, mlBuyValue.toDouble())
             chart.extraIndicator("ml", "sell", epoch, sellPrediction)
+            chart.extraIndicator("ml", "buyvalue", epoch, mlBuyTrigger.split(":")[1].toDouble())
             chart.extraIndicator("$", "profit", epoch, tradeSum)
             chart.extraIndicator("atr", "atr", epoch, atr[i])
             drawCount += 3
@@ -302,7 +314,7 @@ class Strategy(
                     operations = operations + Operation(
                         OperationType.BUY,
                         trade.amount,
-                        "Open #%d at $%.03f\n----------\n$open".format(trade.code, trade.buyPrice))
+                        "Open #%d at $%.03f\n________\n$open".format(trade.code, trade.buyPrice))
                     actionLock = buyCooldown
                 }
             }
@@ -323,18 +335,18 @@ class Strategy(
                         .format(trade.amount, trade.buyPrice, sellPrice, diff, diff*trade.amount)
                 output.write(tradeStrLog)
                 val tooltip =
-                    ("Close #%d at %s%.03f (earnings $%.03f)\n" +
+                    ("Close #%d at %.1f%s (earnings $%.03f)\n" +
                     "Buy $%.03f   Sell $%.03f\n" +
                     "Time %d min (%d ticks)").format(
                         trade.code,
-                        "%",
                         pct,
+                        "%",
                         diff*trade.amount,
                         trade.buyPrice,
                         sellPrice,
                         (epoch - trade.epoch) / 60,
                         (epoch - trade.epoch) / period
-                    ) + "\n----------\n$shouldClose"
+                    ) + "\n________\n$shouldClose"
                 tradeSum += diff*trade.amount
                 operations = operations + Operation(OperationType.SELL, trade.amount, tooltip, trade.buyPrice, trade.code)
                 openTrades = openTrades - trade
