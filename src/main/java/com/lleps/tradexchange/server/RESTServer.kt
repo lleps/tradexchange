@@ -26,7 +26,7 @@ class RESTServer {
     private val instanceState = ConcurrentHashMap<String, InstanceState>()
     private val instanceController = ConcurrentHashMap<String, InstanceController>()
     private val instanceChartData = ConcurrentHashMap<String, InstanceChartData>()
-    private data class InstanceOperationCharts(val map: Map<Int, InstanceChartData> = emptyMap())
+    data class InstanceOperationCharts(var map: Map<Int, InstanceChartData> = emptyMap())
     private val instanceOperationCharts = ConcurrentHashMap<String, InstanceOperationCharts>()
 
     init {
@@ -105,13 +105,15 @@ class RESTServer {
         // build instance
         val state = InstanceState(instanceType)
         val chartData = InstanceChartData()
-        val controller = makeControllerForInstance(instanceName, state, chartData)
+        val operationChartsData = InstanceOperationCharts()
+        val controller = makeControllerForInstance(instanceName, state, chartData, operationChartsData)
         controller.onCreated()
         state.input = controller.getRequiredInput() // overwrite input, only when its created.
 
         // Save
         instanceState[instanceName] = state
         instanceChartData[instanceName] = chartData
+        instanceOperationCharts[instanceName] = operationChartsData
         instanceController[instanceName] = controller
         instances.list = listOf(instanceName) + instances.list // at the beginning
         loadedInstances[instanceName] = Unit
@@ -126,6 +128,7 @@ class RESTServer {
         instanceController.getValue(instance).onDeleted()
         instanceState.remove(instance)
         instanceChartData.remove(instance)
+        instanceOperationCharts.remove(instance)
         instanceController.remove(instance)
         instances.list = instances.list - instance
         loadedInstances.remove(instance)
@@ -151,7 +154,12 @@ class RESTServer {
         saveInstance(instance)
     }
 
-    private fun makeControllerForInstance(instanceName: String, state: InstanceState, chartData: InstanceChartData): InstanceController {
+    private fun makeControllerForInstance(
+        instanceName: String,
+        state: InstanceState,
+        chartData: InstanceChartData,
+        operationChartsData: InstanceOperationCharts
+    ): InstanceController {
         val out = object : Strategy.OutputWriter {
             override fun write(string: String) {
                 LOGGER.info("$instanceName: $string")
@@ -160,7 +168,7 @@ class RESTServer {
             }
         }
         val result = when (state.type) {
-            InstanceType.BACKTEST -> BacktestInstanceController(instanceName, state, chartData, out)
+            InstanceType.BACKTEST -> BacktestInstanceController(instanceName, state, chartData, operationChartsData, out)
             InstanceType.LIVE -> LiveInstanceController(instanceName, state, chartData, out)
             InstanceType.TRAIN -> TrainInstanceController(instanceName, state, chartData, out)
         }
@@ -185,8 +193,8 @@ class RESTServer {
             val chartData = loadFrom<InstanceChartData>("data/instances/chartData-$instance.json")
                 ?: error("cant read chartData: $instance")
             val operationChartsData = loadFrom<InstanceOperationCharts>("data/instances/operationChartData-$instance.json")
-                ?: error("cant read operationChartData: $instance")
-            val controller = makeControllerForInstance(instance, state, chartData)
+                ?: InstanceOperationCharts()
+            val controller = makeControllerForInstance(instance, state, chartData, operationChartsData)
             instanceState[instance] = state
             instanceChartData[instance] = chartData
             instanceController[instance] = controller

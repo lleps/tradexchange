@@ -11,6 +11,7 @@ class BacktestInstanceController(
     val instance: String,
     val state: InstanceState,
     val chartData: InstanceChartData,
+    val operationChartsWrapper: RESTServer.InstanceOperationCharts,
     val out: Strategy.OutputWriter
 ) : InstanceController {
 
@@ -62,6 +63,9 @@ class BacktestInstanceController(
         val candles = mutableListOf<Candle>()
         val chartWriter = ChartWriterImpl(plotChart)
 
+        // Operation charts
+        val opCharts = mutableMapOf<Int, InstanceChartData>()
+
         // Execute strategy
         val trades = mutableListOf<TradeEntry>()
         val exchange = PoloniexBacktestExchange(initialMoney, initialCoins)
@@ -98,6 +102,13 @@ class BacktestInstanceController(
             })
             for (op in operations) {
                 if (op.type == Strategy.OperationType.SELL) {
+                    val chartData = InstanceChartData(
+                        candles = op.chart.candles,
+                        operations = emptyList(),
+                        priceIndicators = op.chart.priceIndicators,
+                        extraIndicators = op.chart.extraIndicators
+                    )
+                    opCharts[op.code] = chartData
                     trades.add(TradeEntry(op.code, op.buyPrice, tick.closePrice.doubleValue(), op.amount))
                     // intermediate updates while the strategy is running
                     val tradeSum = trades.sumByDouble { (it.sell-it.buy)*it.amount }
@@ -129,6 +140,7 @@ class BacktestInstanceController(
         chartData.operations = if (plotChart >= 1) chartOperations else emptyList()
         chartData.priceIndicators = if (plotChart >= 1) chartWriter.priceIndicators else emptyMap()
         chartData.extraIndicators = if (plotChart >= 1) chartWriter.extraIndicators else emptyMap()
+        operationChartsWrapper.map = opCharts
         state.chartVersion++
 
         // Update trades
