@@ -130,17 +130,24 @@ fun getTicksFromPoloniex(pair: String, period: Int, daysBack: Int): List<Bar> {
     }
 }
 
-fun parseCandlesFromCSV(
+fun parseCandlesFrom1MinCSV(
     file: String,
     periodSeconds: Int,
     startDate: LocalDateTime? = null,
     endDate: LocalDateTime? = null
 ): List<Bar> {
+    check(periodSeconds % 60 == 0) { "only periods multipliers of 60 allowed." }
     val startEpochMilli = (startDate?.toEpochSecond(ZoneOffset.UTC) ?: 0) * 1000
     val endEpochMilli = (endDate?.toEpochSecond(ZoneOffset.UTC) ?: 0) * 1000
     val result = ArrayList<Bar>(50000)
     val duration = java.time.Duration.ofSeconds(periodSeconds.toLong())
     var firstLine = true
+    val linesToBuildCandle = periodSeconds / 60
+    var candleAccumulator = 0
+    var candleMin = 0.0
+    var candleMax = 0.0
+    var candleOpen = 0.0
+    var candleVolumeAccumulator = 0.0
     for (line in Files.lines(Paths.get(file))) {
         if (firstLine) { firstLine = false; continue }
 
@@ -149,18 +156,36 @@ fun parseCandlesFromCSV(
         val epoch = parts[0].toLong()
         if (epoch < startEpochMilli) continue
         else if (endEpochMilli in 1..(epoch - 1)) break
+        val open = parts[1].toDouble()
+        val high = parts[3].toDouble()
+        val low = parts[4].toDouble()
+        val close = parts[2].toDouble()
+        val volume = parts[5].toDouble()
 
-        val tick = BaseBar(
-            duration,
-            ZonedDateTime.ofInstant(Instant.ofEpochMilli(epoch), ZoneOffset.UTC),
-            DoubleNum.valueOf(parts[1].toDouble()), // open
-            DoubleNum.valueOf(parts[3].toDouble()), // high
-            DoubleNum.valueOf(parts[4].toDouble()), // low
-            DoubleNum.valueOf(parts[2].toDouble()), // close
-            DoubleNum.valueOf(parts[5].toDouble()), // volume
-            DoubleNum.valueOf(0)
-        )
-        result.add(tick)
+        if (++candleAccumulator < linesToBuildCandle) {
+            if (candleAccumulator == 1) {
+                candleMax = high
+                candleMin = low
+                candleOpen = open
+                candleVolumeAccumulator = 0.0
+            }
+            candleMax = maxOf(candleMax, high)
+            candleMin = minOf(candleMin, low)
+            candleVolumeAccumulator += volume
+        } else {
+            candleAccumulator = 0
+            val tick = BaseBar(
+                duration,
+                ZonedDateTime.ofInstant(Instant.ofEpochMilli(epoch), ZoneOffset.UTC),
+                DoubleNum.valueOf(candleOpen), // open
+                DoubleNum.valueOf(candleMax), // high
+                DoubleNum.valueOf(candleMin), // low
+                DoubleNum.valueOf(close), // close
+                DoubleNum.valueOf(candleVolumeAccumulator), // volume
+                DoubleNum.valueOf(0)
+            )
+            result.add(tick)
+        }
     }
     return result
 }

@@ -254,7 +254,7 @@ class Strategy(
 
     // Depending on volatility, should be close/open barriers
     private fun rebuildCloseConfigByATR(i: Int) {
-        val atrPct = atr[i] / close[i]
+        val atrPct = atr[i] / close[i] * 100.0
         closeConfig = CloseStrategy.Config(
             topBarrierInitial = atrPct * sellBarrier1.toDouble(),
             bottomBarrierInitial = atrPct * topLoss.toDouble(),

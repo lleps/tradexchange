@@ -2,7 +2,7 @@ package com.lleps.tradexchange.server
 
 import com.lleps.tradexchange.strategy.Strategy
 import com.lleps.tradexchange.util.getTicksFromPoloniex
-import com.lleps.tradexchange.util.parseCandlesFromCSV
+import com.lleps.tradexchange.util.parseCandlesFrom1MinCSV
 import org.ta4j.core.Bar
 import java.time.Instant
 import java.time.LocalDate
@@ -38,7 +38,7 @@ fun fetchTicks(pair: String, period: Long, input: Map<String, String>, out: Stra
     return when (btSource) {
         "csv" -> {
             out.write("Parse ticks from $btCsvFile at period ${period.toInt()}")
-            val ticks = parseCandlesFromCSV(
+            val ticks = parseCandlesFrom1MinCSV(
                 file = btCsvFile,
                 periodSeconds = period.toInt(),
                 startDate = LocalDate.parse(btCsvDateStart, DateTimeFormatter.ISO_DATE).atStartOfDay(),

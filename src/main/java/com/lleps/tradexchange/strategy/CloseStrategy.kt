@@ -239,7 +239,7 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
                 //"../Bitfinex-historical-data/ETHUSD/Candles_1m/2019/merged.csv"
             )
             println("loading...")
-            val candles = parseCandlesFromCSV(paths.random(), 60)
+            val candles = parseCandlesFrom1MinCSV(paths.random(), 60)
             series = BaseTimeSeries(candles)
             println("loaded.")
 
