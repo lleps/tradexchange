@@ -16,14 +16,14 @@ import javafx.scene.layout.BorderPane
 import javafx.scene.layout.VBox
 import javafx.scene.paint.Color
 import javafx.stage.Stage
-import org.ta4j.core.*
+import org.ta4j.core.Bar
+import org.ta4j.core.BaseBar
+import org.ta4j.core.BaseTimeSeries
 import org.ta4j.core.indicators.EMAIndicator
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
 import org.ta4j.core.num.DoubleNum
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.time.LocalDateTime
-import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import java.util.*
 import kotlin.concurrent.thread

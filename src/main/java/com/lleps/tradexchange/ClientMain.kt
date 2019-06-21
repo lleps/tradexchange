@@ -10,21 +10,20 @@ import javafx.application.Platform
 import javafx.event.EventHandler
 import javafx.scene.Scene
 import javafx.scene.control.*
-import javafx.scene.image.Image
-import javafx.scene.layout.*
-import javafx.stage.Stage
-import org.slf4j.LoggerFactory
-import kotlin.concurrent.thread
-import javafx.stage.Modality
-import javafx.stage.WindowEvent
-import java.io.PrintWriter
-import java.io.StringWriter
-import javafx.scene.control.ButtonType
 import javafx.scene.control.Alert
+import javafx.scene.control.ButtonType
+import javafx.scene.image.Image
 import javafx.scene.image.ImageView
 import javafx.scene.input.MouseButton
-import java.awt.Color
+import javafx.scene.layout.*
+import javafx.stage.Modality
+import javafx.stage.Stage
+import javafx.stage.WindowEvent
+import org.slf4j.LoggerFactory
 import java.io.File
+import java.io.PrintWriter
+import java.io.StringWriter
+import kotlin.concurrent.thread
 
 class ClientMain : Application() {
     private lateinit var tabPane: TabPane

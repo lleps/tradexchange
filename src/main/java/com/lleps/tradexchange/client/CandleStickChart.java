@@ -31,11 +31,6 @@
  */
 package com.lleps.tradexchange.client;
 
-import java.util.Iterator;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
-import java.util.function.Function;
-
 import com.lleps.tradexchange.Candle;
 import javafx.animation.FadeTransition;
 import javafx.collections.ObservableList;
@@ -45,11 +40,13 @@ import javafx.scene.chart.Axis;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.XYChart;
 import javafx.scene.input.MouseButton;
-import javafx.scene.input.MouseEvent;
 import javafx.scene.shape.LineTo;
 import javafx.scene.shape.MoveTo;
 import javafx.scene.shape.Path;
 import javafx.util.Duration;
+
+import java.util.Iterator;
+import java.util.function.BiConsumer;
 
 /**
  * A candlestick chart is a style of bar-chart used primarily to describe

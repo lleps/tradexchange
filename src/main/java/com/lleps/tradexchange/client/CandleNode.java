@@ -32,7 +32,6 @@
 package com.lleps.tradexchange.client;
 
 import javafx.scene.Group;
-import javafx.scene.control.Tooltip;
 import javafx.scene.layout.Region;
 import javafx.scene.shape.Line;
 

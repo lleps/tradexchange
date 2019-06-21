@@ -1,6 +1,6 @@
 package com.lleps.tradexchange.strategy
 
-import com.lleps.tradexchange.util.*
+import com.lleps.tradexchange.util.get
 import org.ta4j.core.Indicator
 import org.ta4j.core.TimeSeries
 import org.ta4j.core.indicators.ATRIndicator
