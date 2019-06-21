@@ -69,6 +69,8 @@ class ClientMain : Application() {
                             tabs.clear()
                             views.clear()
                             gotInput.clear()
+                            chartVersion.clear()
+                            stateVersion.clear()
                             fetchInstances()
                         }
                     }

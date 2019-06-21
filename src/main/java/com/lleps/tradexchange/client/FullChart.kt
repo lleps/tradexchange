@@ -217,8 +217,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
         Platform.runLater {
             operationSeries.data.clear()
             for (operation in operations) { // operations are not parsed with RR in mind
-                if (operation.timestamp < minTimestamp) continue
-                else if (operation.timestamp > maxTimestamp) break
+                if (operation.timestamp < minTimestamp || operation.timestamp > maxTimestamp) continue
                 val node = createOperationNode(operation)
                 operationSeries.data.add(
                     XYChart.Data<Number, Number>(operation.timestamp, operation.price)
@@ -270,8 +269,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
             // Build operations list
             val operationSeries = XYChart.Series<Number, Number>()
             for (operation in operations) { // operations are not parsed with RR in mind
-                if (operation.timestamp < minTimestamp) continue
-                else if (operation.timestamp > maxTimestamp) break
+                if (operation.timestamp < minTimestamp || operation.timestamp > maxTimestamp) continue
                 val node = createOperationNode(operation)
                 operationSeries.data.add(
                     XYChart.Data<Number, Number>(operation.timestamp, operation.price)

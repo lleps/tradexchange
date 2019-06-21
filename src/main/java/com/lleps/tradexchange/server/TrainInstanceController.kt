@@ -3,13 +3,16 @@ package com.lleps.tradexchange.server
 import com.lleps.tradexchange.*
 import com.lleps.tradexchange.strategy.ChartWriterImpl
 import com.lleps.tradexchange.strategy.Strategy
+import org.ta4j.core.Bar
 import org.ta4j.core.BaseTimeSeries
+import org.ta4j.core.TimeSeries
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
 import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.Paths
+import kotlin.math.abs
 
 class TrainInstanceController(
     val instance: String,
@@ -23,6 +26,7 @@ class TrainInstanceController(
             "pair" to "USDT_ETH",
             "period" to "300",
             "autobuyPeriod" to "100",
+            "autobuyBatch" to "10",
             "warmupTicks" to "300") +
             fetchTicksRequiredInput() +
             Strategy.REQUIRED_INPUT
@@ -102,7 +106,7 @@ class TrainInstanceController(
         val period = input.getValue("period").toInt()
         val warmupTicks = input.getValue("warmupTicks").toInt()
         val autobuyPeriod = input.getValue("autobuyPeriod").toInt()
-        val autobuyBatch = (input["autobuyBatch"] ?: "1").toInt()
+        val autobuyBatch = input.getValue("autobuyBatch").toInt()
         val ticks = fetchTicks(pair, period.toLong(), input, out)
 
         // Set up
@@ -123,46 +127,6 @@ class TrainInstanceController(
         var buyCount = 0
         var sellCount = 0
         for (i in warmupTicks..timeSeries.endIndex) {
-            if (i > warmupTicks && autobuyPeriod != 0 && (i % autobuyPeriod) == 0) {
-                // find the lowest point and add autobuyBatch buys
-                var minIndex = i
-                var minValue = timeSeries.getBar(i - autobuyPeriod).closePrice.doubleValue()
-                var maxIndex = i
-                var maxValue = timeSeries.getBar(i - autobuyPeriod).closePrice.doubleValue()
-                for (j in (i - autobuyPeriod) until i) {
-                    val valueHere = timeSeries.getBar(j).closePrice.doubleValue()
-                    if (valueHere < minValue) {
-                        minIndex = j
-                        minValue = valueHere
-                    }
-                    if (valueHere > maxValue) {
-                        maxIndex = j
-                        maxValue = valueHere
-                    }
-                }
-                // add a buy point at j
-                val autoBuyBatchSide = autobuyBatch/2
-                for (k in (minIndex - autoBuyBatchSide)..(minIndex + autoBuyBatchSide)) {
-                    val tick = timeSeries.getBar(k)
-                    operations.add(
-                        Operation(
-                            tick.endTime.toEpochSecond(),
-                            OperationType.BUY,
-                            tick.closePrice.doubleValue(),
-                            "buy #${++buyCount}"
-                        ))
-                }
-                for (k in (maxIndex - autoBuyBatchSide)..(maxIndex + autoBuyBatchSide)) {
-                    val tick = timeSeries.getBar(k)
-                    operations.add(
-                        Operation(
-                            tick.endTime.toEpochSecond(),
-                            OperationType.SELL,
-                            tick.closePrice.doubleValue(),
-                            "sell #${++sellCount}"
-                        ))
-                }
-            }
             val tick = timeSeries.getBar(i)
             val epoch = tick.endTime.toEpochSecond()
             strategy.onDrawChart(chartWriter, epoch, i)
@@ -172,6 +136,28 @@ class TrainInstanceController(
                 tick.closePrice.doubleValue(),
                 tick.maxPrice.doubleValue(),
                 tick.minPrice.doubleValue()))
+        }
+
+        // Add autobuy points
+        if (autobuyPeriod != 0) {
+            operations.addAll(doAutobuyInSeries(
+                series = timeSeries,
+                seriesPeriod = period,
+                autobuyPeriod = autobuyPeriod,
+                autobuyBatch = autobuyBatch,
+                warmupTicks = warmupTicks,
+                type = OperationType.SELL,
+                comparator = { a, b -> a > b }
+            ))
+            operations.addAll(doAutobuyInSeries(
+                series = timeSeries,
+                seriesPeriod = period,
+                autobuyPeriod = autobuyPeriod,
+                autobuyBatch = autobuyBatch,
+                warmupTicks = warmupTicks,
+                type = OperationType.BUY,
+                comparator = { a, b -> a < b }
+            ))
         }
 
         out.write("Indicators plotted. Click the buy candles and press Export")
@@ -184,6 +170,60 @@ class TrainInstanceController(
         state.statusText = "Train mode"
         state.statusPositiveness = 1
         state.stateVersion++
+    }
+
+    private fun doAutobuyInSeries(
+        series: TimeSeries,
+        seriesPeriod: Int,
+        autobuyPeriod: Int,
+        autobuyBatch: Int,
+        warmupTicks: Int,
+        type: OperationType,
+        comparator: (Double, Double) -> Boolean // should return true if a is a "better point" than b, false otherwise
+    ): List<Operation> {
+        val result = mutableListOf<Operation>()
+
+        // Add best points iterating from warmupTicks to the end, in jumps of autobuyPeriod ticks.
+        // Get smallest point in i..(i+period) = r. At the next iteration, start from r
+        var i = warmupTicks
+        while (i + autobuyPeriod < series.endIndex) {
+            val (idx, bar) = getMinCandle(series, i, i + autobuyPeriod, comparator)
+            result.add(Operation(bar.endTime.toEpochSecond(), type, bar.closePrice.doubleValue()))
+            i = idx + 1
+        }
+
+        // Filter points too close
+        // If we find two consecutive points p1,p2 whose distance in ticks is < autobuyBatch, only keep the best.
+        // Keep going until we don't find such points in result
+        while (true) {
+            var foundBadPoints = false
+            for (pIdx in 0 until (result.size - 1)) {
+                val p1 = result[pIdx]
+                val p2 = result[pIdx + 1]
+                val distanceInTicks = (p2.timestamp - p1.timestamp) / seriesPeriod
+                if (distanceInTicks < autobuyBatch) {
+                    if (comparator(p1.price, p2.price)) result.remove(p2)
+                    else result.remove(p1)
+                    foundBadPoints = true
+                    break
+                }
+            }
+            if (!foundBadPoints) break
+        }
+        return result
+    }
+
+    private fun getMinCandle(series: TimeSeries, fromInclusive: Int, toInclusive: Int, comparator: (Double, Double) -> Boolean): Pair<Int, Bar> {
+        var minIdx = fromInclusive
+        var minVal = series.getBar(fromInclusive).closePrice.doubleValue()
+        for (i in fromInclusive .. toInclusive) {
+            val c = series.getBar(i).closePrice.doubleValue()
+            if (comparator(c, minVal)) {
+                minVal = c
+                minIdx = i
+            }
+        }
+        return Pair(minIdx, series.getBar(minIdx))
     }
 
     override fun onToggleCandle(candleEpoch: Long, toggle: Int) {
