@@ -168,10 +168,9 @@ class Strategy(
             buyModel = KerasModelImport.importKerasSequentialModelAndWeights(buyPath)
             sellModel = KerasModelImport.importKerasSequentialModelAndWeights(sellPath)
             closeConfig = CloseStrategy.Config(
-                topBarrierInitial = sellBarrier1.toDouble(),
-                bottomBarrierInitial = topLoss.toDouble(),
-                avgPeriod = closeBBPeriod,
-                sdPeriod = closeBBPeriod,
+                topBarrierMultiplier = sellBarrier1.toDouble(),
+                bottomBarrierMultiplier = topLoss.toDouble(),
+                bbPeriod = closeBBPeriod,
                 shortEmaPeriod = 3,
                 expiry = tradeExpiry
             )
@@ -256,10 +255,9 @@ class Strategy(
     private fun rebuildCloseConfigByATR(i: Int) {
         val atrPct = atr[i] / close[i] * 100.0
         closeConfig = CloseStrategy.Config(
-            topBarrierInitial = atrPct * sellBarrier1.toDouble(),
-            bottomBarrierInitial = atrPct * topLoss.toDouble(),
-            avgPeriod = closeBBPeriod,
-            sdPeriod = closeBBPeriod,
+            topBarrierMultiplier = atrPct * sellBarrier1.toDouble(),
+            bottomBarrierMultiplier = atrPct * topLoss.toDouble(),
+            bbPeriod = closeBBPeriod,
             shortEmaPeriod = 3,
             expiry = tradeExpiry
         )

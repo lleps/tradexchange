@@ -1,3 +1,5 @@
+package com.lleps.tradexchange.server
+
 import com.lleps.tradexchange.server.PoloniexLiveExchange
 
 class PoloniexLiveExchangeTest {

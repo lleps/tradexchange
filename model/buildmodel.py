@@ -60,12 +60,12 @@ print("len(X):", X.shape[0], "len(y):", len(y))
 print("Shape of X:", X.shape)
 
 model = tf.keras.models.Sequential()
-model.add(tf.keras.layers.LSTM(50, input_shape=(X.shape[1], X.shape[2])))
-model.add(tf.keras.layers.Dense(32, activation='relu'))
+model.add(tf.keras.layers.LSTM(64, input_shape=(X.shape[1], X.shape[2])))
+model.add(tf.keras.layers.Dense(128, activation='relu'))
 model.add(tf.keras.layers.Dense(1, activation='sigmoid'))
 
 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-model.fit(X, y, epochs=10, batch_size=32, verbose=2)
+model.fit(X, y, epochs=5, batch_size=32, verbose=2)
 model.save(output_model)
 
 scores = model.evaluate(X, y)
