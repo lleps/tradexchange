@@ -134,6 +134,12 @@ class BacktestInstanceController(
         out.write(" Coin start/end value   $%.03f / $%.03f (net $%.03f)"
             .format(firstPrice, latestPrice, latestPrice - firstPrice))
         out.write(" Trades: ${strategy.tradeCount}")
+        val buyTriggers = getOperationListTriggers(chartOperations, OperationType.BUY)
+            .joinToString(separator = ", ") { "${it.first} (${it.second}%)" }
+        val sellTriggers = getOperationListTriggers(chartOperations, OperationType.SELL)
+            .joinToString(separator = ", ") { "${it.first} (${it.second}%)" }
+        out.write(" Buy triggers: $buyTriggers")
+        out.write(" Sell triggers: $sellTriggers")
         out.write("  ______________________________________________________ ")
 
         // Update view
@@ -159,5 +165,26 @@ class BacktestInstanceController(
         state.statusText = "$tradesString $tradingVsHoldingString"
         state.statusPositiveness = if (tradePercent > 0) 1 else -1
         state.stateVersion++
+    }
+
+    /** Returns a list of pairs (trigger, percent). To get the most common triggers. */
+    private fun getOperationListTriggers(ops: List<Operation>, type: OperationType): List<Pair<String, Int>> {
+        val triggerCount = mutableMapOf<String, Int>()
+        var registeredTriggers = 0
+        for (op in ops) {
+            if (op.type == type) {
+                val fullDescription = op.description ?: continue
+                val descriptionTriggerString = fullDescription.split("________")[1].replace("\n", "")
+                val trigger = descriptionTriggerString.split(":")[0]
+                triggerCount[trigger] = (triggerCount[trigger]?:0) + 1
+                registeredTriggers++
+            }
+        }
+        // now should convert each entry to percentage
+        val result = mutableListOf<Pair<String, Int>>()
+        for ((trigger, count) in triggerCount) {
+            result += trigger to (count.toDouble() / registeredTriggers.toDouble() * 100.0).toInt()
+        }
+        return result.sortedByDescending { it.second }
     }
 }

@@ -225,9 +225,16 @@ class Strategy(
 
         // Try to sell
         if (!buyOnly) {
+            var sold = false
             for (trade in openTrades) {
                 trade.chartWriter.candles.add(candle)
-                val shouldClose = trade.closeStrategy.doTick(i, sellPrediction, trade.chartWriter) ?: continue
+                var shouldClose = trade.closeStrategy.doTick(i, sellPrediction, trade.chartWriter)
+                if (checkTrigger(mlBuyTrigger, sellPredictionLastLast, sellPredictionLast, sellPrediction)) {
+                    shouldClose = "prediction: %.4f".format(sellPrediction)
+                }
+                if (shouldClose == null) continue
+                if (sold) continue
+                sold = true
                 val sellPrice = exchange.sell(trade.amount * 0.9999)
                 val diff = sellPrice - trade.buyPrice
                 val pct = diff * 100.0 / trade.buyPrice
@@ -239,7 +246,7 @@ class Strategy(
                 val tooltip =
                     ("Close #%d at %.1f%s (earnings $%.03f)\n" +
                     "Buy $%.03f   Sell $%.03f\n" +
-                    "Time %d min (%d ticks)").format(
+                    "Time %d min (%d tiualmcks)").format(
                         trade.code,
                         pct,
                         "%",
