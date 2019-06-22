@@ -63,6 +63,7 @@ public class CandleNode extends Group {
 
     public void update(double closeOffset, double highOffset,
                        double lowOffset, double candleWidth) {
+        if (closeOffset == 0.0) closeOffset = 0.01;
         openAboveClose = closeOffset > 0;
         updateStyleClasses();
         highLowLine.setStartY(highOffset);
