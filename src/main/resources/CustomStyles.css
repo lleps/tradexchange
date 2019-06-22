@@ -16,3 +16,8 @@
 .tab-pane .tab-header-area  {
     -fx-padding: 0 0 0 70;
 }
+
+.chart-series-line {
+    -fx-stroke-width: 1px;
+    -fx-effect: null;
+}

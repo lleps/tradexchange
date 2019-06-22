@@ -113,6 +113,24 @@ public class CandleStickChart extends XYChart<Number, Number> {
         if (getData() == null) {
             return;
         }
+
+        // calculate candle width
+        NumberAxis xAxisNum = (NumberAxis)getXAxis();
+        double amplitude = xAxisNum.getUpperBound() - xAxisNum.getLowerBound();
+        long period = 1L;
+        Series<Number, Number> candleSeries = getData().get(0);
+        if (candleSeries.getData().size() >= 2) {
+            period = (long)candleSeries.getData().get(1).getXValue() -
+                    (long)candleSeries.getData().get(0).getXValue();
+            if (period == 0 && candleSeries.getData().size() >= 3) { // sometimes the first element has the same x as the second?
+                period = (long)candleSeries.getData().get(2).getXValue() -
+                        (long)candleSeries.getData().get(1).getXValue();
+                if (period == 0) period = 300;
+            }
+        }
+        double candleCount = amplitude / period;
+        double candleWidth = getWidth() * (1.0 / candleCount) * 0.7;
+
         // update candle positions
         for (int index = 0; index < getData().size(); index++) {
             Series<Number, Number> series = getData().get(index);
@@ -131,38 +149,16 @@ public class CandleStickChart extends XYChart<Number, Number> {
                 double x = getXAxis().getDisplayPosition(X);
                 double y = getYAxis().getDisplayPosition(Y);
                 Node itemNode = item.getNode();
-                Candle extra =
-                        (Candle)item.getExtraValue();
+                Candle extra = (Candle)item.getExtraValue();
 
                 if (itemNode instanceof CandleNode && extra != null) {
                     double close = yAxis.getDisplayPosition(extra.getClose());
                     double high = yAxis.getDisplayPosition(extra.getHigh());
                     double low = yAxis.getDisplayPosition(extra.getLow());
-                    // calculate candle width
-                    NumberAxis xAxisNum = (NumberAxis)getXAxis();
-                    double amplitude = xAxisNum.getUpperBound() - xAxisNum.getLowerBound();
-                    long period = 1L;
-                    if (!getData().isEmpty() && !getData().get(0).getData().isEmpty()) {
-                        period = (long)getData().get(0).getData().get(1).getXValue() -
-                                (long)getData().get(0).getData().get(0).getXValue();
-                    }
-                    double candleCount = amplitude / period;
-                    double candleWidth = 500.0 * (1.0 / candleCount);//7.0;
-                    /*if (getXAxis() instanceof NumberAxis) {
-                        // use 90% width between ticks
-                        NumberAxis xa = (NumberAxis) getXAxis();
-                        double unit = xa.getDisplayPosition(xa.getTickUnit());
-                        candleWidth = unit * 0.90;
-                    }*/
-                    // update candle
                     CandleNode candle = (CandleNode)itemNode;
                     candle.update(close - y, high - y, low - y, candleWidth);
-                    //candle.updateTooltip(item.getYValue().doubleValue(),
-                    //        extra.getClose(), extra.getHigh(),
-                    //        extra.getLow());
                 }
                 if (itemNode != null) {
-                    // position the candle (or any other node)
                     itemNode.setLayoutX(x);
                     itemNode.setLayoutY(y);
                 }

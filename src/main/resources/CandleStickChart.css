@@ -49,19 +49,19 @@
 /* indicators */
 .candlestick-series-2 {
     -fx-stroke: #F44336;
-    -fx-stroke-width: 2px;
+    -fx-stroke-width: 1px;
 }
 .candlestick-series-3 {
     -fx-stroke: #2196F3;
-    -fx-stroke-width: 2px;
+    -fx-stroke-width: 1px;
 }
 .candlestick-series-4 {
     -fx-stroke: #FFC107;
-    -fx-stroke-width: 2px;
+    -fx-stroke-width: 1px;
 }
 .candlestick-series-5 {
     -fx-stroke: #4CAF50;
-    -fx-stroke-width: 2px;
+    -fx-stroke-width: 1px;
 }
 /*.candlestick-candle {
     -fx-effect: dropshadow( two-pass-box , rgba(0,0,0,0.4) , 10, 0.0 , 2 , 4 );

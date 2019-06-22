@@ -145,6 +145,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
         yAxis.side = Side.RIGHT
 
         priceChart = CandleStickChart(xAxis, yAxis)
+        priceChart.animated = false
         priceChart.priceType = if (useCandles) CandleStickChart.PriceType.CANDLES else CandleStickChart.PriceType.LINE
         xAxis.tickLabelFormatter = TICK_LABEL_FORMATTER
         xAxis.tickUnitProperty().bind(Bindings.divide(Bindings.subtract(xAxis.upperBoundProperty(), xAxis.lowerBoundProperty()), 20.0))
@@ -317,12 +318,10 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
                 xAxis.minorTickCount = 0
                 xAxis.isTickLabelsVisible = false
                 xAxis.isTickMarkVisible = false
-                // TODO: should this binding occur in javafx thread?
                 Platform.runLater {
                     xAxis.lowerBoundProperty().bind((priceChart.xAxis as NumberAxis).lowerBoundProperty())
                     xAxis.upperBoundProperty().bind((priceChart.xAxis as NumberAxis).upperBoundProperty())
                 }
-
 
                 val yAxis = NumberAxis(0.0, 1.0, 5.0)
                 yAxis.side = Side.RIGHT
@@ -331,6 +330,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
                 val chart = LineChart(xAxis, yAxis)
                 chart.createSymbols = false
                 chart.isLegendVisible = false
+                chart.animated = false
 
                 val chartData = FXCollections.observableArrayList<XYChart.Series<Number, Number>>()
                 var minExtraVal = Double.MAX_VALUE

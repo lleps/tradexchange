@@ -239,7 +239,7 @@ class ClientMain : Application() {
 
     private fun showIsolatedTradeWindow(operation: Operation, data: InstanceChartData) {
         Platform.runLater {
-            val chart = FullChart(false)
+            val chart = FullChart(true)
             chart.priceData = data.candles
             val firstCandle = data.candles.first()
             val lastCandle = data.candles.last()
@@ -258,8 +258,8 @@ class ClientMain : Application() {
             val stage = Stage()
             stage.scene = Scene(HBox(chart, label))
             stage.title = "Operation #${operation.code}"
-            chart.fill()
             stage.show()
+            Platform.runLater { chart.fill() }
         }
     }
 
