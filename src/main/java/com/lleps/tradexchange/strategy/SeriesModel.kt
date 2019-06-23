@@ -12,6 +12,7 @@ import org.ta4j.core.indicators.MACDIndicator
 import org.ta4j.core.indicators.ROCIndicator
 import org.ta4j.core.indicators.RSIIndicator
 import org.ta4j.core.indicators.helpers.*
+import org.ta4j.core.indicators.volume.OnBalanceVolumeIndicator
 import org.ta4j.core.num.Num
 
 /**
@@ -59,6 +60,9 @@ class SeriesModel private constructor(
                     timeFrame = input[0],
                     maxBound = MaxPriceIndicator(series),
                     minBound = MinPriceIndicator(series))
+            },
+            IndicatorType("price", "volume", "300") { series, _, input ->
+                NormalizationIndicator(OnBalanceVolumeIndicator(series), input[0])
             },
             IndicatorType("pvi", "pvi", "1") { series, _, _ ->
                 PriceVariationIndicator(series)

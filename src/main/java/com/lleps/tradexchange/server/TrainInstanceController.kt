@@ -26,6 +26,7 @@ class TrainInstanceController(
             "period" to "300",
             "autobuyPeriod" to "100",
             "autobuyBatch" to "10",
+            "autobuyOffset" to "1",
             "warmupTicks" to "300") +
             fetchTicksRequiredInput() +
             Strategy.REQUIRED_INPUT
@@ -106,6 +107,7 @@ class TrainInstanceController(
         val warmupTicks = input.getValue("warmupTicks").toInt()
         val autobuyPeriod = input.getValue("autobuyPeriod").toInt()
         val autobuyBatch = input.getValue("autobuyBatch").toInt()
+        val autobuyOffset = input.getValue("autobuyOffset").toInt()
         val ticks = fetchTicks(pair, period.toLong(), input, out)
 
         // Set up
@@ -144,6 +146,7 @@ class TrainInstanceController(
                 seriesPeriod = period,
                 autobuyPeriod = autobuyPeriod,
                 autobuyBatch = autobuyBatch,
+                autobuyOffset = autobuyOffset,
                 warmupTicks = warmupTicks,
                 type = OperationType.SELL,
                 comparator = { a, b -> a > b }
@@ -153,6 +156,7 @@ class TrainInstanceController(
                 seriesPeriod = period,
                 autobuyPeriod = autobuyPeriod,
                 autobuyBatch = autobuyBatch,
+                autobuyOffset = autobuyOffset,
                 warmupTicks = warmupTicks,
                 type = OperationType.BUY,
                 comparator = { a, b -> a < b }
@@ -176,6 +180,7 @@ class TrainInstanceController(
         seriesPeriod: Int,
         autobuyPeriod: Int,
         autobuyBatch: Int,
+        autobuyOffset: Int,
         warmupTicks: Int,
         type: OperationType,
         comparator: (Double, Double) -> Boolean // should return true if a is a "better point" than b, false otherwise
@@ -187,8 +192,9 @@ class TrainInstanceController(
         var i = warmupTicks
         while (i + autobuyPeriod < series.endIndex) {
             val (idx, bar) = getMinCandle(series, i, i + autobuyPeriod, comparator)
-            result.add(Operation(bar.endTime.toEpochSecond(), type, bar.closePrice.doubleValue()))
-            i = idx + 1
+            val barOffset = series.getBar(idx + autobuyOffset)
+            result.add(Operation(barOffset.endTime.toEpochSecond(), type, barOffset.closePrice.doubleValue()))
+            i = idx + autobuyOffset + 1
         }
 
         // Filter points too close
