@@ -170,8 +170,8 @@ class Strategy(
             chart.extraIndicator("$", "profit", epoch, tradeSum)
             drawCount += 3
         }
-        for ((featureName, featureValue) in seriesModel.evaluateFeatures(i)) {
-            chart.extraIndicator(featureName, featureName, epoch, featureValue)
+        for ((featureGroup, featureName, featureValue) in seriesModel.evaluateFeatures(i)) {
+            chart.extraIndicator(featureGroup, featureName, epoch, featureValue)
             drawCount++
             if (!training && drawCount >= 5) break
         }
