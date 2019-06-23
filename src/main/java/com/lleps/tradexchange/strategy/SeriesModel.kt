@@ -64,6 +64,9 @@ class SeriesModel private constructor(
             IndicatorType("price", "volume", "300") { series, _, input ->
                 NormalizationIndicator(OnBalanceVolumeIndicator(series), input[0])
             },
+            IndicatorType("pressure", "pressure", "100,2,100") { series, _, input ->
+                BuyPressureIndicator(series, input[0], input[1], input[2])
+            },
             IndicatorType("pvi", "pvi", "1") { series, _, _ ->
                 PriceVariationIndicator(series)
             },

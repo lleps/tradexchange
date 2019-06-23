@@ -6,6 +6,7 @@ import com.lleps.tradexchange.util.get
 import org.ta4j.core.TimeSeries
 import org.ta4j.core.indicators.EMAIndicator
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
+import org.ta4j.core.num.DoubleNum
 
 class Strategy(
     private val output: OutputWriter,
@@ -209,6 +210,7 @@ class Strategy(
                     val closeStrategy = CloseStrategy(closeConfig, series, i, buyPrice)
                     val trade = OpenTrade(buyPrice, amountOfCoins, epoch, buyNumber++, closeStrategy, chart)
                     openTrades = openTrades + trade
+                    bar.addTrade(DoubleNum.valueOf(0), bar.closePrice)
                     operations = operations + Operation(
                         OperationType.BUY,
                         trade.amount,

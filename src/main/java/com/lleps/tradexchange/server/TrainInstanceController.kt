@@ -115,31 +115,13 @@ class TrainInstanceController(
         val candles = mutableListOf<Candle>()
         val chartWriter = ChartWriterImpl()
         val timeSeries = BaseTimeSeries(ticks)
-        val strategy = Strategy(
-            output = out,
-            series = timeSeries,
-            period = period.toLong(),
-            training = true,
-            exchange = PoloniexBacktestExchange(),
-            input = input
-        )
-        strategy.init()
-        val operations = mutableListOf<Operation>()
-        var buyCount = 0
-        var sellCount = 0
-        for (i in warmupTicks..timeSeries.endIndex) {
-            val tick = timeSeries.getBar(i)
-            val epoch = tick.endTime.toEpochSecond()
-            strategy.onDrawChart(chartWriter, epoch, i)
-            candles.add(Candle(
-                epoch,
-                tick.openPrice.doubleValue(),
-                tick.closePrice.doubleValue(),
-                tick.maxPrice.doubleValue(),
-                tick.minPrice.doubleValue()))
-        }
 
-        // Add autobuy points
+        // Add autobuy points.
+        // Added before plotting, because it's necessary to attach
+        // trades to the bars so the BuyPressureIndicator can read it.
+        // Indicators can only read state from series and bars, and for convenience
+        // the pressure is expressed as an indicator.
+        val operations = mutableListOf<Operation>()
         if (autobuyPeriod != 0) {
             operations.addAll(doAutobuyInSeries(
                 series = timeSeries,
@@ -151,7 +133,7 @@ class TrainInstanceController(
                 type = OperationType.SELL,
                 comparator = { a, b -> a > b }
             ))
-            operations.addAll(doAutobuyInSeries(
+            val buys = doAutobuyInSeries(
                 series = timeSeries,
                 seriesPeriod = period,
                 autobuyPeriod = autobuyPeriod,
@@ -160,10 +142,38 @@ class TrainInstanceController(
                 warmupTicks = warmupTicks,
                 type = OperationType.BUY,
                 comparator = { a, b -> a < b }
-            ))
+            )
+            operations.addAll(buys)
+            val epochsWithBuys = mutableSetOf<Long>()
+            for (op in buys) epochsWithBuys.add(op.timestamp)
+            for (bar in timeSeries.barData) {
+                val hasTrades = bar.endTime.toEpochSecond() in epochsWithBuys
+                if (hasTrades) bar.addTrade(timeSeries.numOf(0), bar.minPrice)
+            }
         }
 
-        out.write("Indicators plotted. Click the buy candles and press Export")
+        // Run strategy and plot indicators (aka features)
+        val strategy = Strategy(
+            output = out,
+            series = timeSeries,
+            period = period.toLong(),
+            training = true,
+            exchange = PoloniexBacktestExchange(),
+            input = input
+        )
+        strategy.init()
+        for (i in warmupTicks..timeSeries.endIndex) {
+            val tick = timeSeries.getBar(i)
+            val epoch = tick.endTime.toEpochSecond()
+            strategy.onDrawChart(chartWriter, epoch, i)
+            candles.add(Candle(
+                epoch,
+                tick.openPrice.doubleValue(),
+                tick.closePrice.doubleValue(),
+                tick.maxPrice.doubleValue(),
+                tick.minPrice.doubleValue()))
+        }
+        out.write("Done")
 
         chartData.candles = candles
         chartData.operations = operations
