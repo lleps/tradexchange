@@ -37,7 +37,7 @@ class Strategy(
         val REQUIRED_INPUT = mapOf(
             "strategy.model" to "",
             "strategy.buyOnly" to "0",
-            "strategy.periodMultiplier" to "1",
+            "strategy.periodMultipliers" to "1",
             "strategy.balanceMultiplier" to "0.4",
             "strategy.openTradesCount" to "5",
             "strategy.buyCooldown" to "5",
@@ -54,7 +54,7 @@ class Strategy(
     // Parse open input
     private val modelName = input.getValue("strategy.model")
     private val buyOnly = input.getValue("strategy.buyOnly").toInt() != 0
-    private val periodMultiplier = input.getValue("strategy.periodMultiplier").toFloat()
+    private val periodMultipliers = input.getValue("strategy.periodMultipliers").split(",").map { it.toInt() }
     private val balanceMultiplier = input.getValue("strategy.balanceMultiplier").toFloat()
     private val openTradesCount = input.getValue("strategy.openTradesCount").toInt()
     private val buyCooldown = input.getValue("strategy.buyCooldown").toInt() // 4h. During cooldown won't buy anything
@@ -100,9 +100,9 @@ class Strategy(
 
     // Functions
     fun init() {
-        seriesModel = SeriesModel.createFromInput(series, input, periodMultiplier.toInt())
+        seriesModel = SeriesModel.createFromInput(series, input, periodMultipliers)
         if (!training) {
-            seriesModel.loadModel(modelName)
+            seriesModel.loadPredictionsModel(modelName)
             closeConfig = CloseStrategy.Config(
                 topBarrierMultiplier = sellBarrier1.toDouble(),
                 bottomBarrierMultiplier = topLoss.toDouble(),
@@ -161,7 +161,6 @@ class Strategy(
     }
 
     fun onDrawChart(chart: ChartWriter, epoch: Long, i: Int) {
-        var drawCount = 0
         if (!training) {
             chart.priceIndicator("emaShort", epoch, emaShort[i])
             chart.priceIndicator("emaLong", epoch, emaLong[i])
@@ -169,13 +168,8 @@ class Strategy(
             chart.extraIndicator("ml", "sell", epoch, sellPrediction)
             chart.extraIndicator("ml", "buyvalue", epoch, mlBuyTrigger.split(":")[1].toDouble())
             chart.extraIndicator("$", "profit", epoch, tradeSum)
-            drawCount += 3
         }
-        for ((featureGroup, featureName, featureValue) in seriesModel.evaluateFeatures(i)) {
-            chart.extraIndicator(featureGroup, featureName, epoch, featureValue)
-            drawCount++
-            if (!training && drawCount >= 5) break
-        }
+        seriesModel.drawFeatures(i, epoch, chart, limit = if (training) 0 else 3)
     }
 
     fun onTick(i: Int): List<Operation> {

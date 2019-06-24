@@ -28,105 +28,141 @@ class SeriesModel private constructor(
         val group: String, // to group them in charts
         val name: String,
         val defaultValue: String,
+        val periodMultiplied: Boolean, // for indicators that may have multiple "instances" with different multipliers
         val factory: (TimeSeries, Indicator<Num>, List<Int>) -> Indicator<Num>
     )
 
     companion object {
         private val FEATURE_TYPES = listOf(
-            IndicatorType("price", "close", "300") { series, _, input ->
+            // open-high-low-close
+            IndicatorType("price", "close", "300", false) { series, _, input ->
                 NormalizationIndicator(
                     indicator = ClosePriceIndicator(series),
                     timeFrame = input[0],
                     maxBound = MaxPriceIndicator(series),
                     minBound = MinPriceIndicator(series))
             },
-            IndicatorType("price", "open", "300") { series, _, input ->
+            IndicatorType("price", "open", "300", false) { series, _, input ->
                 NormalizationIndicator(
                     indicator = OpenPriceIndicator(series),
                     timeFrame = input[0],
                     maxBound = MaxPriceIndicator(series),
                     minBound = MinPriceIndicator(series))
             },
-            IndicatorType("price", "high", "300") { series, _, input ->
+            IndicatorType("price", "high", "300", false) { series, _, input ->
                 NormalizationIndicator(
                     indicator = MaxPriceIndicator(series),
                     timeFrame = input[0],
                     maxBound = MaxPriceIndicator(series),
                     minBound = MinPriceIndicator(series))
             },
-            IndicatorType("price", "low", "300") { series, _, input ->
+            IndicatorType("price", "low", "300", false) { series, _, input ->
                 NormalizationIndicator(
                     indicator = MinPriceIndicator(series),
                     timeFrame = input[0],
                     maxBound = MaxPriceIndicator(series),
                     minBound = MinPriceIndicator(series))
             },
-            IndicatorType("price", "volume", "300") { series, _, input ->
+            // raw volume (but keeping in mind the sign)
+            IndicatorType("price", "volume", "300", false) { series, _, input ->
                 NormalizationIndicator(OnBalanceVolumeIndicator(series), input[0])
             },
-            IndicatorType("pressure", "pressure", "100,2,100") { series, _, input ->
+            // pressure (ie time since last trade)
+            IndicatorType("pressure", "pressure", "100,2,100", false) { series, _, input ->
                 BuyPressureIndicator(series, input[0], input[1], input[2])
             },
-            IndicatorType("pvi", "pvi", "1") { series, _, _ ->
+            // this one is the ratio of change, not needed anymore since we have candles now
+            IndicatorType("pvi", "pvi", "1", false) { series, _, _ ->
                 PriceVariationIndicator(series)
             },
-            IndicatorType("bb%", "bb%", "20,2,300") { _, indicator, input ->
+            // technical indicators. those can be period-multiplied
+            IndicatorType("bb%", "bb%", "20,2,300", true) { _, indicator, input ->
                 NormalizationIndicator(PercentBIndicatorFixed(indicator, input[0], input[1].toDouble()), input[2])
             },
-            IndicatorType("williamsR%", "williamsR%", "14") { s, _, input ->
+            IndicatorType("williamsR%", "williamsR%", "14", true) { s, _, input ->
                 MappingIndicator(WilliamsRIndicatorFixed(s, input[0])) { (it + 100.0) / 100.0 }
             },
-            IndicatorType("cci", "cci", "20,300") { s, _, input ->
+            IndicatorType("cci", "cci", "20,300", true) { s, _, input ->
                 NormalizationIndicator(CCIIndicator(s, input[0]), input[1])
             },
-            IndicatorType("roc", "roc", "9,300") { _, indicator, input ->
+            IndicatorType("roc", "roc", "9,300", true) { _, indicator, input ->
                 NormalizationIndicator(ROCIndicator(indicator, input[0]), input[1])
             },
-            IndicatorType("rsi", "rsi", "14") { _, indicator, input ->
+            IndicatorType("rsi", "rsi", "14", true) { _, indicator, input ->
                 MappingIndicator(RSIIndicator(indicator, input[0])) { it / 100.0 }
             },
-            IndicatorType("macd", "macd", "12,26,300") { _, indicator, input ->
+            IndicatorType("macd", "macd", "12,26,300", true) { _, indicator, input ->
                 NormalizationIndicator(MACDIndicator(indicator, input[0], input[1]), input[2])
             },
-            IndicatorType("obvo", "obvo", "24,300") { series, _, input ->
+            IndicatorType("obvo", "obvo", "24,300", true) { series, _, input ->
                 NormalizationIndicator(OBVOscillatorIndicator(series, input[0]), input[1])
             }
         )
 
         fun getRequiredInput() = FEATURE_TYPES.map { type -> "indicator.${type.name}" to type.defaultValue }
 
-        fun createFromInput(series: TimeSeries, input: Map<String, String>, periodMultiplier: Int): SeriesModel {
+        fun createFromInput(series: TimeSeries, input: Map<String, String>, periodMultipliers: List<Int>): SeriesModel {
             val usedIndicators = mutableListOf<Triple<String, String, Indicator<Num>>>()
             val closeIndicator = ClosePriceIndicator(series)
+            val firstMultiplier = periodMultipliers[0] // this is applied to all
             for (type in FEATURE_TYPES) {
                 val key = "indicator.${type.name}"
-                val paramsArray = input.getValue(key).split(",").map { (it.toInt() * periodMultiplier) }
-                if (paramsArray[0] == 0) continue // indicator ignored
-                val indicator = type.factory(series, closeIndicator, paramsArray)
-                usedIndicators.add(Triple(type.group, type.name, indicator))
+                if (type.periodMultiplied) {
+                    // add an instance for every multiplier. Series named group(multiplier), ie rsi(*1) and rsi(*4)
+                    // but the group remains the same so it can be drawn on the same chart.
+                    for (m in periodMultipliers) {
+                        val paramsArray = input.getValue(key).split(",").map { (it.toInt() * m) }
+                        if (paramsArray[0] == 0) continue // indicator ignored
+                        val indicator = type.factory(series, closeIndicator, paramsArray)
+                        usedIndicators.add(Triple(type.group, "${type.name}(*$m)", indicator))
+                    }
+                } else {
+                    // add just one instance with the first multiplier. Group named as the default group.
+                    val paramsArray = input.getValue(key).split(",").map { (it.toInt() * firstMultiplier) }
+                    if (paramsArray[0] == 0) continue // indicator ignored
+                    val indicator = type.factory(series, closeIndicator, paramsArray)
+                    usedIndicators.add(Triple(type.group, type.name, indicator))
+                }
             }
             return SeriesModel(series, closeIndicator, usedIndicators)
         }
     }
 
-    private var buyModel: MultiLayerNetwork? = null
-    private var sellModel: MultiLayerNetwork? = null
-
-    /** Load model */
-    fun loadModel(model: String) {
-        val buyPath = "data/models/[train]$model-open.h5"
-        val sellPath = "data/models/[train]$model-close.h5"
-        buyModel = KerasModelImport.importKerasSequentialModelAndWeights(buyPath)
-        sellModel = KerasModelImport.importKerasSequentialModelAndWeights(sellPath)
-    }
-
-    /** Evaluate model features on the series at [i]. Return a list of pairs of (feature name, feature value). */
+    /** Evaluate used model features on the series at [i]. Return a list of pairs of (feature name, feature value). */
     fun evaluateFeatures(i: Int): List<Triple<String, String, Double>> {
         val result = mutableListOf<Triple<String, String, Double>>()
         for ((group, name, indicator) in usedIndicators) {
             result += Triple(group, name, indicator[i])
         }
         return result
+    }
+
+    /**
+     * Draw used features of the model at tick [i] on the given [chartWriter].
+     * Set [limit] if you want to limit the amount of groups drawn.
+     */
+    fun drawFeatures(i: Int, epoch: Long, chartWriter: Strategy.ChartWriter, limit: Int = 0) {
+        var count = 0
+        var lastGroup = ""
+        for ((group, name, indicator) in usedIndicators) {
+            chartWriter.extraIndicator(group, name, epoch, indicator[i])
+            if (group != lastGroup && limit > 0 && ++count >= limit) break
+            lastGroup = group
+        }
+    }
+
+
+    // Prediction-related. Wraps ml code here, not just the feature group.
+
+    private var buyModel: MultiLayerNetwork? = null
+    private var sellModel: MultiLayerNetwork? = null
+
+    /** Set the model used in [calculateBuySellPredictions]. */
+    fun loadPredictionsModel(model: String) {
+        val buyPath = "data/models/[train]$model-open.h5"
+        val sellPath = "data/models/[train]$model-close.h5"
+        buyModel = KerasModelImport.importKerasSequentialModelAndWeights(buyPath)
+        sellModel = KerasModelImport.importKerasSequentialModelAndWeights(sellPath)
     }
 
     /** Calculate predictions for the tick [i]. */
