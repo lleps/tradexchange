@@ -88,7 +88,6 @@ class LiveInstanceController(
         val strategy = Strategy(
             output = out,
             series = series,
-            training = false,
             exchange = exchange,
             period = period.toLong(),
             input = input)

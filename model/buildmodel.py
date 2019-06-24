@@ -73,4 +73,4 @@ model.save(output_model)
 
 scores = model.evaluate(X, y)
 print("\n%s: %.2f%%" % (model.metrics_names[0], scores[0]*100))
-print("\n%s: %.2f%%" % (model.metrics_names[1], scores[1]*100))
+print("%s: %.2f%%" % (model.metrics_names[1], scores[1]*100))

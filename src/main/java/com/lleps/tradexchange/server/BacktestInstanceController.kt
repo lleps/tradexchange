@@ -75,7 +75,6 @@ class BacktestInstanceController(
             output = out,
             series = timeSeries,
             period = period.toLong(),
-            training = false,
             exchange = exchange,
             input = input
         )

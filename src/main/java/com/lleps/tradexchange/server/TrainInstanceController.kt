@@ -21,6 +21,8 @@ class TrainInstanceController(
     val out: Strategy.OutputWriter
 ) : InstanceController {
 
+    private var predictionModel: PredictionModel? = null
+
     override fun getRequiredInput(): Map<String, String> {
         return mapOf(
             "pair" to "USDT_ETH",
@@ -58,7 +60,10 @@ class TrainInstanceController(
         batchSize: Int,
         timesteps: Int,
         csvPath: String,
-        modelPath: String) {
+        modelPath: String
+    ) {
+        // Features are the extra chart series flat-mapped
+
         out.write("$type: Exporting to $csvPath...")
         val sb = StringBuilder()
         val opsByTimestamp = hashMapOf<Long, Operation>()
@@ -115,6 +120,7 @@ class TrainInstanceController(
         val sellsCsv = "data/trainings/$instance-close.csv"
         val buysModel = "data/models/$instance-open.h5"
         val sellsModel = "data/models/$instance-close.h5"
+        predictionModel!!.saveMetadata(instance)
         exportAndBuildModelType(OperationType.BUY, epochs, batchSize, timesteps, buysCsv, buysModel)
         exportAndBuildModelType(OperationType.SELL, epochs, batchSize, timesteps, sellsCsv, sellsModel)
     }
@@ -172,20 +178,13 @@ class TrainInstanceController(
             }
         }
 
-        // Run strategy and plot indicators (aka features)
-        val strategy = Strategy(
-            output = out,
-            series = timeSeries,
-            period = period.toLong(),
-            training = true,
-            exchange = PoloniexBacktestExchange(),
-            input = input
-        )
-        strategy.init()
+        // Draw features
+        predictionModel = PredictionModel.createModel(timeSeries, input)
+        val predictionModel = this.predictionModel!!
         for (i in warmupTicks..timeSeries.endIndex) {
             val tick = timeSeries.getBar(i)
             val epoch = tick.endTime.toEpochSecond()
-            strategy.onDrawChart(chartWriter, epoch, i)
+            predictionModel.drawFeatures(i, epoch, chartWriter)
             candles.add(Candle(
                 epoch,
                 tick.openPrice.doubleValue(),
@@ -221,7 +220,7 @@ class TrainInstanceController(
         // Get smallest point in i..(i+period) = r. At the next iteration, start from r
         var i = warmupTicks
         while (i + autobuyPeriod < series.endIndex) {
-            val (idx, bar) = getMinCandle(series, i, i + autobuyPeriod, comparator)
+            val (idx, _) = getMinCandle(series, i, i + autobuyPeriod, comparator)
             val barOffset = series.getBar(idx + autobuyOffset)
             result.add(Operation(barOffset.endTime.toEpochSecond(), type, barOffset.closePrice.doubleValue()))
             i = idx + autobuyOffset + 1
@@ -248,7 +247,12 @@ class TrainInstanceController(
         return result
     }
 
-    private fun getMinCandle(series: TimeSeries, fromInclusive: Int, toInclusive: Int, comparator: (Double, Double) -> Boolean): Pair<Int, Bar> {
+    private fun getMinCandle(
+        series: TimeSeries,
+        fromInclusive: Int,
+        toInclusive: Int,
+        comparator: (Double, Double) -> Boolean
+    ): Pair<Int, Bar> {
         var minIdx = fromInclusive
         var minVal = series.getBar(fromInclusive).closePrice.doubleValue()
         for (i in fromInclusive .. toInclusive) {

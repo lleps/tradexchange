@@ -12,9 +12,8 @@ class Strategy(
     private val output: OutputWriter,
     private val series: TimeSeries,
     private val period: Long,
-    private val training: Boolean,
     private val exchange: Exchange,
-    private val input: Map<String, String>) {
+    input: Map<String, String>) {
 
     interface OutputWriter {
         fun write(string: String)
@@ -47,19 +46,17 @@ class Strategy(
             "strategy.close.topLoss" to "10",
             "strategy.close.sellBarrier1" to "10",
             "strategy.close.BBPeriod" to "20"
-        ) + PredictionModel.getRequiredInput()
+        )
     }
 
-    // Parse open input
+    // Parse input
     private val modelName = input.getValue("strategy.model")
     private val buyOnly = input.getValue("strategy.buyOnly").toInt() != 0
-    private val periodMultipliers = input.getValue("strategy.periodMultipliers").split(",").map { it.toInt() }
     private val balanceMultiplier = input.getValue("strategy.balanceMultiplier").toFloat()
     private val openTradesCount = input.getValue("strategy.openTradesCount").toInt()
     private val buyCooldown = input.getValue("strategy.buyCooldown").toInt() // 4h. During cooldown won't buy anything
     private val mlBuyTrigger = input.getValue("strategy.mlBuyTrigger")
     private val emaPeriods = input.getValue("strategy.emaPeriods").split(",").map { it.toInt() }
-    // Parse close input
     private val tradeExpiry = input.getValue("strategy.close.tradeExpiry").toInt() // give up if can't meet the margin
     private val topLoss = input.getValue("strategy.close.topLoss").toFloat()
     private val sellBarrier1 = input.getValue("strategy.close.sellBarrier1").toFloat()
@@ -73,7 +70,8 @@ class Strategy(
         val code: Int,
         val closeStrategy: CloseStrategy,
         val chartWriter: ChartWriterImpl
-    )    var tradeCount = 0
+    )
+    var tradeCount = 0
         private set
     var sellOnly = false
     private var buyNumber = 1
@@ -99,19 +97,17 @@ class Strategy(
 
     // Functions
     fun init() {
-        predictionModel = PredictionModel.createFromFile(series, modelName)
-        if (!training) {
-            predictionModel.loadPredictionsModel(modelName)
-            closeConfig = CloseStrategy.Config(
-                topBarrierMultiplier = sellBarrier1.toDouble(),
-                bottomBarrierMultiplier = topLoss.toDouble(),
-                bbPeriod = closeBBPeriod,
-                shortEmaPeriod = 3,
-                expiry = tradeExpiry
-            )
-            CloseStrategy.inited = false // cache trick. to rebuild the indicators on the new timeseries.
-            if (buyOnly) output.write("Using buy only mode!")
-        }
+        predictionModel = PredictionModel.createFromFile(series, "[train]$modelName")
+        predictionModel.loadPredictionsModel(modelName)
+        closeConfig = CloseStrategy.Config(
+            topBarrierMultiplier = sellBarrier1.toDouble(),
+            bottomBarrierMultiplier = topLoss.toDouble(),
+            bbPeriod = closeBBPeriod,
+            shortEmaPeriod = 3,
+            expiry = tradeExpiry
+        )
+        CloseStrategy.inited = false // cache trick. to rebuild the indicators on the new timeseries.
+        if (buyOnly) output.write("Using buy only mode!")
     }
 
     private fun calculatePredictions(i: Int) {
@@ -160,15 +156,13 @@ class Strategy(
     }
 
     fun onDrawChart(chart: ChartWriter, epoch: Long, i: Int) {
-        if (!training) {
-            chart.priceIndicator("emaShort", epoch, emaShort[i])
-            chart.priceIndicator("emaLong", epoch, emaLong[i])
-            chart.extraIndicator("ml", "buy", epoch, buyPrediction)
-            chart.extraIndicator("ml", "sell", epoch, sellPrediction)
-            chart.extraIndicator("ml", "buyvalue", epoch, mlBuyTrigger.split(":")[1].toDouble())
-            chart.extraIndicator("$", "profit", epoch, tradeSum)
-        }
-        predictionModel.drawFeatures(i, epoch, chart, limit = if (training) 0 else 3)
+        chart.priceIndicator("emaShort", epoch, emaShort[i])
+        chart.priceIndicator("emaLong", epoch, emaLong[i])
+        chart.extraIndicator("ml", "buy", epoch, buyPrediction)
+        chart.extraIndicator("ml", "sell", epoch, sellPrediction)
+        chart.extraIndicator("ml", "buyvalue", epoch, mlBuyTrigger.split(":")[1].toDouble())
+        chart.extraIndicator("$", "profit", epoch, tradeSum)
+        predictionModel.drawFeatures(i, epoch, chart, limit = 3)
     }
 
     fun onTick(i: Int): List<Operation> {
