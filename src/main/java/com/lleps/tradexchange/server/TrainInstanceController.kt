@@ -27,6 +27,9 @@ class TrainInstanceController(
             "autobuyPeriod" to "100",
             "autobuyBatch" to "10",
             "autobuyOffset" to "1",
+            "trainEpochs" to "15",
+            "trainBatchSize" to "32",
+            "trainTimesteps" to "7",
             "warmupTicks" to "300") +
             fetchTicksRequiredInput() +
             Strategy.REQUIRED_INPUT
@@ -48,7 +51,13 @@ class TrainInstanceController(
         else exportAndBuildModel(input)
     }
 
-    private fun exportAndBuildModelType(type: OperationType, csvPath: String, modelPath: String) {
+    private fun exportAndBuildModelType(
+        type: OperationType,
+        epochs: Int,
+        batchSize: Int,
+        timesteps: Int,
+        csvPath: String,
+        modelPath: String) {
         out.write("$type: Exporting to $csvPath...")
         val sb = StringBuilder()
         val opsByTimestamp = hashMapOf<Long, Operation>()
@@ -81,7 +90,14 @@ class TrainInstanceController(
             sb.append(",$action\n")
         }
         Files.write(Paths.get(csvPath), sb.toString().toByteArray(Charset.defaultCharset()))
-        val cmd = listOf("model/venv/bin/python", "model/buildmodel.py", csvPath, modelPath)
+        val cmd = listOf(
+            "model/venv/bin/python",
+            "model/buildmodel.py",
+            epochs.toString(),
+            batchSize.toString(),
+            timesteps.toString(),
+            csvPath,
+            modelPath)
         out.write("$type: Invoke '$cmd'...")
         val exit = runCommand(cmd, onStdOut = { outStr -> out.write(outStr)})
         out.write("$type: Exit code: $exit.")
@@ -89,14 +105,17 @@ class TrainInstanceController(
     }
 
     private fun exportAndBuildModel(input: Map<String, String>) {
+        val epochs = input.getValue("trainEpochs").toInt()
+        val batchSize = input.getValue("trainBatchSize").toInt()
+        val timesteps = input.getValue("trainTimesteps").toInt()
         File("data/trainings").mkdir()
         File("data/models").mkdir()
         val buysCsv = "data/trainings/$instance-open.csv"
         val sellsCsv = "data/trainings/$instance-close.csv"
         val buysModel = "data/models/$instance-open.h5"
         val sellsModel = "data/models/$instance-close.h5"
-        exportAndBuildModelType(OperationType.BUY, buysCsv, buysModel)
-        exportAndBuildModelType(OperationType.SELL, sellsCsv, sellsModel)
+        exportAndBuildModelType(OperationType.BUY, epochs, batchSize, timesteps, buysCsv, buysModel)
+        exportAndBuildModelType(OperationType.SELL, epochs, batchSize, timesteps, sellsCsv, sellsModel)
     }
 
     private fun resetTrain(input: Map<String, String>) {

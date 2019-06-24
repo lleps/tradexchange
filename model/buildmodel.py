@@ -35,18 +35,21 @@ def join_rows_by_time(data, past_rows=1, future_rows=1, dropnan=True):
     return agg
 
 
-if len(sys.argv) < 3:
-    print("Required input: <csv file> <output model>")
+if len(sys.argv) < 6:
+    print("Required input: <epochs> <batch size> <timesteps> <csv file> <output model>")
     exit(1)
 
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
-input_csv = sys.argv[1]
-output_model = sys.argv[2]
+epochs = int(sys.argv[1])
+batch_size = int(sys.argv[2])
+timesteps = int(sys.argv[3])
+input_csv = sys.argv[4]
+output_model = sys.argv[5]
 
 dataset = numpy.loadtxt(input_csv, delimiter=",")
 feature_count = dataset[0].size - 1
-num_timesteps = 7
+num_timesteps = timesteps
 
 X = dataset[:, 1:-1] # ignore price
 y = dataset[:, -1:]
@@ -65,8 +68,9 @@ model.add(tf.keras.layers.Dense(128, activation='relu'))
 model.add(tf.keras.layers.Dense(1, activation='sigmoid'))
 
 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-model.fit(X, y, epochs=15, batch_size=32, verbose=2)
+model.fit(X, y, epochs=epochs, batch_size=batch_size, verbose=2)
 model.save(output_model)
 
 scores = model.evaluate(X, y)
+print("\n%s: %.2f%%" % (model.metrics_names[0], scores[0]*100))
 print("\n%s: %.2f%%" % (model.metrics_names[1], scores[1]*100))
