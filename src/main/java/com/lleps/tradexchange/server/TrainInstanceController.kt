@@ -2,6 +2,7 @@ package com.lleps.tradexchange.server
 
 import com.lleps.tradexchange.*
 import com.lleps.tradexchange.strategy.ChartWriterImpl
+import com.lleps.tradexchange.strategy.PredictionModel
 import com.lleps.tradexchange.strategy.Strategy
 import org.ta4j.core.Bar
 import org.ta4j.core.BaseTimeSeries
@@ -32,7 +33,7 @@ class TrainInstanceController(
             "trainTimesteps" to "7",
             "warmupTicks" to "300") +
             fetchTicksRequiredInput() +
-            Strategy.REQUIRED_INPUT
+            PredictionModel.getRequiredInput()
     }
 
     override fun onLoaded() {

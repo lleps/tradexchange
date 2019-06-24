@@ -37,7 +37,6 @@ class Strategy(
         val REQUIRED_INPUT = mapOf(
             "strategy.model" to "",
             "strategy.buyOnly" to "0",
-            "strategy.periodMultipliers" to "1",
             "strategy.balanceMultiplier" to "0.4",
             "strategy.openTradesCount" to "5",
             "strategy.buyCooldown" to "5",
@@ -48,7 +47,7 @@ class Strategy(
             "strategy.close.topLoss" to "10",
             "strategy.close.sellBarrier1" to "10",
             "strategy.close.BBPeriod" to "20"
-        ) + SeriesModel.getRequiredInput()
+        ) + PredictionModel.getRequiredInput()
     }
 
     // Parse open input
@@ -95,14 +94,14 @@ class Strategy(
     private val emaShort = EMAIndicator(ClosePriceIndicator(series), emaPeriods[0])
     private val emaLong = EMAIndicator(ClosePriceIndicator(series), emaPeriods[1])
     private val close = ClosePriceIndicator(series)
-    private lateinit var seriesModel: SeriesModel
+    private lateinit var predictionModel: PredictionModel
     private lateinit var closeConfig: CloseStrategy.Config
 
     // Functions
     fun init() {
-        seriesModel = SeriesModel.createFromInput(series, input, periodMultipliers)
+        predictionModel = PredictionModel.createFromFile(series, modelName)
         if (!training) {
-            seriesModel.loadPredictionsModel(modelName)
+            predictionModel.loadPredictionsModel(modelName)
             closeConfig = CloseStrategy.Config(
                 topBarrierMultiplier = sellBarrier1.toDouble(),
                 bottomBarrierMultiplier = topLoss.toDouble(),
@@ -116,7 +115,7 @@ class Strategy(
     }
 
     private fun calculatePredictions(i: Int) {
-        val (newBuyPrediction, newSellPrediction) = seriesModel.calculateBuySellPredictions(i)
+        val (newBuyPrediction, newSellPrediction) = predictionModel.calculateBuySellPredictions(i)
         buyPredictionLastLast = buyPredictionLast
         buyPredictionLast = buyPrediction
         sellPredictionLastLast = sellPredictionLast
@@ -169,7 +168,7 @@ class Strategy(
             chart.extraIndicator("ml", "buyvalue", epoch, mlBuyTrigger.split(":")[1].toDouble())
             chart.extraIndicator("$", "profit", epoch, tradeSum)
         }
-        seriesModel.drawFeatures(i, epoch, chart, limit = if (training) 0 else 3)
+        predictionModel.drawFeatures(i, epoch, chart, limit = if (training) 0 else 3)
     }
 
     fun onTick(i: Int): List<Operation> {

@@ -2,6 +2,8 @@ package com.lleps.tradexchange.strategy
 
 import com.lleps.tradexchange.indicator.*
 import com.lleps.tradexchange.util.get
+import com.lleps.tradexchange.util.loadFrom
+import com.lleps.tradexchange.util.saveTo
 import org.deeplearning4j.nn.modelimport.keras.KerasModelImport
 import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
 import org.nd4j.linalg.factory.Nd4j
@@ -19,7 +21,8 @@ import org.ta4j.core.num.Num
  * The point of this is to group model-related behavior, like feature gathering (evaluating a bunch of indicators),
  * This is stateful, may have a model loaded for predictions but can be used without it.
  */
-class SeriesModel private constructor(
+class PredictionModel private constructor(
+    private val input: Map<String, String>,
     private val series: TimeSeries,
     private val closeIndicator: ClosePriceIndicator,
     private val usedIndicators: List<Triple<String, String, Indicator<Num>>>
@@ -30,6 +33,10 @@ class SeriesModel private constructor(
         val defaultValue: String,
         val periodMultiplied: Boolean, // for indicators that may have multiple "instances" with different multipliers
         val factory: (TimeSeries, Indicator<Num>, List<Int>) -> Indicator<Num>
+    )
+
+    private data class ModelMetadata(
+        val input: Map<String, String> = emptyMap()
     )
 
     companion object {
@@ -99,14 +106,27 @@ class SeriesModel private constructor(
             }
         )
 
-        fun getRequiredInput() = FEATURE_TYPES.map { type -> "indicator.${type.name}" to type.defaultValue }
+        fun getRequiredInput() = 
+                mapOf("model.periodMultipliers" to "1") +
+                FEATURE_TYPES.map { type -> "model.${type.name}" to type.defaultValue }
 
-        fun createFromInput(series: TimeSeries, input: Map<String, String>, periodMultipliers: List<Int>): SeriesModel {
+        /** Creates a model from the given [series] amd input from [metadataPath]. */
+        fun createFromFile(series: TimeSeries, metadataPath: String): PredictionModel {
+            val meta = loadFrom<ModelMetadata>(metadataPath) ?: error("can't find file $metadataPath")
+            return createModel(series, meta.input)
+        }
+
+        /** Creates a model from the given [series] and [input]. */
+        fun createModel(
+            series: TimeSeries,
+            input: Map<String, String>
+        ): PredictionModel {
+            val periodMultipliers = input.getValue("model.periodMultipliers").split(",").map { it.toInt() }
             val usedIndicators = mutableListOf<Triple<String, String, Indicator<Num>>>()
             val closeIndicator = ClosePriceIndicator(series)
             val firstMultiplier = periodMultipliers[0] // this is applied to all
             for (type in FEATURE_TYPES) {
-                val key = "indicator.${type.name}"
+                val key = "model.${type.name}"
                 if (type.periodMultiplied) {
                     // add an instance for every multiplier. Series named group(multiplier), ie rsi(*1) and rsi(*4)
                     // but the group remains the same so it can be drawn on the same chart.
@@ -124,8 +144,18 @@ class SeriesModel private constructor(
                     usedIndicators.add(Triple(type.group, type.name, indicator))
                 }
             }
-            return SeriesModel(series, closeIndicator, usedIndicators)
+            return PredictionModel(
+                input.toMap(),
+                series,
+                closeIndicator,
+                usedIndicators)
         }
+    }
+
+    /** Saves the input used in this model (ie the configuration) on [path] */
+    fun saveMetadata(path: String) {
+        val metadata = ModelMetadata(input.filter { it.key.startsWith("model.") })
+        metadata.saveTo(path)
     }
 
     /** Evaluate used model features on the series at [i]. Return a list of pairs of (feature name, feature value). */
