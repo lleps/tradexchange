@@ -4,6 +4,7 @@ import com.lleps.tradexchange.*
 import com.lleps.tradexchange.strategy.ChartWriterImpl
 import com.lleps.tradexchange.strategy.PredictionModel
 import com.lleps.tradexchange.strategy.Strategy
+import com.lleps.tradexchange.util.markAs
 import org.ta4j.core.Bar
 import org.ta4j.core.BaseTimeSeries
 import org.ta4j.core.TimeSeries
@@ -28,7 +29,9 @@ class TrainInstanceController(
             "pair" to "USDT_ETH",
             "period" to "300",
             "autobuyPeriod" to "100",
+            "autosellPeriod" to "100",
             "autobuyBatch" to "10",
+            "autobuySeBatch" to "10",
             "autobuyOffset" to "1",
             "trainEpochs" to "15",
             "trainBatchSize" to "32",
@@ -132,6 +135,7 @@ class TrainInstanceController(
         val period = input.getValue("period").toInt()
         val warmupTicks = input.getValue("warmupTicks").toInt()
         val autobuyPeriod = input.getValue("autobuyPeriod").toInt()
+        val autosellPeriod = input.getValue("autosellPeriod").toInt()
         val autobuyBatch = input.getValue("autobuyBatch").toInt()
         val autobuyOffset = input.getValue("autobuyOffset").toInt()
         val ticks = fetchTicks(pair, period.toLong(), input, out)
@@ -149,7 +153,58 @@ class TrainInstanceController(
         // the pressure is expressed as an indicator.
         val operations = mutableListOf<Operation>()
         if (autobuyPeriod != 0) {
-            operations.addAll(doAutobuyInSeries(
+            var i = warmupTicks
+            var code = 1
+            var buyPrice = 0.0
+            val sellComparator: (Double, Double) -> Boolean = { a, b -> a > b }
+            val buyComparator: (Double, Double) -> Boolean = { a, b -> a < b }
+            var profitSum = 0.0
+            while (i < timeSeries.endIndex - autobuyPeriod - 1) {
+                if (buyPrice == 0.0) {
+                    val idx = getBestBar(timeSeries, i, i + autobuyPeriod, buyComparator).first + autobuyOffset
+                    val bar = timeSeries.getBar(idx)
+                    val desc = "#$code at ${bar.closePrice}"
+                    operations.add(Operation(
+                        timestamp = bar.endTime.toEpochSecond(),
+                        type = OperationType.BUY,
+                        price = bar.closePrice.doubleValue(),
+                        description = desc,
+                        code = code))
+                    buyPrice = bar.closePrice.doubleValue()
+                    i = idx + 1
+                } else {
+                    val idx = getBestBar(timeSeries, i, i + autosellPeriod, sellComparator).first + autobuyOffset
+                    val bar = timeSeries.getBar(idx)
+                    val profit = (bar.closePrice.doubleValue() - buyPrice) / buyPrice * 100.0
+                    val desc = "#$code at ${bar.closePrice} (%.2f%s)".format(profit, "%")
+                    operations.add(Operation(
+                        timestamp = bar.endTime.toEpochSecond(),
+                        type = OperationType.SELL,
+                        price = bar.closePrice.doubleValue(),
+                        description = desc,
+                        code = code))
+                    buyPrice = 0.0
+                    profitSum += profit
+                    code++
+                    i = idx + 1
+                }
+            }
+            // remove the last unmatched buy
+            if (operations.isNotEmpty() && operations.last().type == OperationType.BUY) {
+                operations.removeAt(operations.size - 1)
+            }
+            val tradeCount = code - 1
+            val trainDays = (
+                timeSeries.lastBar.endTime.toEpochSecond() -
+                    timeSeries.getBar(warmupTicks).endTime.toEpochSecond()) / 3600 / 24
+            val tradesPerDay = tradeCount / trainDays.toDouble()
+            out.write("$trainDays days")
+            out.write("%d trades, avg %.1f%s (sum %.1f%s)"
+                .format(tradeCount, profitSum / tradeCount.toDouble(), "%", profitSum, "%"))
+            out.write("trades/day %.1f, profit/day %.1f%s"
+                .format(tradesPerDay, profitSum / trainDays.toDouble(), "%"))
+
+            /*operations.addAll(doAutobuyInSeries(
                 series = timeSeries,
                 seriesPeriod = period,
                 autobuyPeriod = autobuyPeriod,
@@ -168,13 +223,14 @@ class TrainInstanceController(
                 warmupTicks = warmupTicks,
                 type = OperationType.BUY,
                 comparator = { a, b -> a < b }
-            )
-            operations.addAll(buys)
-            val epochsWithBuys = mutableSetOf<Long>()
-            for (op in buys) epochsWithBuys.add(op.timestamp)
+            )*/
+
+            // Mark series bars with trades metadata so pressure indicators can read them
+            val epochsWithOps = mutableMapOf<Long, Int>() // timestamp->type (1 buy, 2 sell)
+            for (op in operations) epochsWithOps[op.timestamp] = if (op.type == OperationType.SELL) 1 else 2
             for (bar in timeSeries.barData) {
-                val hasTrades = bar.endTime.toEpochSecond() in epochsWithBuys
-                if (hasTrades) bar.addTrade(timeSeries.numOf(0), bar.minPrice)
+                val type = epochsWithOps[bar.endTime.toEpochSecond()]
+                if (type != null) bar.markAs(type)
             }
         }
 
@@ -220,7 +276,7 @@ class TrainInstanceController(
         // Get smallest point in i..(i+period) = r. At the next iteration, start from r
         var i = warmupTicks
         while (i + autobuyPeriod < series.endIndex) {
-            val (idx, _) = getMinCandle(series, i, i + autobuyPeriod, comparator)
+            val (idx, _) = getBestBar(series, i, i + autobuyPeriod, comparator)
             val barOffset = series.getBar(idx + autobuyOffset)
             result.add(Operation(barOffset.endTime.toEpochSecond(), type, barOffset.closePrice.doubleValue()))
             i = idx + autobuyOffset + 1
@@ -247,22 +303,22 @@ class TrainInstanceController(
         return result
     }
 
-    private fun getMinCandle(
+    private fun getBestBar(
         series: TimeSeries,
         fromInclusive: Int,
         toInclusive: Int,
         comparator: (Double, Double) -> Boolean
     ): Pair<Int, Bar> {
-        var minIdx = fromInclusive
-        var minVal = series.getBar(fromInclusive).closePrice.doubleValue()
+        var bestIdx = fromInclusive
+        var bestVal = series.getBar(fromInclusive).closePrice.doubleValue()
         for (i in fromInclusive .. toInclusive) {
             val c = series.getBar(i).closePrice.doubleValue()
-            if (comparator(c, minVal)) {
-                minVal = c
-                minIdx = i
+            if (comparator(c, bestVal)) {
+                bestVal = c
+                bestIdx = i
             }
         }
-        return Pair(minIdx, series.getBar(minIdx))
+        return Pair(bestIdx, series.getBar(bestIdx))
     }
 
     override fun onToggleCandle(candleEpoch: Long, toggle: Int) {

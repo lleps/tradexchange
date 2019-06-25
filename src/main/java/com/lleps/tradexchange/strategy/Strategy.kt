@@ -3,6 +3,7 @@ package com.lleps.tradexchange.strategy
 import com.lleps.tradexchange.Candle
 import com.lleps.tradexchange.server.Exchange
 import com.lleps.tradexchange.util.get
+import com.lleps.tradexchange.util.markAs
 import org.ta4j.core.TimeSeries
 import org.ta4j.core.indicators.EMAIndicator
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
@@ -197,7 +198,8 @@ class Strategy(
                     val closeStrategy = CloseStrategy(closeConfig, series, i, buyPrice)
                     val trade = OpenTrade(buyPrice, amountOfCoins, epoch, buyNumber++, closeStrategy, chart)
                     openTrades = openTrades + trade
-                    bar.addTrade(DoubleNum.valueOf(0), bar.closePrice)
+                    // TODO: the strategy doesn't update the buypressure indicator. check why
+                    bar.markAs(1/*buy*/) // to udate pressure indicators
                     operations = operations + Operation(
                         OperationType.BUY,
                         trade.amount,

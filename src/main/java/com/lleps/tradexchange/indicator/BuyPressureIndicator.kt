@@ -1,9 +1,14 @@
 package com.lleps.tradexchange.indicator
 
+import com.lleps.tradexchange.util.getMark
 import org.ta4j.core.TimeSeries
 import org.ta4j.core.indicators.CachedIndicator
 import org.ta4j.core.num.Num
 
+/**
+ * Calculates the pressure to buy. The longer since last buy, the higher the pressure.
+ * Depends on markAs and getMark() utility calls from ta4jUtil to know when a bar was a buy or not.
+ */
 class BuyPressureIndicator(
     series: TimeSeries,
     val expiry: Int,
@@ -25,7 +30,7 @@ class BuyPressureIndicator(
         var count = 0
         val lastTradesTick = Array(concurrentTrades) { warmupTicks }
         for (j in (i - 1) downTo (i - expiry)) {
-            if (timeSeries.getBar(j).trades > 0) {
+            if (timeSeries.getBar(j).getMark() == 1/*buy*/) {
                 lastTradesTick[count++] = j
                 if (count == concurrentTrades) break
             }
