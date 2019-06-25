@@ -359,7 +359,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
             // Plot extra charts
             Platform.runLater {
                 if (newExtraCharts.isNotEmpty()) {// maybe priceChart.height?
-                    val heightPerChart = (maxOf(priceChart.height, nodeHBox.height / 2.0, extraChartsHBox.height) / newExtraCharts.size) * 1.1
+                    val heightPerChart = (maxOf(priceChart.height, nodeHBox.height / 2.0, extraChartsHBox.height) / newExtraCharts.size)
                     for (c in newExtraCharts) {
                         c.minHeight = heightPerChart
                         c.maxHeight = heightPerChart
