@@ -65,6 +65,8 @@ class MainView {
         val tabPane = TabPane(tabOutput, tabTrades)
         tabPane.tabClosingPolicy = TabPane.TabClosingPolicy.UNAVAILABLE
         tabPane.prefWidth = paneWidth
+        tabPane.prefHeight = paneWidth * 0.5
+        tabPane.minHeight = paneWidth * 0.5
 
         outputPane.prefWidth = paneWidth
         controlPane.children.add(ScrollPane(inputPane))

@@ -1,6 +1,7 @@
 package com.lleps.tradexchange.strategy
 
 import com.lleps.tradexchange.Candle
+import com.lleps.tradexchange.OperationType
 import com.lleps.tradexchange.server.Exchange
 import com.lleps.tradexchange.util.get
 import com.lleps.tradexchange.util.markAs
@@ -163,7 +164,7 @@ class Strategy(
         chart.extraIndicator("ml", "sell", epoch, sellPrediction)
         chart.extraIndicator("ml", "buyvalue", epoch, mlBuyTrigger.split(":")[1].toDouble())
         chart.extraIndicator("$", "profit", epoch, tradeSum)
-        predictionModel.drawFeatures(i, epoch, chart, limit = 3)
+        predictionModel.drawFeatures(com.lleps.tradexchange.OperationType.BUY, i, epoch, chart, limit = 3)
     }
 
     fun onTick(i: Int): List<Operation> {

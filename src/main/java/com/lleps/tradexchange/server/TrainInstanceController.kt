@@ -28,6 +28,7 @@ class TrainInstanceController(
         return mapOf(
             "pair" to "USDT_ETH",
             "period" to "300",
+            "trainType" to "buy",
             "autobuyPeriod" to "100",
             "autosellPeriod" to "100",
             "autobuyBatch" to "10",
@@ -57,6 +58,7 @@ class TrainInstanceController(
         else exportAndBuildModel(input)
     }
 
+    // this doesn't need changes. Just exports what sees on extra charts.
     private fun exportAndBuildModelType(
         type: OperationType,
         epochs: Int,
@@ -66,6 +68,32 @@ class TrainInstanceController(
         modelPath: String
     ) {
         // Features are the extra chart series flat-mapped
+
+        // for BUY should export all the extra charts.
+        // however, for SELL should?
+        // may use an extra charts to isolate features from the main concept. But
+        // how to export it in csv format?
+        // as long as there are 1 sell per moment, sells may be added as global
+        // data. how?
+        // first. the same price indicator.
+        // second. an "in sell" indicator. can be a binary indicator, or "timeSinceBuy" with a sell expiry.
+        // goes to zero if the last move was a sell. starts counting if the last mark is a buy.
+        // thrid. the percent up since the buy was made. PercentSinceBuyIndicator.
+        // can I just do this disabling all the buy noise?
+
+        // ok. so extra charts should depend on the trainType (sell or buy).
+        // and under "model" you should have instead, model.sell.* and model.buy.* so you
+        // can actually select which features go on each one?
+        // or you could do it sequentially?
+
+        // the displayIndicators should be "buy" or "sell"?
+        // maybe when you build the model you should be able to build them separately, the buy
+        // model and the sell model.
+        // so you set the trainType, and build just does it for the type you give. its ok.
+
+        // so, to implement this...
+        // first, make model.buy.* and model.sell.* features in the model input.
+        //
 
         out.write("$type: Exporting to $csvPath...")
         val sb = StringBuilder()
@@ -132,6 +160,7 @@ class TrainInstanceController(
         state.output = ""
 
         val pair = input.getValue("pair")
+        val type = OperationType.valueOf(input.getValue("trainType").toUpperCase())
         val period = input.getValue("period").toInt()
         val warmupTicks = input.getValue("warmupTicks").toInt()
         val autobuyPeriod = input.getValue("autobuyPeriod").toInt()
@@ -204,33 +233,12 @@ class TrainInstanceController(
             out.write("trades/day %.1f, profit/day %.1f%s"
                 .format(tradesPerDay, profitSum / trainDays.toDouble(), "%"))
 
-            /*operations.addAll(doAutobuyInSeries(
-                series = timeSeries,
-                seriesPeriod = period,
-                autobuyPeriod = autobuyPeriod,
-                autobuyBatch = autobuyBatch,
-                autobuyOffset = autobuyOffset,
-                warmupTicks = warmupTicks,
-                type = OperationType.SELL,
-                comparator = { a, b -> a > b }
-            ))
-            val buys = doAutobuyInSeries(
-                series = timeSeries,
-                seriesPeriod = period,
-                autobuyPeriod = autobuyPeriod,
-                autobuyBatch = autobuyBatch,
-                autobuyOffset = autobuyOffset,
-                warmupTicks = warmupTicks,
-                type = OperationType.BUY,
-                comparator = { a, b -> a < b }
-            )*/
-
             // Mark series bars with trades metadata so pressure indicators can read them
             val epochsWithOps = mutableMapOf<Long, Int>() // timestamp->type (1 buy, 2 sell)
-            for (op in operations) epochsWithOps[op.timestamp] = if (op.type == OperationType.SELL) 1 else 2
+            for (op in operations) epochsWithOps[op.timestamp] = if (op.type == OperationType.SELL) 2 else 1
             for (bar in timeSeries.barData) {
-                val type = epochsWithOps[bar.endTime.toEpochSecond()]
-                if (type != null) bar.markAs(type)
+                val opType = epochsWithOps[bar.endTime.toEpochSecond()]
+                if (opType != null) bar.markAs(opType)
             }
         }
 
@@ -240,7 +248,7 @@ class TrainInstanceController(
         for (i in warmupTicks..timeSeries.endIndex) {
             val tick = timeSeries.getBar(i)
             val epoch = tick.endTime.toEpochSecond()
-            predictionModel.drawFeatures(i, epoch, chartWriter)
+            predictionModel.drawFeatures(type, i, epoch, chartWriter)
             candles.add(Candle(
                 epoch,
                 tick.openPrice.doubleValue(),
@@ -258,49 +266,6 @@ class TrainInstanceController(
         state.statusText = "Train mode"
         state.statusPositiveness = 1
         state.stateVersion++
-    }
-
-    private fun doAutobuyInSeries(
-        series: TimeSeries,
-        seriesPeriod: Int,
-        autobuyPeriod: Int,
-        autobuyBatch: Int,
-        autobuyOffset: Int,
-        warmupTicks: Int,
-        type: OperationType,
-        comparator: (Double, Double) -> Boolean // should return true if a is a "better point" than b, false otherwise
-    ): List<Operation> {
-        val result = mutableListOf<Operation>()
-
-        // Add best points iterating from warmupTicks to the end, in jumps of autobuyPeriod ticks.
-        // Get smallest point in i..(i+period) = r. At the next iteration, start from r
-        var i = warmupTicks
-        while (i + autobuyPeriod < series.endIndex) {
-            val (idx, _) = getBestBar(series, i, i + autobuyPeriod, comparator)
-            val barOffset = series.getBar(idx + autobuyOffset)
-            result.add(Operation(barOffset.endTime.toEpochSecond(), type, barOffset.closePrice.doubleValue()))
-            i = idx + autobuyOffset + 1
-        }
-
-        // Filter points too close
-        // If we find two consecutive points p1,p2 whose distance in ticks is < autobuyBatch, only keep the best.
-        // Keep going until we don't find such points in result
-        while (true) {
-            var foundBadPoints = false
-            for (pIdx in 0 until (result.size - 1)) {
-                val p1 = result[pIdx]
-                val p2 = result[pIdx + 1]
-                val distanceInTicks = (p2.timestamp - p1.timestamp) / seriesPeriod
-                if (distanceInTicks < autobuyBatch) {
-                    if (comparator(p1.price, p2.price)) result.remove(p2)
-                    else result.remove(p1)
-                    foundBadPoints = true
-                    break
-                }
-            }
-            if (!foundBadPoints) break
-        }
-        return result
     }
 
     private fun getBestBar(
