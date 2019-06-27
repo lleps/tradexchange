@@ -1,14 +1,12 @@
 package com.lleps.tradexchange.strategy
 
 import com.lleps.tradexchange.Candle
-import com.lleps.tradexchange.OperationType
 import com.lleps.tradexchange.server.Exchange
 import com.lleps.tradexchange.util.get
 import com.lleps.tradexchange.util.markAs
 import org.ta4j.core.TimeSeries
 import org.ta4j.core.indicators.EMAIndicator
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
-import org.ta4j.core.num.DoubleNum
 
 class Strategy(
     private val output: OutputWriter,
@@ -42,6 +40,7 @@ class Strategy(
             "strategy.openTradesCount" to "5",
             "strategy.buyCooldown" to "5",
             "strategy.mlBuyTrigger" to "over:0.5",
+            "strategy.mlSellTrigger" to "0.5",
             "strategy.emaPeriods" to "12,26",
             "strategy.close.atrPeriod" to "24",
             "strategy.close.tradeExpiry" to "300",
@@ -58,6 +57,7 @@ class Strategy(
     private val openTradesCount = input.getValue("strategy.openTradesCount").toInt()
     private val buyCooldown = input.getValue("strategy.buyCooldown").toInt() // 4h. During cooldown won't buy anything
     private val mlBuyTrigger = input.getValue("strategy.mlBuyTrigger")
+    private val mlSellTrigger = input.getValue("strategy.mlSellTrigger").toFloat()
     private val emaPeriods = input.getValue("strategy.emaPeriods").split(",").map { it.toInt() }
     private val tradeExpiry = input.getValue("strategy.close.tradeExpiry").toInt() // give up if can't meet the margin
     private val topLoss = input.getValue("strategy.close.topLoss").toFloat()
@@ -66,6 +66,7 @@ class Strategy(
 
     // Strategy state. This should be persisted
     private class OpenTrade(
+        val buyTick: Int,
         val buyPrice: Double,
         val amount: Double,
         val epoch: Long,
@@ -84,10 +85,6 @@ class Strategy(
     private var buyPredictionLastLast = 0.0
     private var buyPredictionLast = 0.0
     private var buyPrediction = 0.0
-    private var soldInCrest = false
-    private var sellPredictionLastLast = 0.0
-    private var sellPredictionLast = 0.0
-    private var sellPrediction = 0.0
     private var tradeSum = 0.0
 
     // Transient state
@@ -96,6 +93,7 @@ class Strategy(
     private val close = ClosePriceIndicator(series)
     private lateinit var predictionModel: PredictionModel
     private lateinit var closeConfig: CloseStrategy.Config
+    private val sellPredictions = mutableListOf<Double>() // saved to draw. Each slot is an open trade
 
     // Functions
     fun init() {
@@ -113,13 +111,10 @@ class Strategy(
     }
 
     private fun calculatePredictions(i: Int) {
-        val (newBuyPrediction, newSellPrediction) = predictionModel.calculateBuySellPredictions(i)
+        val newBuyPrediction = predictionModel.predictBuy(i)
         buyPredictionLastLast = buyPredictionLast
         buyPredictionLast = buyPrediction
-        sellPredictionLastLast = sellPredictionLast
-        sellPredictionLast = sellPrediction
         buyPrediction = newBuyPrediction
-        sellPrediction = newSellPrediction
     }
 
     private fun checkCrossOver(barrier: Float, last: Double, current: Double): Boolean {
@@ -161,10 +156,17 @@ class Strategy(
         chart.priceIndicator("emaShort", epoch, emaShort[i])
         chart.priceIndicator("emaLong", epoch, emaLong[i])
         chart.extraIndicator("ml", "buy", epoch, buyPrediction)
-        chart.extraIndicator("ml", "sell", epoch, sellPrediction)
+        if (sellPredictions.isEmpty()) {
+            chart.extraIndicator("ml", "sell-0", epoch, 0.0)
+        } else {
+            for ((idx, p) in sellPredictions.withIndex()) {
+                chart.extraIndicator("ml", "sell-$idx", epoch, p)
+            }
+        }
         chart.extraIndicator("ml", "buyvalue", epoch, mlBuyTrigger.split(":")[1].toDouble())
         chart.extraIndicator("$", "profit", epoch, tradeSum)
         predictionModel.drawFeatures(com.lleps.tradexchange.OperationType.BUY, i, epoch, chart, limit = 3)
+        sellPredictions.clear()
     }
 
     fun onTick(i: Int): List<Operation> {
@@ -197,7 +199,7 @@ class Strategy(
                     val chart = ChartWriterImpl()
                     chart.candles.add(candle)
                     val closeStrategy = CloseStrategy(closeConfig, series, i, buyPrice)
-                    val trade = OpenTrade(buyPrice, amountOfCoins, epoch, buyNumber++, closeStrategy, chart)
+                    val trade = OpenTrade(i, buyPrice, amountOfCoins, epoch, buyNumber++, closeStrategy, chart)
                     openTrades = openTrades + trade
                     // TODO: the strategy doesn't update the buypressure indicator. check why
                     bar.markAs(1/*buy*/) // to udate pressure indicators
@@ -220,9 +222,11 @@ class Strategy(
             var sold = false
             for (trade in openTrades) {
                 trade.chartWriter.candles.add(candle)
-                var shouldClose = trade.closeStrategy.doTick(i, sellPrediction, trade.chartWriter)
-                if (checkTrigger(mlBuyTrigger, sellPredictionLastLast, sellPredictionLast, sellPrediction)) {
-                    shouldClose = "prediction: %.4f".format(sellPrediction)
+                val prediction = predictionModel.predictSell(trade.buyTick, i)
+                sellPredictions.add(prediction)
+                var shouldClose = trade.closeStrategy.doTick(i, prediction, trade.chartWriter)
+                if (prediction > mlSellTrigger) {
+                    shouldClose = "prediction: %.4f".format(prediction)
                 }
                 if (shouldClose == null) continue
                 if (sold) continue

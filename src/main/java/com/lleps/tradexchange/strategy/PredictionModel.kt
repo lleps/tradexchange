@@ -33,6 +33,7 @@ class PredictionModel private constructor(
         val group: String, // to group them in charts
         val name: String,
         val defaultValue: String,
+        val type: OperationType?, // null: both
         val periodMultiplied: Boolean, // for indicators that may have multiple "instances" with different multipliers
         val factory: (TimeSeries, Indicator<Num>, List<Int>) -> Indicator<Num>
     )
@@ -43,79 +44,84 @@ class PredictionModel private constructor(
 
     companion object {
         private val FEATURE_TYPES = listOf(
-            // open-high-low-close
-            IndicatorType("price", "close", "300", false) { series, _, input ->
+            // open-high-low-close and volume
+            IndicatorType("price", "close", "300", null, false) { series, _, input ->
                 NormalizationIndicator(
                     indicator = ClosePriceIndicator(series),
                     timeFrame = input[0],
                     maxBound = MaxPriceIndicator(series),
                     minBound = MinPriceIndicator(series))
             },
-            IndicatorType("price", "open", "300", false) { series, _, input ->
+            IndicatorType("price", "open", "300", null, false) { series, _, input ->
                 NormalizationIndicator(
                     indicator = OpenPriceIndicator(series),
                     timeFrame = input[0],
                     maxBound = MaxPriceIndicator(series),
                     minBound = MinPriceIndicator(series))
             },
-            IndicatorType("price", "high", "300", false) { series, _, input ->
+            IndicatorType("price", "high", "300", null, false) { series, _, input ->
                 NormalizationIndicator(
                     indicator = MaxPriceIndicator(series),
                     timeFrame = input[0],
                     maxBound = MaxPriceIndicator(series),
                     minBound = MinPriceIndicator(series))
             },
-            IndicatorType("price", "low", "300", false) { series, _, input ->
+            IndicatorType("price", "low", "300", null, false) { series, _, input ->
                 NormalizationIndicator(
                     indicator = MinPriceIndicator(series),
                     timeFrame = input[0],
                     maxBound = MaxPriceIndicator(series),
                     minBound = MinPriceIndicator(series))
             },
-            // raw volume (but keeping in mind the sign)
-            IndicatorType("price", "volume", "300", false) { series, _, input ->
+            IndicatorType("price", "volume", "300", null, false) { series, _, input ->
                 NormalizationIndicator(OnBalanceVolumeIndicator(series), input[0])
             },
-            // pressure (ie time since last trade)
-            IndicatorType("pressure", "buyPressure", "100,2,300", false) { series, _, input ->
+
+            // trades indicators. Those are the only specific to one op type
+            IndicatorType("pressure", "buyPressure", "100,2,300", OperationType.BUY, false) { series, _, input ->
                 BuyPressureIndicator(series, input[0], input[1], input[2])
             },
-            IndicatorType("pressure", "sellPressure", "100", false) { series, _, input ->
+            IndicatorType("pressure", "sellPressure", "100", OperationType.SELL, false) { series, _, input ->
                 SellPressureIndicator(series, input[0])
             },
-            // this one is the ratio of change, not needed anymore since we have candles now
-            IndicatorType("pvi", "pvi", "1", false) { series, _, _ ->
-                PriceVariationIndicator(series)
+            IndicatorType("pct", "pct", "5", OperationType.SELL, false) { series, _, input ->
+                NormalizedBuyPercentChangeIndicator(series, input[0].toDouble())
             },
-            // technical indicators. those can be period-multiplied
-            IndicatorType("bb%", "bb%", "20,2,300", true) { _, indicator, input ->
+
+            // technical, global indicators. those can be period-multiplied
+            IndicatorType("bb%", "bb%", "20,2,300", null, true) { _, indicator, input ->
                 NormalizationIndicator(PercentBIndicatorFixed(indicator, input[0], input[1].toDouble()), input[2])
             },
-            IndicatorType("williamsR%", "williamsR%", "14", true) { s, _, input ->
+            IndicatorType("williamsR%", "williamsR%", "14", null, true) { s, _, input ->
                 MappingIndicator(WilliamsRIndicatorFixed(s, input[0])) { (it + 100.0) / 100.0 }
             },
-            IndicatorType("cci", "cci", "20,300", true) { s, _, input ->
+            IndicatorType("cci", "cci", "20,300", null, true) { s, _, input ->
                 NormalizationIndicator(CCIIndicator(s, input[0]), input[1])
             },
-            IndicatorType("roc", "roc", "9,300", true) { _, indicator, input ->
+            IndicatorType("roc", "roc", "9,300", null, true) { _, indicator, input ->
                 NormalizationIndicator(ROCIndicator(indicator, input[0]), input[1])
             },
-            IndicatorType("rsi", "rsi", "14", true) { _, indicator, input ->
+            IndicatorType("rsi", "rsi", "14", null, true) { _, indicator, input ->
                 MappingIndicator(RSIIndicator(indicator, input[0])) { it / 100.0 }
             },
-            IndicatorType("macd", "macd", "12,26,300", true) { _, indicator, input ->
+            IndicatorType("macd", "macd", "12,26,300", null, true) { _, indicator, input ->
                 NormalizationIndicator(MACDIndicator(indicator, input[0], input[1]), input[2])
             },
-            IndicatorType("obvo", "obvo", "24,300", true) { series, _, input ->
+            IndicatorType("obvo", "obvo", "24,300", null, true) { series, _, input ->
                 NormalizationIndicator(OBVOscillatorIndicator(series, input[0]), input[1])
             }
         )
 
         fun getRequiredInput(): Map<String, String> {
             return mapOf("model.buy.periodMultipliers" to "1") +
-                FEATURE_TYPES.map { type -> "model.buy.${type.name}" to type.defaultValue } +
+                FEATURE_TYPES
+                    .filter { type -> type.type == null || type.type == OperationType.BUY }
+                    .map { type -> "model.buy.${type.name}" to type.defaultValue } +
+
                 mapOf("model.sell.periodMultipliers" to "1") +
-                FEATURE_TYPES.map { type -> "model.sell.${type.name}" to type.defaultValue }
+                FEATURE_TYPES
+                    .filter { type -> type.type == null || type.type == OperationType.SELL }
+                    .map { type -> "model.sell.${type.name}" to type.defaultValue }
         }
 
         /** Creates a model from the given [series] amd input from [name]. */
@@ -127,6 +133,7 @@ class PredictionModel private constructor(
 
         private fun parseIndicators(
             input: Map<String, String>,
+            opType: OperationType,
             series: TimeSeries,
             closeIndicator: ClosePriceIndicator,
             prefix: String
@@ -134,7 +141,7 @@ class PredictionModel private constructor(
             val multipliers = input.getValue("$prefix.periodMultipliers").split(",").map { it.toInt() }
             val mainMultiplier = multipliers[0]
             val result = mutableListOf<Triple<String, String, Indicator<Num>>>()
-            for (type in FEATURE_TYPES) {
+            for (type in FEATURE_TYPES.filter { it.type == null || it.type == opType }) {
                 val key = "$prefix.${type.name}"
                 if (type.periodMultiplied) {
                     // add an instance for every multiplier. Series named name(*multiplier), ie rsi(*1) and rsi(*4)
@@ -162,8 +169,8 @@ class PredictionModel private constructor(
             input: Map<String, String>
         ): PredictionModel {
             val closeIndicator = ClosePriceIndicator(series)
-            val buyIndicators = parseIndicators(input, series, closeIndicator, "model.buy")
-            val sellIndicators = parseIndicators(input, series, closeIndicator, "model.sell")
+            val buyIndicators = parseIndicators(input, OperationType.BUY, series, closeIndicator, "model.buy")
+            val sellIndicators = parseIndicators(input, OperationType.SELL, series, closeIndicator, "model.sell")
             return PredictionModel(
                 input.toMap(),
                 buyIndicators,
@@ -192,12 +199,12 @@ class PredictionModel private constructor(
         }
     }
 
-    // Prediction-related. Wraps ml code here, not just the feature group.
+    // Predictions
 
     private var buyModel: MultiLayerNetwork? = null
     private var sellModel: MultiLayerNetwork? = null
 
-    /** Set the model used in [calculateBuySellPredictions]. */
+    /** Set the model used in [predictBuy]. */
     fun loadPredictionsModel(model: String) {
         val buyPath = "data/models/[train]$model-open.h5"
         val sellPath = "data/models/[train]$model-close.h5"
@@ -205,16 +212,35 @@ class PredictionModel private constructor(
         sellModel = KerasModelImport.importKerasSequentialModelAndWeights(sellPath)
     }
 
-    /** Calculate predictions for the tick [i]. */
-    fun calculateBuySellPredictions(i: Int): Pair<Double, Double> {
-        if (buyModel == null || sellModel == null) error("model not loaded ($buyModel, $sellModel)")
+    /** Calculate sell prediction for the tick [i] and a buy at tick [buyTick] */
+    fun predictSell(buyTick: Int, i: Int): Double {
+        if (sellModel == null) error("sell model not loaded")
+
+        // set on the sell indicators the buy tick
+        for (indicator in sellIndicators) {
+            if (indicator is SellIndicator) indicator.buyTick = buyTick
+        }
+
+        return predict(i, sellModel!!, sellIndicators)
+    }
+
+    /** Calculate global buy prediction for the tick [i]. */
+    fun predictBuy(i: Int): Double {
+        if (buyModel == null) error("buy model not loaded")
+        return predict(i, buyModel!!, buyIndicators)
+    }
+
+    private fun predict(
+        i: Int,
+        network: MultiLayerNetwork,
+        indicators: List<Triple<String, String, Indicator<Num>>>
+    ): Double {
         val timesteps = 7
-        val timestepsArray = Array(buyIndicators.size) { indicatorIndex ->
+        val timestepsArray = Array(indicators.size) { indicatorIndex ->
             DoubleArray(timesteps) { index ->
-                buyIndicators[indicatorIndex].third[i - (timesteps - index - 1)]
+                indicators[indicatorIndex].third[i - (timesteps - index - 1)]
             }
         }
-        val data = arrayOf(timestepsArray)
-        return Pair(buyModel!!.output(Nd4j.create(data)).getDouble(0), sellModel!!.output(Nd4j.create(data)).getDouble(0))
+        return network.output(Nd4j.create(arrayOf(timestepsArray))).getDouble(0)
     }
 }

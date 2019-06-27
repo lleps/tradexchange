@@ -11,9 +11,9 @@ import org.ta4j.core.num.Num
  */
 class BuyPressureIndicator(
     series: TimeSeries,
-    val expiry: Int,
-    val concurrentTrades: Int,
-    val warmupTicks: Int // to not add pressure on those ticks. Otherwise the model will be more likely to buy at the beginning.
+    private val expiry: Int,
+    private val concurrentTrades: Int,
+    private val warmupTicks: Int // to not add pressure on those ticks. Otherwise the model will be more likely to buy at the beginning.
 ) : CachedIndicator<Num>(series) {
 
     private fun getPressure(tradeTick: Int, currentTick: Int, expiry: Int)
@@ -37,6 +37,6 @@ class BuyPressureIndicator(
         }
 
         val totalPressure = lastTradesTick.sumByDouble { tick -> getPressure(tick, i, this.expiry) }
-        return timeSeries.numOf(totalPressure / concurrentTrades.toDouble())
+        return numOf(totalPressure / concurrentTrades.toDouble())
     }
 }

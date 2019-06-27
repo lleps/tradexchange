@@ -54,8 +54,12 @@ class TrainInstanceController(
     }
 
     override fun onExecute(input: Map<String, String>, button: Int) {
-        if (button == 1) resetTrain(input)
-        else exportAndBuildModel(input)
+        if (button == 1) {
+            resetTrain(input)
+        } else {
+            val type = OperationType.valueOf(input.getValue("trainType").toUpperCase())
+            exportAndBuildModel(type, input)
+        }
     }
 
     // this doesn't need changes. Just exports what sees on extra charts.
@@ -141,19 +145,17 @@ class TrainInstanceController(
         if (exit != 0) out.write("$type: Something went wrong. Check the output.")
     }
 
-    private fun exportAndBuildModel(input: Map<String, String>) {
+    private fun exportAndBuildModel(type: OperationType, input: Map<String, String>) {
         val epochs = input.getValue("trainEpochs").toInt()
         val batchSize = input.getValue("trainBatchSize").toInt()
         val timesteps = input.getValue("trainTimesteps").toInt()
         File("data/trainings").mkdir()
         File("data/models").mkdir()
-        val buysCsv = "data/trainings/$instance-open.csv"
-        val sellsCsv = "data/trainings/$instance-close.csv"
-        val buysModel = "data/models/$instance-open.h5"
-        val sellsModel = "data/models/$instance-close.h5"
+        val typeStr = if (type == OperationType.BUY) "open" else "close"
+        val csvPath = "data/trainings/$instance-$typeStr.csv"
+        val modelPath = "data/models/$instance-$typeStr.h5"
         predictionModel!!.saveMetadata(instance)
-        exportAndBuildModelType(OperationType.BUY, epochs, batchSize, timesteps, buysCsv, buysModel)
-        exportAndBuildModelType(OperationType.SELL, epochs, batchSize, timesteps, sellsCsv, sellsModel)
+        exportAndBuildModelType(type, epochs, batchSize, timesteps, csvPath, modelPath)
     }
 
     private fun resetTrain(input: Map<String, String>) {
@@ -233,7 +235,7 @@ class TrainInstanceController(
             out.write("trades/day %.1f, profit/day %.1f%s"
                 .format(tradesPerDay, profitSum / trainDays.toDouble(), "%"))
 
-            // Mark series bars with trades metadata so pressure indicators can read them
+            // Mark series bars with trades metadata so trade-relative indicators can read them
             val epochsWithOps = mutableMapOf<Long, Int>() // timestamp->type (1 buy, 2 sell)
             for (op in operations) epochsWithOps[op.timestamp] = if (op.type == OperationType.SELL) 2 else 1
             for (bar in timeSeries.barData) {
