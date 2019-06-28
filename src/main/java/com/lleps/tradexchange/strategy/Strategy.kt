@@ -182,39 +182,6 @@ class Strategy(
 
         calculatePredictions(i)
 
-        // Try to buy
-        if (!sellOnly && (buyOnly || openTrades.size < openTradesCount)) { // BUY
-            if (buyLock > 0) {
-                buyLock--
-            } else {
-                val open = shouldOpen(i, epoch)
-                if (open != null) {
-                    var amountOfMoney = (exchange.moneyBalance) / (openTradesCount - openTrades.size).toDouble() * balanceMultiplier
-                    if (buyOnly) {
-                        output.write("Open buy position (buyOnly, always at 1.5usd)")
-                        amountOfMoney = 1.5
-                    }
-                    val amountOfCoins = amountOfMoney / close[i]
-                    val buyPrice = exchange.buy(amountOfCoins)
-                    val chart = ChartWriterImpl()
-                    chart.candles.add(candle)
-                    val closeStrategy = CloseStrategy(closeConfig, series, i, buyPrice)
-                    val trade = OpenTrade(i, buyPrice, amountOfCoins, epoch, buyNumber++, closeStrategy, chart)
-                    openTrades = openTrades + trade
-                    // TODO: the strategy doesn't update the buypressure indicator. check why
-                    bar.markAs(1/*buy*/) // to udate pressure indicators
-                    operations = operations + Operation(
-                        OperationType.BUY,
-                        trade.amount,
-                        "Open #%d at $%.03f\n________\n$open".format(trade.code, trade.buyPrice),
-                        0.0,
-                        trade.code,
-                        trade.chartWriter)
-                    buyLock = buyCooldown
-                }
-            }
-        }
-
         if (sellLock > 0) sellLock--
 
         // Try to sell
@@ -256,6 +223,39 @@ class Strategy(
                 operations = operations + Operation(OperationType.SELL, trade.amount, tooltip, trade.buyPrice, trade.code, trade.chartWriter)
                 openTrades = openTrades - trade
                 tradeCount++
+            }
+        }
+
+        // Try to buy
+        if (!sellOnly && (buyOnly || openTrades.size < openTradesCount)) { // BUY
+            if (buyLock > 0) {
+                buyLock--
+            } else {
+                val open = shouldOpen(i, epoch)
+                if (open != null) {
+                    var amountOfMoney = (exchange.moneyBalance) / (openTradesCount - openTrades.size).toDouble() * balanceMultiplier
+                    if (buyOnly) {
+                        output.write("Open buy position (buyOnly, always at 1.5usd)")
+                        amountOfMoney = 1.5
+                    }
+                    val amountOfCoins = amountOfMoney / close[i]
+                    val buyPrice = exchange.buy(amountOfCoins)
+                    val chart = ChartWriterImpl()
+                    chart.candles.add(candle)
+                    val closeStrategy = CloseStrategy(closeConfig, series, i, buyPrice)
+                    val trade = OpenTrade(i, buyPrice, amountOfCoins, epoch, buyNumber++, closeStrategy, chart)
+                    openTrades = openTrades + trade
+                    // TODO: the strategy doesn't update the buypressure indicator. check why
+                    bar.markAs(1/*buy*/) // to udate pressure indicators
+                    operations = operations + Operation(
+                        OperationType.BUY,
+                        trade.amount,
+                        "Open #%d at $%.03f\n________\n$open".format(trade.code, trade.buyPrice),
+                        0.0,
+                        trade.code,
+                        trade.chartWriter)
+                    buyLock = buyCooldown
+                }
             }
         }
         return operations

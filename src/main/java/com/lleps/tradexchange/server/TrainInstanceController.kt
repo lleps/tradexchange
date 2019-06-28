@@ -31,8 +31,6 @@ class TrainInstanceController(
             "trainType" to "buy",
             "autobuyPeriod" to "100",
             "autosellPeriod" to "100",
-            "autobuyBatch" to "10",
-            "autobuySeBatch" to "10",
             "autobuyOffset" to "1",
             "trainEpochs" to "15",
             "trainBatchSize" to "32",
@@ -146,6 +144,10 @@ class TrainInstanceController(
     }
 
     private fun exportAndBuildModel(type: OperationType, input: Map<String, String>) {
+        if (predictionModel == null) {
+            out.write("First reset to initialize prediction model.")
+            return
+        }
         val epochs = input.getValue("trainEpochs").toInt()
         val batchSize = input.getValue("trainBatchSize").toInt()
         val timesteps = input.getValue("trainTimesteps").toInt()
@@ -167,7 +169,6 @@ class TrainInstanceController(
         val warmupTicks = input.getValue("warmupTicks").toInt()
         val autobuyPeriod = input.getValue("autobuyPeriod").toInt()
         val autosellPeriod = input.getValue("autosellPeriod").toInt()
-        val autobuyBatch = input.getValue("autobuyBatch").toInt()
         val autobuyOffset = input.getValue("autobuyOffset").toInt()
         val ticks = fetchTicks(pair, period.toLong(), input, out)
 

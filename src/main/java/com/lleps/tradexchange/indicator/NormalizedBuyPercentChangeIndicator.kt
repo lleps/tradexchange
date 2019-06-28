@@ -18,7 +18,7 @@ class NormalizedBuyPercentChangeIndicator(
 ) : SellIndicator(series) {
 
     override fun getValue(i: Int): Num {
-        val t = calculateBuyTick(i, 300) // idk how far in the past to detect it. This is only for training anyway
+        val t = calculateBuyTick(i, 100) // idk how far in the past to detect it. This is only for training anyway
         if (t == 0 || t >= i) return numOf(0.5)
 
         val initial = indicator[t]

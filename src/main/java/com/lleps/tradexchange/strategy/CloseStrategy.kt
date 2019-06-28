@@ -103,7 +103,6 @@ class CloseStrategy(val cfg: Config, val timeSeries: TimeSeries, val buyTick: In
             if (cfg.longEmaPeriod != 0) chart.priceIndicator("longEma", epoch, longEma[i])
             if (cfg.topBarrierMultiplier != 0.0) chart.priceIndicator("topBarrier", epoch, topBarrier)
             if (cfg.bottomBarrierMultiplier != 0.0) chart.priceIndicator("bottomBarrier", epoch, bottomBarrier)
-            chart.extraIndicator("atr", "atr", epoch, atrIndicator[i])
             chart.extraIndicator("ml", "ml", epoch, globalSellPrediction)
         }
 
