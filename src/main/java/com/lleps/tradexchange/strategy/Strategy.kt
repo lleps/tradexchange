@@ -7,6 +7,8 @@ import com.lleps.tradexchange.util.markAs
 import org.ta4j.core.TimeSeries
 import org.ta4j.core.indicators.EMAIndicator
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
+import java.text.DecimalFormat
+import kotlin.system.measureTimeMillis
 
 class Strategy(
     private val output: OutputWriter,
@@ -262,4 +264,13 @@ class Strategy(
         }
         return operations
     }
+}
+
+fun main() {
+    val format = DecimalFormat("0.000")
+    val size = 500000
+    val list = DoubleArray(size) { 0.0 }
+    repeat(size) { list[it] = Math.random() * 10000.0 }
+    val took = measureTimeMillis { repeat(size) { format.format(list[it]) } }
+    println("to format $size nums took $took")
 }

@@ -1,13 +1,37 @@
 package com.lleps.tradexchange.util
 
+import com.fasterxml.jackson.core.JsonGenerator
+import com.fasterxml.jackson.databind.JsonSerializer
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.SerializerProvider
+import com.fasterxml.jackson.databind.module.SimpleModule
 import java.io.IOException
 import java.nio.charset.Charset
 import java.nio.file.Files
 import java.nio.file.Paths
+import java.math.BigDecimal
+import java.text.DecimalFormat
 
-val INTERNAL_MAPPER = ObjectMapper()
-val INTERNAL_PRETTY_MAPPER = ObjectMapper().writerWithDefaultPrettyPrinter()!!
+
+@Suppress("UNCHECKED_CAST")
+private fun mapper(): ObjectMapper  = ObjectMapper().apply {
+    val module = SimpleModule()
+    module.addSerializer(java.lang.Double::class.java, DoubleSerializer() as JsonSerializer<java.lang.Double>)
+    module.addSerializer(Double::class.javaPrimitiveType, DoubleSerializer())
+    registerModule(module)
+}
+
+val INTERNAL_MAPPER = mapper()
+
+val INTERNAL_PRETTY_MAPPER = mapper().writerWithDefaultPrettyPrinter()!!
+
+
+// this serializer writes double values as float (that is, use half the precision to reduce json size)
+class DoubleSerializer : JsonSerializer<Double>() {
+    override fun serialize(value: Double, jgen: JsonGenerator, provider: SerializerProvider) {
+        jgen.writeNumber(value.toFloat())
+    }
+}
 
 // JSON TO/FROM FILES
 fun Any.saveTo(fileName: String) {
