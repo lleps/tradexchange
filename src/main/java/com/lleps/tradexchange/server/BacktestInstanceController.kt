@@ -6,6 +6,7 @@ import com.lleps.tradexchange.strategy.Strategy
 import com.lleps.tradexchange.util.get
 import org.ta4j.core.BaseTimeSeries
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
+import java.util.concurrent.atomic.AtomicBoolean
 
 class BacktestInstanceController(
     val instance: String,
@@ -14,6 +15,8 @@ class BacktestInstanceController(
     val operationChartsWrapper: RESTServer.InstanceOperationCharts,
     val out: Strategy.OutputWriter
 ) : InstanceController {
+
+    private var running = AtomicBoolean(false)
 
     override fun getRequiredInput(): Map<String, String> {
         return mapOf(
@@ -43,7 +46,17 @@ class BacktestInstanceController(
     }
 
     override fun onExecute(input: Map<String, String>, button: Int) {
+        if (running.get()) {
+            running.set(false)
+            state.output = ""
+            state.action1 = "Run"
+            return
+        }
+
+        running.set(true)
         state.output = ""
+        state.action1 = "Stop"
+        state.statusText = "Starting..."
         state.trades = emptyList()
 
         // read input
@@ -79,8 +92,19 @@ class BacktestInstanceController(
             input = input
         )
         strategy.init()
+        val startMillis = System.currentTimeMillis()
+        var etaLock = 2L
+        val etaP = 0.4
+        var etaProgress = 0.0
+
         val sellOnlyTick = timeSeries.endIndex - cooldownTicks
         for (i in warmupTicks..timeSeries.endIndex) {
+            if (!running.get()) {
+                state.statusText = "Interrupted"
+                state.statusPositiveness = -1
+                state.action1 = "Run"
+                return
+            }
             val tick = timeSeries.getBar(i)
             val epoch = tick.endTime.toEpochSecond()
             exchange.marketPrice = tick.closePrice.doubleValue()
@@ -110,15 +134,21 @@ class BacktestInstanceController(
                     )
                     opCharts[op.code] = chartData
                     trades.add(TradeEntry(op.code, op.buyPrice, tick.closePrice.doubleValue(), op.amount))
-                    // intermediate updates while the strategy is running
-                    val tradeSum = trades.sumByDouble { (it.sell-it.buy)*it.amount }
-                    state.statusText = "%d trades sum \$%.2f".format(trades.size, tradeSum)
-                    state.statusPositiveness = if (tradeSum > 0.0) 1 else -1
-                    state.stateVersion++
                 }
             }
-        }
 
+            val secondsSinceStarted = (System.currentTimeMillis() - startMillis) / 1000
+            if (secondsSinceStarted >= etaLock) {
+                etaLock = secondsSinceStarted + 1
+                val currentPercent = (i / timeSeries.endIndex.toDouble()) * 100
+                val etaSeconds = (100 * secondsSinceStarted / currentPercent) - secondsSinceStarted
+                etaProgress = (etaP) * etaProgress + (1.0-etaP) * etaSeconds
+                state.statusText = "%d%s (eta %ds)".format(currentPercent.toInt(), "%", etaProgress.toInt())
+                state.statusPositiveness = 1
+                state.stateVersion++
+            }
+
+        }
         // Print resume
         val firstPrice = ClosePriceIndicator(timeSeries)[warmupTicks]
         val latestPrice = ClosePriceIndicator(timeSeries)[timeSeries.endIndex]
@@ -164,6 +194,9 @@ class BacktestInstanceController(
         state.statusText = "$tradesString $tradingVsHoldingString"
         state.statusPositiveness = if (tradePercent > 0) 1 else -1
         state.stateVersion++
+
+        running.set(false)
+        state.action1 = "Run"
     }
 
     /** Returns a list of pairs (trigger, percent). To get the most common triggers. */

@@ -97,8 +97,10 @@ class Strategy(
 
     // Functions
     fun init() {
-        predictionModel = PredictionModel.createFromFile(series, "[train]$modelName")
-        predictionModel.loadPredictionsModel(modelName)
+        val modelInstance = "[train]$modelName"
+        predictionModel = PredictionModel.createFromFile(series, modelInstance)
+        predictionModel.loadBuyModel(modelInstance)
+        predictionModel.loadSellModel(modelInstance)
         closeConfig = CloseStrategy.Config(
             topBarrierMultiplier = sellBarrier1.toDouble(),
             bottomBarrierMultiplier = topLoss.toDouble(),

@@ -64,6 +64,7 @@ class MainView {
         val tabTrades = Tab("Trades", tradeTableContainer)
         val tabPane = TabPane(tabOutput, tabTrades)
         tabPane.tabClosingPolicy = TabPane.TabClosingPolicy.UNAVAILABLE
+        tabPane.styleClass.add(TabPane.STYLE_CLASS_FLOATING)
         tabPane.prefWidth = paneWidth
         tabPane.prefHeight = paneWidth * 0.5
         tabPane.minHeight = paneWidth * 0.5

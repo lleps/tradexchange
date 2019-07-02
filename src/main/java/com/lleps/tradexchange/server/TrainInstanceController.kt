@@ -32,6 +32,7 @@ class TrainInstanceController(
             "autobuyPeriod" to "100",
             "autosellPeriod" to "100",
             "autobuyOffset" to "1",
+            "buyPrediction" to "0.2",
             "trainEpochs" to "15",
             "trainBatchSize" to "32",
             "trainTimesteps" to "7",
@@ -163,6 +164,9 @@ class TrainInstanceController(
     private fun resetTrain(input: Map<String, String>) {
         state.output = ""
 
+        // for buy mode, should train as is.
+        // but if set in "sell mode", instead should
+        // do buys using the model and then proceed to do the sells as is.
         val pair = input.getValue("pair")
         val type = OperationType.valueOf(input.getValue("trainType").toUpperCase())
         val period = input.getValue("period").toInt()
@@ -170,6 +174,7 @@ class TrainInstanceController(
         val autobuyPeriod = input.getValue("autobuyPeriod").toInt()
         val autosellPeriod = input.getValue("autosellPeriod").toInt()
         val autobuyOffset = input.getValue("autobuyOffset").toInt()
+        val buyPrediction = input.getValue("buyPrediction").toFloat()
         val ticks = fetchTicks(pair, period.toLong(), input, out)
 
         // Set up
@@ -184,74 +189,91 @@ class TrainInstanceController(
         // Indicators can only read state from series and bars, and for convenience
         // the pressure is expressed as an indicator.
         val operations = mutableListOf<Operation>()
-        if (autobuyPeriod != 0) {
-            var i = warmupTicks
-            var code = 1
-            var buyPrice = 0.0
-            val sellComparator: (Double, Double) -> Boolean = { a, b -> a > b }
-            val buyComparator: (Double, Double) -> Boolean = { a, b -> a < b }
-            var profitSum = 0.0
-            while (i < timeSeries.endIndex - autobuyPeriod - 1) {
-                if (buyPrice == 0.0) {
-                    val idx = getBestBar(timeSeries, i, i + autobuyPeriod, buyComparator).first + autobuyOffset
-                    val bar = timeSeries.getBar(idx)
-                    val desc = "#$code at ${bar.closePrice}"
-                    operations.add(Operation(
-                        timestamp = bar.endTime.toEpochSecond(),
-                        type = OperationType.BUY,
-                        price = bar.closePrice.doubleValue(),
-                        description = desc,
-                        code = code))
-                    buyPrice = bar.closePrice.doubleValue()
-                    i = idx + 1
-                } else {
-                    val idx = getBestBar(timeSeries, i, i + autosellPeriod, sellComparator).first + autobuyOffset
-                    val bar = timeSeries.getBar(idx)
-                    val profit = (bar.closePrice.doubleValue() - buyPrice) / buyPrice * 100.0
-                    val desc = "#$code at ${bar.closePrice} (%.2f%s)".format(profit, "%")
-                    operations.add(Operation(
-                        timestamp = bar.endTime.toEpochSecond(),
-                        type = OperationType.SELL,
-                        price = bar.closePrice.doubleValue(),
-                        description = desc,
-                        code = code))
-                    buyPrice = 0.0
-                    profitSum += profit
-                    code++
-                    i = idx + 1
-                }
-            }
-            // remove the last unmatched buy
-            if (operations.isNotEmpty() && operations.last().type == OperationType.BUY) {
-                operations.removeAt(operations.size - 1)
-            }
-            val tradeCount = code - 1
-            val trainDays = (
-                timeSeries.lastBar.endTime.toEpochSecond() -
-                    timeSeries.getBar(warmupTicks).endTime.toEpochSecond()) / 3600 / 24
-            val tradesPerDay = tradeCount / trainDays.toDouble()
-            out.write("$trainDays days")
-            out.write("%d trades, avg %.1f%s (sum %.1f%s)"
-                .format(tradeCount, profitSum / tradeCount.toDouble(), "%", profitSum, "%"))
-            out.write("trades/day %.1f, profit/day %.1f%s"
-                .format(tradesPerDay, profitSum / trainDays.toDouble(), "%"))
+        var code = 1
+        var profitSum = 0.0
+        val sellComparator: (Double, Double) -> Boolean = { a, b -> a > b }
+        val buyComparator: (Double, Double) -> Boolean = { a, b -> a < b }
+        val predictionModel = if (type == OperationType.BUY) {
+            PredictionModel.createModel(timeSeries, input)
+        } else {
+            val model = PredictionModel.createFromFile(timeSeries, name = this.instance)
+            out.write("Loading buy model... (${this.instance})")
+            model.loadBuyModel(name = this.instance)
+            out.write("Loaded.")
+            model
+        }
+        this.predictionModel = predictionModel
+        var i = warmupTicks
+        var buyPrice = 0.0
 
-            // Mark series bars with trades metadata so trade-relative indicators can read them
-            val epochsWithOps = mutableMapOf<Long, Int>() // timestamp->type (1 buy, 2 sell)
-            for (op in operations) epochsWithOps[op.timestamp] = if (op.type == OperationType.SELL) 2 else 1
-            for (bar in timeSeries.barData) {
-                val opType = epochsWithOps[bar.endTime.toEpochSecond()]
-                if (opType != null) bar.markAs(opType)
+        out.write("Adding operations...")
+        while (i < timeSeries.endIndex - autobuyPeriod - 1) {
+            if (buyPrice == 0.0) {
+                val idx = if (type == OperationType.BUY) {
+                    // best bar for buy training
+                    getBestBar(timeSeries, i, i + autobuyPeriod, buyComparator).first + autobuyOffset
+                } else {
+                    // predicted bar for sell training
+                    if (predictionModel.predictBuy(i) > buyPrediction) {
+                        i
+                    } else {
+                        i++
+                        continue
+                    }
+                }
+
+                val bar = timeSeries.getBar(idx)
+                val desc = "#$code at ${bar.closePrice}"
+                operations.add(Operation(
+                    timestamp = bar.endTime.toEpochSecond(),
+                    type = OperationType.BUY,
+                    price = bar.closePrice.doubleValue(),
+                    description = desc,
+                    code = code))
+                buyPrice = bar.closePrice.doubleValue()
+                bar.markAs(1)
+                i = idx + 1
+            } else {
+                val idx = getBestBar(timeSeries, i, i + autosellPeriod, sellComparator).first + autobuyOffset
+                val bar = timeSeries.getBar(idx)
+                val profit = (bar.closePrice.doubleValue() - buyPrice) / buyPrice * 100.0
+                // only effective add sells in sellmode, the first mode is only for buy points?
+                val desc = "#$code at ${bar.closePrice} (%.2f%s)".format(profit, "%")
+                operations.add(Operation(
+                    timestamp = bar.endTime.toEpochSecond(),
+                    type = OperationType.SELL,
+                    price = bar.closePrice.doubleValue(),
+                    description = desc,
+                    code = code))
+                buyPrice = 0.0
+                profitSum += profit
+                code++
+                bar.markAs(2)
+                i = idx + 1
             }
         }
 
+        // remove the last unmatched buy
+        if (operations.isNotEmpty() && operations.last().type == OperationType.BUY) {
+            operations.removeAt(operations.size - 1)
+        }
+        // Print resume
+        val tradeCount = code - 1
+        val trainDays = (
+            timeSeries.lastBar.endTime.toEpochSecond() -
+                timeSeries.getBar(warmupTicks).endTime.toEpochSecond()) / 3600 / 24
+        val tradesPerDay = tradeCount / trainDays.toDouble()
+        out.write("$trainDays days")
+        out.write("%d trades, avg %.1f%s (sum %.1f%s)"
+            .format(tradeCount, profitSum / tradeCount.toDouble(), "%", profitSum, "%"))
+        out.write("trades/day %.1f, profit/day %.1f%s"
+            .format(tradesPerDay, profitSum / trainDays.toDouble(), "%"))
+
         // Draw features
-        predictionModel = PredictionModel.createModel(timeSeries, input)
-        val predictionModel = this.predictionModel!!
-        for (i in warmupTicks..timeSeries.endIndex) {
-            val tick = timeSeries.getBar(i)
+        for (tickNumber in warmupTicks..timeSeries.endIndex) {
+            val tick = timeSeries.getBar(tickNumber)
             val epoch = tick.endTime.toEpochSecond()
-            predictionModel.drawFeatures(type, i, epoch, chartWriter)
+            predictionModel.drawFeatures(type, tickNumber, epoch, chartWriter)
             candles.add(Candle(
                 epoch,
                 tick.openPrice.doubleValue(),

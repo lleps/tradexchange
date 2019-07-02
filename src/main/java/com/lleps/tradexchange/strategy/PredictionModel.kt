@@ -205,10 +205,14 @@ class PredictionModel private constructor(
     private var sellModel: MultiLayerNetwork? = null
 
     /** Set the model used in [predictBuy]. */
-    fun loadPredictionsModel(model: String) {
-        val buyPath = "data/models/[train]$model-open.h5"
-        val sellPath = "data/models/[train]$model-close.h5"
+    fun loadBuyModel(name: String) {
+        val buyPath = "data/models/$name-open.h5"
         buyModel = KerasModelImport.importKerasSequentialModelAndWeights(buyPath)
+    }
+
+    /** Set the model used in [predictSell]. */
+    fun loadSellModel(name: String) {
+        val sellPath = "data/models/$name-close.h5"
         sellModel = KerasModelImport.importKerasSequentialModelAndWeights(sellPath)
     }
 
