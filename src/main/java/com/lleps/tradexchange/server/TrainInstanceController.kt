@@ -238,17 +238,19 @@ class TrainInstanceController(
                 val bar = timeSeries.getBar(idx)
                 val profit = (bar.closePrice.doubleValue() - buyPrice) / buyPrice * 100.0
                 // only effective add sells in sellmode, the first mode is only for buy points?
-                val desc = "#$code at ${bar.closePrice} (%.2f%s)".format(profit, "%")
-                operations.add(Operation(
-                    timestamp = bar.endTime.toEpochSecond(),
-                    type = OperationType.SELL,
-                    price = bar.closePrice.doubleValue(),
-                    description = desc,
-                    code = code))
+                if (type == OperationType.SELL) {
+                    val desc = "#$code at ${bar.closePrice} (%.2f%s)".format(profit, "%")
+                    operations.add(Operation(
+                        timestamp = bar.endTime.toEpochSecond(),
+                        type = OperationType.SELL,
+                        price = bar.closePrice.doubleValue(),
+                        description = desc,
+                        code = code))
+                    bar.markAs(2)
+                }
                 buyPrice = 0.0
                 profitSum += profit
                 code++
-                bar.markAs(2)
                 i = idx + 1
             }
         }

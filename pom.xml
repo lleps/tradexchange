@@ -13,18 +13,31 @@
         <kotlin.compiler.incremental>true</kotlin.compiler.incremental>
     </properties>
 
-    <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>1.5.9.RELEASE</version>
-    </parent>
-
     <dependencies>
+        <!--Jackson for serialization and deserialization -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.9.9</version>
+        </dependency>
+        <!-- To make the REST interface. Only for the server -->
+        <dependency>
+            <groupId>io.javalin</groupId>
+            <artifactId>javalin</artifactId>
+            <version>3.1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>1.7.26</version>
+        </dependency>
+        <!-- To workaround missing javafx in openjdk -->
         <dependency>
             <groupId>com.oracle.javafx</groupId>
             <artifactId>javafx</artifactId>
             <version>2.1</version>
         </dependency>
+        <!-- Required for ML. Too damn big! -->
         <dependency>
             <groupId>org.deeplearning4j</groupId>
             <artifactId>deeplearning4j-core</artifactId>
@@ -40,25 +53,25 @@
             <artifactId>nd4j-native-platform</artifactId>
             <version>1.0.0-beta4</version>
         </dependency>
+        <!-- For the client. Make http requests -->
         <dependency>
             <groupId>com.mashape.unirest</groupId>
             <artifactId>unirest-java</artifactId>
             <version>1.4.9</version>
         </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
+        <!-- For the server. Technical analysis stuff. -->
         <dependency>
             <groupId>org.ta4j</groupId>
             <artifactId>ta4j-core</artifactId>
             <version>0.12</version>
         </dependency>
+        <!-- To get data from poloniex. Only in the server. -->
         <dependency>
             <groupId>com.github.thecookielab</groupId>
             <artifactId>PoloniexClient</artifactId>
             <version>1.1.1</version>
         </dependency>
+        <!-- For kotlin. Used in both client and server. -->
         <dependency>
             <groupId>org.jetbrains.kotlin</groupId>
             <artifactId>kotlin-stdlib-jdk8</artifactId>

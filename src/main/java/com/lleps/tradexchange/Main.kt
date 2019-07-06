@@ -1,5 +1,7 @@
 package com.lleps.tradexchange
 
+import com.lleps.tradexchange.server.RESTServer
+
 object Main {
     @JvmStatic
     fun main(args: Array<String>) {
@@ -16,7 +18,7 @@ object Main {
         }
 
         if (args[0] == "--server") {
-            ServerMain.main(arrayOf())
+            RESTServer()
         } else {
             println("Invalid mode: ${args[0]}. Allowed: --server or empty (aka --client)")
         }

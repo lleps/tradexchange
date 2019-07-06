@@ -5,11 +5,9 @@ import com.lleps.tradexchange.InstanceChartData
 import com.lleps.tradexchange.InstanceState
 import com.lleps.tradexchange.InstanceType
 import com.lleps.tradexchange.strategy.Strategy
-import com.lleps.tradexchange.util.GZIPCompression
-import com.lleps.tradexchange.util.loadFrom
-import com.lleps.tradexchange.util.saveTo
+import com.lleps.tradexchange.util.*
+import io.javalin.Javalin
 import org.slf4j.LoggerFactory
-import org.springframework.web.bind.annotation.*
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -35,9 +33,11 @@ import kotlin.collections.toMap
 import kotlin.collections.toMutableMap
 import kotlin.concurrent.thread
 
+fun main() {
+    RESTServer()
+}
 
 /** Server main class. This handles the instances at a higher level and takes care of persistence. */
-@RestController
 class RESTServer {
     private val mapper = ObjectMapper()
 
@@ -52,17 +52,62 @@ class RESTServer {
     private val instanceOperationCharts = ConcurrentHashMap<String, InstanceOperationCharts>()
 
     init {
+        println("Loading data...")
         File("data").mkdir()
         File("data/instances").mkdir()
         instances = loadInstanceList()
+
+        println("Initialize api...")
+        val app = Javalin.create().start(8080)
+        app.get("/instances") { ctx ->
+            ctx.result(getInstances().toJsonString())
+        }
+        app.get("/instanceState/:instance") { ctx ->
+            val instance = ctx.pathParam("instance")
+            ctx.result(getInstanceState(instance).toJsonString())
+        }
+        app.get("/instanceChartData/:instance") { ctx ->
+            val instance = ctx.pathParam("instance")
+            ctx.result(getInstanceChartData(instance))
+        }
+        app.get("/operationChartData/:instance/:operationCode") { ctx ->
+            val instance = ctx.pathParam("instance")
+            val operationCode = ctx.pathParam("operationCode").toInt()
+            ctx.result(getInstanceOperationChartData(instance, operationCode).toJsonString())
+        }
+        app.get("/getInstanceVersion/:instance") { ctx ->
+            val instance = ctx.pathParam("instance")
+            ctx.result(getInstanceVersion(instance))
+        }
+        app.post("/updateInput/:instance/:button") { ctx ->
+            val instance = ctx.pathParam("instance")
+            val button = ctx.pathParam("button").toInt()
+            val input = parseJsonMap(ctx.body())
+            updateInput(instance, button, input)
+            ctx.result("")
+        }
+        app.post("/toggleCandleState/:instance/:candleEpoch/:toggle") { ctx ->
+            val instance = ctx.pathParam("instance")
+            val candleEpoch = ctx.pathParam("candleEpoch").toLong()
+            val toggle = ctx.pathParam("toggle").toInt()
+            toggleCandleState(instance, candleEpoch, toggle)
+            ctx.result("")
+        }
+        app.put("/createInstance/:instanceQuery") { ctx ->
+            val instanceQuery = ctx.pathParam("instanceQuery")
+            ctx.result(createInstance(instanceQuery))
+        }
+        app.delete("/deleteInstance/:instance") { ctx ->
+            val instance = ctx.pathParam("instance")
+            deleteInstance(instance)
+            ctx.result("")
+        }
     }
 
-    @GetMapping("/instances")
-    fun getInstances(): List<String> = instances.list.toList()
+    private fun getInstances(): List<String> = instances.list.toList()
 
-    @GetMapping("/instanceState/{instance}")
-    fun getInstanceState(@PathVariable instance: String): InstanceState {
-        loadInstanceIfNecessary(instance)
+    private fun getInstanceState(instance: String): InstanceState {
+        checkInstance(instance)
         val state = instanceState.getValue(instance)
         val controller = instanceController.getValue(instance)
         // Sanitize input. Inject new required keys to the input and drop deleted ones.
@@ -77,23 +122,20 @@ class RESTServer {
     }
 
     // This is sent compressed - big charts may take like 20MBs.
-    @GetMapping("/instanceChartData/{instance}")
-    fun getInstanceChartData(@PathVariable instance: String): String {
-        loadInstanceIfNecessary(instance)
+    private fun getInstanceChartData(instance: String): String {
+        checkInstance(instance)
         val fullString = mapper.writeValueAsString(instanceChartData.getValue(instance).copy())
         return Base64.getEncoder().encodeToString(GZIPCompression.compress(fullString))
     }
 
-    @GetMapping("/operationChartData/{instance}/{operationCode}")
-    fun getInstanceOperationChartData(@PathVariable instance: String, @PathVariable operationCode: Int): InstanceChartData {
-        loadInstanceIfNecessary(instance)
+    private fun getInstanceOperationChartData(instance: String, operationCode: Int): InstanceChartData {
+        checkInstance(instance)
         val opChartData = instanceOperationCharts.getValue(instance)
         return opChartData.map.getValue(operationCode)
     }
 
-    @PostMapping("/updateInput/{instance}/{button}")
-    fun updateInput(@PathVariable instance: String, @PathVariable button: Int, @RequestBody input: Map<String, String>) {
-        loadInstanceIfNecessary(instance)
+    private fun updateInput(instance: String, button: Int, input: Map<String, String>) {
+        checkInstance(instance)
         val state = instanceState.getValue(instance)
         val controller = instanceController.getValue(instance)
         state.input = input
@@ -114,14 +156,13 @@ class RESTServer {
         saveInstance(instance)
     }
 
-    @PutMapping("/createInstance/{instanceQuery}")
-    fun createInstance(@PathVariable instanceQuery: String): String {
+    private fun createInstance(instanceQuery: String): String {
         // parse query
         val bigParts = instanceQuery.split("<")
         val query = bigParts[0]
         val copyFrom = if (bigParts.size == 2) bigParts[1] else null
         val parts = query.split(":")
-        if (parts.size < 2 || parts.size > 3) error("query should be type:name<copyFrom?")
+        if (parts.size < 2 || parts.size > 3) error("query should be type:name<copyFrom>?")
         val instanceTypeStr = parts[0]
         val instanceType = InstanceType.valueOf(instanceTypeStr.toUpperCase())
         val instanceName = "[${instanceType.toString().toLowerCase()}]${parts[1]}"
@@ -149,9 +190,8 @@ class RESTServer {
         return instanceName
     }
 
-    @DeleteMapping("/deleteInstance/{instance}")
-    fun deleteInstance(@PathVariable instance: String) {
-        loadInstanceIfNecessary(instance)
+    private fun deleteInstance(instance: String) {
+        checkInstance(instance)
         instanceController.getValue(instance).onDeleted()
         instanceState.remove(instance)
         instanceChartData.remove(instance)
@@ -163,20 +203,18 @@ class RESTServer {
         saveInstanceList()
     }
 
-    @GetMapping("/getInstanceVersion/{instance}")
-    fun getInstanceVersion(@PathVariable instance: String): String {
-        loadInstanceIfNecessary(instance)
+    private fun getInstanceVersion(instance: String): String {
+        checkInstance(instance)
         val state = instanceState.getValue(instance)
         return "${state.stateVersion}:${state.chartVersion}"
     }
 
-    @PostMapping("/toggleCandleState/{instance}/{candleEpoch}/{toggle}")
-    fun toggleCandleState(
-        @PathVariable instance: String,
-        @PathVariable candleEpoch: Long,
-        @PathVariable toggle: Int
+    private fun toggleCandleState(
+        instance: String,
+        candleEpoch: Long,
+        toggle: Int
     ) {
-        loadInstanceIfNecessary(instance)
+        checkInstance(instance)
         instanceController.getValue(instance).onToggleCandle(candleEpoch, toggle)
         saveInstance(instance)
     }
@@ -213,7 +251,7 @@ class RESTServer {
         instances.saveTo("data/instances/list.json")
     }
 
-    private fun loadInstanceIfNecessary(instance: String) {
+    private fun checkInstance(instance: String) {
         if (!loadedInstances.containsKey(instance)) {
             val state = loadFrom<InstanceState>("data/instances/state-$instance.json")
                 ?: error("cant read state: $instance")
