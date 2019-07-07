@@ -70,34 +70,6 @@ class TrainInstanceController(
         csvPath: String,
         modelPath: String
     ) {
-        // Features are the extra chart series flat-mapped
-
-        // for BUY should export all the extra charts.
-        // however, for SELL should?
-        // may use an extra charts to isolate features from the main concept. But
-        // how to export it in csv format?
-        // as long as there are 1 sell per moment, sells may be added as global
-        // data. how?
-        // first. the same price indicator.
-        // second. an "in sell" indicator. can be a binary indicator, or "timeSinceBuy" with a sell expiry.
-        // goes to zero if the last move was a sell. starts counting if the last mark is a buy.
-        // thrid. the percent up since the buy was made. PercentSinceBuyIndicator.
-        // can I just do this disabling all the buy noise?
-
-        // ok. so extra charts should depend on the trainType (sell or buy).
-        // and under "model" you should have instead, model.sell.* and model.buy.* so you
-        // can actually select which features go on each one?
-        // or you could do it sequentially?
-
-        // the displayIndicators should be "buy" or "sell"?
-        // maybe when you build the model you should be able to build them separately, the buy
-        // model and the sell model.
-        // so you set the trainType, and build just does it for the type you give. its ok.
-
-        // so, to implement this...
-        // first, make model.buy.* and model.sell.* features in the model input.
-        //
-
         out.write("$type: Exporting to $csvPath...")
         val sb = StringBuilder()
         val opsByTimestamp = hashMapOf<Long, Operation>()
@@ -210,7 +182,8 @@ class TrainInstanceController(
         while (i < timeSeries.endIndex - autobuyPeriod - 1) {
             if (buyPrice == 0.0) {
                 val idx = if (type == OperationType.BUY) {
-                    // best bar for buy training
+                    // best bar for buy training. Only if some autobuyPeriod is specified. Otherwise break the loop
+                    if (autobuyPeriod == 0) break
                     getBestBar(timeSeries, i, i + autobuyPeriod, buyComparator).first + autobuyOffset
                 } else {
                     // predicted bar for sell training
@@ -234,6 +207,13 @@ class TrainInstanceController(
                 bar.markAs(1)
                 i = idx + 1
             } else {
+                // if autosellPeriod is 0 and buymode is sell, just go to the next buy.
+                // Will create a bunch of unmatched buys and its ok
+                if (autosellPeriod == 0 && type == OperationType.SELL) {
+                    i++
+                    continue
+                }
+
                 val idx = getBestBar(timeSeries, i, i + autosellPeriod, sellComparator).first + autobuyOffset
                 val bar = timeSeries.getBar(idx)
                 val profit = (bar.closePrice.doubleValue() - buyPrice) / buyPrice * 100.0
@@ -255,21 +235,24 @@ class TrainInstanceController(
             }
         }
 
-        // remove the last unmatched buy
-        if (operations.isNotEmpty() && operations.last().type == OperationType.BUY) {
-            operations.removeAt(operations.size - 1)
+        if (operations.size > 0) {
+            // remove the last unmatched buy
+            if (operations.isNotEmpty() && operations.last().type == OperationType.BUY) {
+                operations.removeAt(operations.size - 1)
+            }
+            // Print resume
+            val tradeCount = code - 1
+            val trainDays = (
+                timeSeries.lastBar.endTime.toEpochSecond() -
+                    timeSeries.getBar(warmupTicks).endTime.toEpochSecond()) / 3600 / 24
+            val tradesPerDay = tradeCount / trainDays.toDouble()
+            out.write("$trainDays days")
+            out.write("%d trades, avg %.1f%s (sum %.1f%s)"
+                .format(tradeCount, profitSum / tradeCount.toDouble(), "%", profitSum, "%"))
+            out.write("trades/day %.1f, profit/day %.1f%s"
+                .format(tradesPerDay, profitSum / trainDays.toDouble(), "%"))
+
         }
-        // Print resume
-        val tradeCount = code - 1
-        val trainDays = (
-            timeSeries.lastBar.endTime.toEpochSecond() -
-                timeSeries.getBar(warmupTicks).endTime.toEpochSecond()) / 3600 / 24
-        val tradesPerDay = tradeCount / trainDays.toDouble()
-        out.write("$trainDays days")
-        out.write("%d trades, avg %.1f%s (sum %.1f%s)"
-            .format(tradeCount, profitSum / tradeCount.toDouble(), "%", profitSum, "%"))
-        out.write("trades/day %.1f, profit/day %.1f%s"
-            .format(tradesPerDay, profitSum / trainDays.toDouble(), "%"))
 
         // Draw features
         for (tickNumber in warmupTicks..timeSeries.endIndex) {
@@ -317,18 +300,7 @@ class TrainInstanceController(
         val candleAtThisEpoch = chartData.candles.firstOrNull { it.timestamp == candleEpoch } ?: error("can't find candle")
         if (toggle != 0) {
             // build tick description, with all the useful info
-            val tickDescription = buildString {
-                append("Price: $${candleAtThisEpoch.close}\n")
-                for ((chartName, chartSeries) in chartData.extraIndicators) {
-                    for ((series, seriesPoints) in chartSeries) {
-                        for ((epoch, value) in seriesPoints) {
-                            if (epoch == candleEpoch) {
-                                append("$chartName:$series: $value\n")
-                            }
-                        }
-                    }
-                }
-            }
+            val tickDescription = "manual point"
             // add tick to the chart
             val type = if (toggle == -1) OperationType.BUY else OperationType.SELL
             chartData.operations += Operation(candleEpoch, type, candleAtThisEpoch.close, tickDescription)
