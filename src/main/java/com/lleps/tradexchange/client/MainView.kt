@@ -177,11 +177,13 @@ class MainView {
         candles: List<Candle>,
         operations: List<Operation>,
         priceIndicators: Map<String, Map<Long, Double>>,
-        extraIndicators: Map<String, Map<String, Map<Long, Double>>>) {
+        extraIndicators: Map<String, Map<String, Map<Long, Double>>>
+    ) {
         val priceChanged = chart.priceData != candles
         val operationsChanged = chart.operations != operations
         val priceIndicatorsChanged = chart.priceIndicators != priceIndicators
         val extraIndicatorsChanged = chart.extraIndicators != extraIndicators
+
         // nothing changed
         if (!priceChanged && !operationsChanged && !priceIndicatorsChanged && !extraIndicatorsChanged) {
             return
@@ -192,6 +194,15 @@ class MainView {
             chart.updateOperations()
             return
         }
+        // only extra charts (and maybe operations) changed
+        else if (extraIndicatorsChanged && !priceChanged && !priceIndicatorsChanged) {
+            chart.operations = operations
+            chart.extraIndicators = extraIndicators
+            chart.updateOperations()
+            chart.updateExtraCharts()
+            return
+        }
+
         // something else, rebuild the chart
         chart.priceData = candles
         chart.operations = operations

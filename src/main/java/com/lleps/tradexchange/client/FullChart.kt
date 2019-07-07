@@ -48,12 +48,11 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
         }
     }
 
-    private val nodeHBox = VBox(-10.0)
-    private val extraChartsHBox = VBox(-20.0)
+    private val rootContainer = VBox(-10.0)
+    private val extraChartsContainer = VBox(-20.0)
     private lateinit var priceChart: CandleStickChart
     private lateinit var chartNavToolbar: HBox
     private lateinit var operationSeries: XYChart.Series<Number, Number>
-    private val extraCharts = mutableListOf<LineChart<Number, Number>>()
     private var minTimestamp = 0L
     private var maxTimestamp = 0L
 
@@ -69,9 +68,9 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
     }
 
     init {
-        center = nodeHBox
+        center = rootContainer
         createChartNavToolbar()
-        createPriceChart()
+        createAndAddPriceChart()
     }
 
     private fun adjustYRangeByXBounds(chart: XYChart<Number, Number>) {
@@ -110,19 +109,19 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
         for ((timeFrameStr, timeFrameSeconds) in timeFrames) {
             chartNavToolbar.children.add(Button(timeFrameStr).apply {
                 style = "-fx-background-color: transparent;"
-                setOnAction { plotChart(maxTimestamp - timeFrameSeconds, maxTimestamp) }
+                setOnAction { plotWholeChart(maxTimestamp - timeFrameSeconds, maxTimestamp) }
             })
         }
         chartNavToolbar.children.add(Button("ALL").apply {
             style = "-fx-background-color: transparent;"
-            setOnAction { plotChart(minTimestamp, maxTimestamp) }
+            setOnAction { plotWholeChart(minTimestamp, maxTimestamp) }
         })
         chartNavToolbar.children.add(Button("<").apply {
             style = "-fx-background-color: transparent;"
             setOnAction {
                 val xAxis = priceChart.xAxis as NumberAxis
                 val currFrame = xAxis.upperBound - xAxis.lowerBound
-                plotChart((xAxis.lowerBound - currFrame).toLong(), (xAxis.upperBound - currFrame).toLong())
+                plotWholeChart((xAxis.lowerBound - currFrame).toLong(), (xAxis.upperBound - currFrame).toLong())
             }
         })
         chartNavToolbar.children.add(Button(">").apply {
@@ -130,14 +129,14 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
             setOnAction {
                 val xAxis = priceChart.xAxis as NumberAxis
                 val currFrame = xAxis.upperBound - xAxis.lowerBound
-                plotChart((xAxis.lowerBound + currFrame).toLong(), (xAxis.upperBound + currFrame).toLong())
+                plotWholeChart((xAxis.lowerBound + currFrame).toLong(), (xAxis.upperBound + currFrame).toLong())
             }
         })
         chartNavToolbar.alignment = Pos.CENTER
         chartNavToolbar.style = "-fx-background-color: transparent;"
     }
 
-    private fun createPriceChart() {
+    private fun createAndAddPriceChart() {
         val xAxis = NumberAxis(0.0, 5.0, 500.0)
         xAxis.minorTickCount = 0
         val yAxis = NumberAxis(0.0, 5.0, 5.0)
@@ -167,8 +166,8 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
             }
             setOnSelectCandle { c, b -> onSelectCandleCallback(c, b) }
         }
-        val anchor = AnchorPane()
-        anchor.children.addAll(priceChart, chartNavToolbar)
+        val chartContainer = AnchorPane()
+        chartContainer.children.addAll(priceChart, chartNavToolbar)
         AnchorPane.setTopAnchor(chartNavToolbar, 18.0)
         AnchorPane.setLeftAnchor(chartNavToolbar, 50.0)
         AnchorPane.setRightAnchor(chartNavToolbar, 50.0)
@@ -176,13 +175,13 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
         AnchorPane.setRightAnchor(priceChart, 1.0)
         AnchorPane.setLeftAnchor(priceChart, 1.0)
         AnchorPane.setBottomAnchor(priceChart, 1.0)
-        if (nodeHBox.children.isNotEmpty()) {
-            nodeHBox.children[0] = anchor
+        if (rootContainer.children.isNotEmpty()) {
+            rootContainer.children[0] = chartContainer
         } else {
-            nodeHBox.children.add(anchor)
+            rootContainer.children.add(chartContainer)
         }
-        if (nodeHBox.children.size == 1) {
-            nodeHBox.children.add(extraChartsHBox)
+        if (rootContainer.children.size == 1) {
+            rootContainer.children.add(extraChartsContainer)
         }
     }
 
@@ -212,164 +211,79 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
         return node
     }
 
-    // provide a method to update operations since this is needed for candle clicks.
-    // You can't rebuild the chart, lose the interval, etc at each click.
+    // Update operation series without rebuilding the whole thing
     fun updateOperations() {
         Platform.runLater {
             operationSeries.data.clear()
-            for (operation in operations) { // operations are not parsed with RR in mind
-                if (operation.timestamp < minTimestamp || operation.timestamp > maxTimestamp) continue
-                val node = createOperationNode(operation)
-                operationSeries.data.add(
-                    XYChart.Data<Number, Number>(operation.timestamp, operation.price)
-                        .also { it.node = node }
-                )
+            operationSeries.data.setAll(makeOperationSeries().data)
+        }
+    }
+
+    // Update extra charts without rebuilding the whole thing
+    fun updateExtraCharts() {
+        chartPlotExecutor.execute {
+            val tickRR = calculateResolution()
+            if (tickRR == 0) return@execute
+            val charts = makeExtraCharts(tickRR, minTimestamp, maxTimestamp)
+            Platform.runLater {
+                extraChartsContainer.children.setAll(charts)
+                resizeExtraCharts(charts)
             }
         }
+    }
+
+    private fun calculateResolution(maxTicks: Int = 800): Int {
+        val tickCount = priceData.count { it.timestamp in (minTimestamp)..(maxTimestamp) }
+        if (tickCount == 0) return 0
+        var tickRR = 1
+        while ((tickCount / tickRR) > maxTicks) tickRR++
+        return tickRR
     }
 
     private fun sellColor(op: Operation): Paint {
         return if (op.description?.contains("-") == true) NEGATIVE_SELL_COLOR else SELL_COLOR
     }
 
-    private fun plotChart(minTimestamp: Long, maxTimestamp: Long, maxTicks: Int = 800) {
+    private fun resizeExtraCharts(charts: List<XYChart<Number, Number>>) {
+        if (charts.isNotEmpty()) {// maybe priceChart.height?
+            val heightPerChart = (maxOf(priceChart.height, rootContainer.height / 2.0, extraChartsContainer.height) / charts.size)
+            for (c in charts) {
+                c.minHeight = heightPerChart
+                c.maxHeight = heightPerChart
+                c.prefHeight = heightPerChart
+            }
+        }
+    }
+
+    private fun plotWholeChart(minTimestamp: Long, maxTimestamp: Long) {
+        // Calculate resolution
+        val tickRR = calculateResolution()
+        if (tickRR == 0) return
+
+        // Add empty price chart
+        createAndAddPriceChart()
+        hackTooltipStartTiming()
+
+        // Build all the series in parallel. Plot them when they're ready
         chartPlotExecutor.execute {
-            var minValue = Double.MAX_VALUE
-            var maxValue = 0.0
-            val allSeries = FXCollections.observableArrayList<XYChart.Series<Number, Number>>()
-            val candleSeries = XYChart.Series<Number, Number>()
+            // make price chart
+            val mainChartSeries = FXCollections.observableArrayList<XYChart.Series<Number, Number>>()
+            mainChartSeries.add(makeCandleChartSeries(tickRR, minTimestamp, maxTimestamp))
+            operationSeries = makeOperationSeries(minTimestamp, maxTimestamp)
+            mainChartSeries.add(operationSeries)
+            mainChartSeries.addAll(makePriceChartSeries(tickRR, minTimestamp, maxTimestamp))
+            adjustYRangeByXBounds(priceChart)
+            val xa = (priceChart.xAxis as NumberAxis)
+            xa.lowerBound = minTimestamp.toDouble()
+            xa.upperBound = maxTimestamp.toDouble()
+            // make extra charts
+            val extraCharts = makeExtraCharts(tickRR, minTimestamp, maxTimestamp) // ranges adjusted builtin
 
-            // Calculate chart resolution
-            val tickCount = priceData.count { it.timestamp in (minTimestamp)..(maxTimestamp) }
-            if (tickCount == 0) return@execute
-
-            var tickRR = 1
-            while ((tickCount / tickRR) > maxTicks) {
-                tickRR++
-            }
-
-            // Build candles list
-            var candleIndex = 0
-            for (candle in priceData) {
-                if (candle.timestamp < minTimestamp) continue
-                else if (candle.timestamp > maxTimestamp) break
-                if (candleIndex++ % tickRR != 0) continue
-
-                candleSeries.data.add(
-                    XYChart.Data(
-                        candle.timestamp,
-                        candle.open,
-                        candle
-                    )
-                )
-                minValue = minOf(candle.low, minValue)
-                maxValue = maxOf(candle.high, maxValue)
-            }
-            allSeries.add(candleSeries)
-
-            // Build operations list
-            val operationSeries = XYChart.Series<Number, Number>()
-            for (operation in operations) { // operations are not parsed with RR in mind
-                if (operation.timestamp < minTimestamp || operation.timestamp > maxTimestamp) continue
-                val node = createOperationNode(operation)
-                operationSeries.data.add(
-                    XYChart.Data<Number, Number>(operation.timestamp, operation.price)
-                        .also { it.node = node }
-                )
-            }
-            this.operationSeries = operationSeries
-            allSeries.add(operationSeries)
-
-            // Build price indicators list
-            for ((indicatorName, indicatorPoints) in priceIndicators) {
-                val series = XYChart.Series<Number, Number>()
-                series.name = indicatorName
-                var indicatorIndex = 0
-                for ((epoch, dataValue) in indicatorPoints) {
-                    if (epoch < minTimestamp) continue
-                    else if (epoch > maxTimestamp) break
-                    if (indicatorIndex++ % tickRR != 0) continue
-                    series.data.add(XYChart.Data<Number, Number>(epoch, dataValue))
-                    minValue = minOf(dataValue, minValue)
-                    maxValue = maxOf(dataValue, maxValue)
-                }
-                allSeries.add(series)
-            }
-
-            // Plot main chart
+            // Plot
             Platform.runLater {
-                createPriceChart()
-                if (minValue == Double.MAX_VALUE) minValue = 0.0
-                val xa = (priceChart.xAxis as NumberAxis)
-                val ya = (priceChart.yAxis as NumberAxis)
-                ya.tickUnit = (maxValue - minValue) / 10.0
-                xa.lowerBound = minTimestamp.toDouble()
-                xa.upperBound = maxTimestamp.toDouble()
-                setBoundsWithSpacing(ya, maxValue, minValue)
-                priceChart.data = allSeries
-                hackTooltipStartTiming()
-            }
-
-            // Build extra chart list
-            val newExtraCharts = mutableListOf<LineChart<Number, Number>>()
-            for ((indicatorName, indicatorData) in extraIndicators) {
-                // create extra chart
-                val xAxis = NumberAxis(minTimestamp.toDouble(), maxTimestamp.toDouble(), (maxTimestamp - minTimestamp) / 20.0)
-                xAxis.minorTickCount = 0
-                xAxis.isTickLabelsVisible = false
-                xAxis.isTickMarkVisible = false
-                Platform.runLater {
-                    xAxis.lowerBoundProperty().bind((priceChart.xAxis as NumberAxis).lowerBoundProperty())
-                    xAxis.upperBoundProperty().bind((priceChart.xAxis as NumberAxis).upperBoundProperty())
-                }
-
-                val yAxis = NumberAxis(0.0, 1.0, 5.0)
-                yAxis.side = Side.RIGHT
-                yAxis.label = indicatorName
-
-                val chart = LineChart(xAxis, yAxis)
-                chart.createSymbols = false
-                chart.isLegendVisible = false
-                chart.animated = false
-
-                val chartData = FXCollections.observableArrayList<XYChart.Series<Number, Number>>()
-                var minExtraVal = Double.MAX_VALUE
-                var maxExtraVal = 0.0
-                for ((seriesName, seriesData) in indicatorData) {
-                    val series = XYChart.Series<Number, Number>()
-                    series.name = seriesName
-                    var indicatorIndex = 0
-                    for ((epoch, value) in seriesData) {
-                        if (epoch < minTimestamp) continue
-                        else if (epoch > maxTimestamp) break
-                        if (indicatorIndex++ % tickRR != 0) continue
-
-                        minExtraVal = minOf(value, minExtraVal)
-                        maxExtraVal = maxOf(value, maxExtraVal)
-                        series.data.add(XYChart.Data<Number, Number>(epoch, value))
-                    }
-                    chartData.add(series)
-                }
-                setBoundsWithSpacing(yAxis, maxExtraVal, minExtraVal)
-                yAxis.tickUnit = (maxExtraVal - minExtraVal) / 2
-                chart.data = chartData
-                newExtraCharts.add(chart)
-            }
-
-            // Plot extra charts
-            Platform.runLater {
-                if (newExtraCharts.isNotEmpty()) {// maybe priceChart.height?
-                    val heightPerChart = (maxOf(priceChart.height, nodeHBox.height / 2.0, extraChartsHBox.height) / newExtraCharts.size)
-                    for (c in newExtraCharts) {
-                        c.minHeight = heightPerChart
-                        c.maxHeight = heightPerChart
-                        c.prefHeight = heightPerChart
-                    }
-                }
-                extraChartsHBox.children.removeAll(extraCharts)
-                extraCharts.clear()
-                extraCharts.addAll(newExtraCharts)
-                extraChartsHBox.children.addAll(newExtraCharts)
+                priceChart.data = mainChartSeries
+                extraChartsContainer.children.setAll(extraCharts)
+                resizeExtraCharts(extraCharts)
             }
         }
     }
@@ -377,7 +291,115 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
     fun fill() {
         minTimestamp = priceData.firstOrNull()?.timestamp ?: 0L
         maxTimestamp = priceData.lastOrNull()?.timestamp ?: 1L
-        plotChart(minTimestamp, maxTimestamp)
+        plotWholeChart(minTimestamp, maxTimestamp)
+    }
+
+    private fun makeCandleChartSeries(
+        tickRR: Int,
+        minTimestamp: Long = this.minTimestamp,
+        maxTimestamp: Long = this.maxTimestamp
+    ): XYChart.Series<Number, Number> {
+        val candleSeries = XYChart.Series<Number, Number>()
+        var candleIndex = 0
+        for (candle in priceData) {
+            if (candle.timestamp < minTimestamp) continue
+            else if (candle.timestamp > maxTimestamp) break
+            if (candleIndex++ % tickRR != 0) continue
+
+            candleSeries.data.add(
+                XYChart.Data(
+                    candle.timestamp,
+                    candle.open,
+                    candle
+                )
+            )
+        }
+        return candleSeries
+    }
+
+    private fun makeOperationSeries(
+        minTimestamp: Long = this.minTimestamp,
+        maxTimestamp: Long = this.maxTimestamp
+    ): XYChart.Series<Number, Number> {
+        val result = XYChart.Series<Number, Number>()
+        for (operation in operations) { // operations are not parsed with RR in mind
+            if (operation.timestamp < minTimestamp || operation.timestamp > maxTimestamp) continue
+            val node = createOperationNode(operation)
+            result.data.add(XYChart.Data<Number, Number>(operation.timestamp, operation.price).also { it.node = node })
+        }
+        return result
+    }
+
+    private fun makePriceChartSeries(
+        tickRR: Int,
+        minTimestamp: Long = this.minTimestamp,
+        maxTimestamp: Long = this.maxTimestamp
+    ): List<XYChart.Series<Number, Number>> {
+        val result = mutableListOf<XYChart.Series<Number, Number>>()
+        for ((indicatorName, indicatorPoints) in priceIndicators) {
+            val series = XYChart.Series<Number, Number>()
+            series.name = indicatorName
+            var indicatorIndex = 0
+            for ((epoch, dataValue) in indicatorPoints) {
+                if (epoch < minTimestamp) continue
+                else if (epoch > maxTimestamp) break
+                if (indicatorIndex++ % tickRR != 0) continue
+                series.data.add(XYChart.Data<Number, Number>(epoch, dataValue))
+            }
+            result.add(series)
+        }
+        return result
+    }
+
+    private fun makeExtraCharts(
+        tickRR: Int,
+        minTimestamp: Long = this.minTimestamp,
+        maxTimestamp: Long = this.maxTimestamp
+    ): List<XYChart<Number, Number>> {
+        val result = mutableListOf<LineChart<Number, Number>>()
+        for ((indicatorName, indicatorData) in extraIndicators) {
+            val xAxis = NumberAxis(minTimestamp.toDouble(), maxTimestamp.toDouble(), (maxTimestamp - minTimestamp) / 20.0)
+            xAxis.minorTickCount = 0
+            xAxis.isTickLabelsVisible = false
+            xAxis.isTickMarkVisible = false
+            Platform.runLater {
+                xAxis.lowerBoundProperty().bind((priceChart.xAxis as NumberAxis).lowerBoundProperty())
+                xAxis.upperBoundProperty().bind((priceChart.xAxis as NumberAxis).upperBoundProperty())
+            }
+
+            val yAxis = NumberAxis(0.0, 1.0, 5.0)
+            yAxis.side = Side.RIGHT
+            yAxis.label = indicatorName
+
+            val chart = LineChart(xAxis, yAxis)
+            chart.createSymbols = false
+            chart.isLegendVisible = false
+            chart.animated = false
+
+            val chartData = FXCollections.observableArrayList<XYChart.Series<Number, Number>>()
+            var minExtraVal = Double.MAX_VALUE
+            var maxExtraVal = 0.0
+            for ((seriesName, seriesData) in indicatorData) {
+                val series = XYChart.Series<Number, Number>()
+                series.name = seriesName
+                var indicatorIndex = 0
+                for ((epoch, value) in seriesData) {
+                    if (epoch < minTimestamp) continue
+                    else if (epoch > maxTimestamp) break
+                    if (indicatorIndex++ % tickRR != 0) continue
+
+                    minExtraVal = minOf(value, minExtraVal)
+                    maxExtraVal = maxOf(value, maxExtraVal)
+                    series.data.add(XYChart.Data<Number, Number>(epoch, value))
+                }
+                chartData.add(series)
+            }
+            setBoundsWithSpacing(yAxis, maxExtraVal, minExtraVal)
+            yAxis.tickUnit = (maxExtraVal - minExtraVal) / 2
+            chart.data = chartData
+            result.add(chart)
+        }
+        return result
     }
 
     // To test this view quickly
