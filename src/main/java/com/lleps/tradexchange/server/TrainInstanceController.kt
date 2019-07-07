@@ -6,8 +6,10 @@ import com.lleps.tradexchange.strategy.PredictionModel
 import com.lleps.tradexchange.strategy.Strategy
 import com.lleps.tradexchange.util.markAs
 import org.ta4j.core.Bar
+import org.ta4j.core.BaseBar
 import org.ta4j.core.BaseTimeSeries
 import org.ta4j.core.TimeSeries
+import org.ta4j.core.num.DoubleNum
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
@@ -23,6 +25,9 @@ class TrainInstanceController(
 ) : InstanceController {
 
     private var predictionModel: PredictionModel? = null
+    private var series: TimeSeries? = null
+    private var warmupTicks: Int = 0
+    private var type: OperationType = OperationType.BUY
 
     override fun getRequiredInput(): Map<String, String> {
         return mapOf(
@@ -174,10 +179,20 @@ class TrainInstanceController(
             out.write("Loaded.")
             model
         }
-        this.predictionModel = predictionModel
         var i = warmupTicks
         var buyPrice = 0.0
 
+
+        // Copy necessary shit to global state.
+        // That's because some stuff need to be rebuilt
+        // when you click a point, and references to the
+        // input are necessary.
+        this.warmupTicks = warmupTicks
+        this.series = timeSeries // needs to be accessed from toggleCandleState
+        this.predictionModel = predictionModel
+        this.type = type
+
+        // Add operations
         out.write("Adding operations...")
         while (i < timeSeries.endIndex - autobuyPeriod - 1) {
             if (buyPrice == 0.0) {
@@ -296,19 +311,63 @@ class TrainInstanceController(
         return Pair(bestIdx, series.getBar(bestIdx))
     }
 
+    private fun rebuildIndicators() {
+        val chartWriter = ChartWriterImpl()
+        val series = this.series!!
+        val predictionModel = predictionModel!!
+        for (tickNumber in warmupTicks..series.endIndex) {
+            val tick = series.getBar(tickNumber)
+            val epoch = tick.endTime.toEpochSecond()
+            predictionModel.drawFeatures(type, tickNumber, epoch, chartWriter)
+        }
+
+        chartData.priceIndicators = chartWriter.priceIndicators
+        chartData.extraIndicators = chartWriter.extraIndicators
+        state.chartVersion++
+    }
+
     override fun onToggleCandle(candleEpoch: Long, toggle: Int) {
         val candleAtThisEpoch = chartData.candles.firstOrNull { it.timestamp == candleEpoch } ?: error("can't find candle")
+        val rawBarData = series!!.barData
+        val bar = rawBarData.first { it.endTime.toEpochSecond() == candleEpoch }
+        val barIndexInSeries = rawBarData.indexOf(bar)
         if (toggle != 0) {
             // build tick description, with all the useful info
             val tickDescription = "manual point"
             // add tick to the chart
             val type = if (toggle == -1) OperationType.BUY else OperationType.SELL
+            val markType = if (type == OperationType.BUY) 1 else 2
             chartData.operations += Operation(candleEpoch, type, candleAtThisEpoch.close, tickDescription)
+            val newBar = BaseBar(
+                bar.timePeriod,
+                bar.endTime,
+                bar.openPrice,
+                bar.maxPrice,
+                bar.minPrice,
+                bar.closePrice,
+                bar.volume,
+                DoubleNum.valueOf(0) // amount
+            )
+            newBar.markAs(markType)
+            rawBarData[barIndexInSeries] = newBar
         } else {
             // remove tick from the chart
             val op = chartData.operations.firstOrNull { it.timestamp == candleEpoch } ?: error("cant find op")
             chartData.operations -= op
+            val newBar = BaseBar(
+                bar.timePeriod,
+                bar.endTime,
+                bar.openPrice,
+                bar.maxPrice,
+                bar.minPrice,
+                bar.closePrice,
+                bar.volume,
+                DoubleNum.valueOf(0) // amount
+            )
+            rawBarData[barIndexInSeries] = newBar
         }
+
+        rebuildIndicators()
         state.chartVersion++
     }
 

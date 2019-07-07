@@ -1,6 +1,7 @@
 package com.lleps.tradexchange.indicator
 
 import com.lleps.tradexchange.util.getMark
+import org.ta4j.core.Indicator
 import org.ta4j.core.TimeSeries
 import org.ta4j.core.indicators.CachedIndicator
 import org.ta4j.core.num.Num
@@ -10,16 +11,24 @@ import org.ta4j.core.num.Num
  * Depends on markAs and getMark() utility calls from ta4jUtil to know when a bar was a buy or not.
  */
 class BuyPressureIndicator(
-    series: TimeSeries,
+    private val series: TimeSeries,
     private val expiry: Int,
     private val concurrentTrades: Int,
     private val warmupTicks: Int // to not add pressure on those ticks. Otherwise the model will be more likely to buy at the beginning.
-) : CachedIndicator<Num>(series) {
+) : Indicator<Num> {
+
+    override fun getTimeSeries(): TimeSeries {
+        return series
+    }
+
+    override fun numOf(num: Number?): Num {
+        return series.numOf(num)
+    }
 
     private fun getPressure(tradeTick: Int, currentTick: Int, expiry: Int)
         = minOf(1.0, (currentTick - tradeTick).toDouble() / expiry.toDouble())
 
-    override fun calculate(i: Int): Num {
+    override fun getValue(i: Int): Num {
         // need to find time since last concurrentTrades trades?
         // with 1 concurrentTrades.
         // if ... should be 1: time since last trade >= expiry.
