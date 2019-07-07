@@ -3,6 +3,7 @@ package com.lleps.tradexchange
 import com.lleps.tradexchange.client.FullChart
 import com.lleps.tradexchange.client.MainView
 import com.lleps.tradexchange.client.RESTClient
+import com.lleps.tradexchange.client.Toast
 import com.lleps.tradexchange.util.loadFrom
 import com.lleps.tradexchange.util.saveTo
 import javafx.application.Application
@@ -266,7 +267,8 @@ class ClientMain : Application() {
     private fun showError(string: String, throwable: Throwable? = null) {
         waitingToAcceptError = true
         Platform.runLater {
-            val dialog = Dialog<ButtonType>()
+            Toast.show(string+"\n"+throwable.toString(), stage)
+            /*val dialog = Dialog<ButtonType>()
             dialog.title = "Error"
             val dialogPane = dialog.dialogPane
             dialogPane.contentText = "Details of the problem:"
@@ -297,7 +299,7 @@ class ClientMain : Application() {
                 dialogPane.expandableContent = root
             }
             dialog.showAndWait()
-            waitingToAcceptError = false
+            waitingToAcceptError = false*/
         }
     }
 

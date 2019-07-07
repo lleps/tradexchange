@@ -272,7 +272,6 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
             operationSeries = makeOperationSeries(minTimestamp, maxTimestamp)
             mainChartSeries.add(operationSeries)
             mainChartSeries.addAll(makePriceChartSeries(tickRR, minTimestamp, maxTimestamp))
-            adjustYRangeByXBounds(priceChart)
             val xa = (priceChart.xAxis as NumberAxis)
             xa.lowerBound = minTimestamp.toDouble()
             xa.upperBound = maxTimestamp.toDouble()
@@ -284,6 +283,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
                 priceChart.data = mainChartSeries
                 extraChartsContainer.children.setAll(extraCharts)
                 resizeExtraCharts(extraCharts)
+                adjustYRangeByXBounds(priceChart)
             }
         }
     }
