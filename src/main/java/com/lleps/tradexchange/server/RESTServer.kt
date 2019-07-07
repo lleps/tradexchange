@@ -34,24 +34,22 @@ import kotlin.collections.toMutableMap
 import kotlin.concurrent.thread
 
 fun main() {
-    RESTServer()
+    RESTServer().start()
 }
 
-/** Server main class. This handles the instances at a higher level and takes care of persistence. */
+/** Server main class. This handles the instances at a higher level via REST api calls, takes care of persistence. */
 class RESTServer {
-    private val mapper = ObjectMapper()
-
     // Server state
     private data class InstancesWrapper(var list: List<String> = emptyList())
     private val loadedInstances = ConcurrentHashMap<String, Unit>()
-    private val instances: InstancesWrapper
+    private lateinit var instances: InstancesWrapper
     private val instanceState = ConcurrentHashMap<String, InstanceState>()
     private val instanceController = ConcurrentHashMap<String, InstanceController>()
     private val instanceChartData = ConcurrentHashMap<String, InstanceChartData>()
     data class InstanceOperationCharts(var map: Map<Int, InstanceChartData> = emptyMap())
     private val instanceOperationCharts = ConcurrentHashMap<String, InstanceOperationCharts>()
 
-    init {
+    fun start() {
         println("Loading data...")
         File("data").mkdir()
         File("data/instances").mkdir()
@@ -124,7 +122,7 @@ class RESTServer {
     // This is sent compressed - big charts may take like 20MBs.
     private fun getInstanceChartData(instance: String): String {
         checkInstance(instance)
-        val fullString = mapper.writeValueAsString(instanceChartData.getValue(instance).copy())
+        val fullString = instanceChartData.getValue(instance).copy().toJsonString()
         return Base64.getEncoder().encodeToString(GZIPCompression.compress(fullString))
     }
 
@@ -251,6 +249,7 @@ class RESTServer {
         instances.saveTo("data/instances/list.json")
     }
 
+    /** Ensure [instance] exists and load it if not loaded. Throws an exception otherwise. */
     private fun checkInstance(instance: String) {
         if (!loadedInstances.containsKey(instance)) {
             val state = loadFrom<InstanceState>("data/instances/state-$instance.json")
