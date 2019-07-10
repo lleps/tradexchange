@@ -16,10 +16,10 @@ import java.util.HashMap
 
 @Suppress("UNCHECKED_CAST")
 private fun mapper(): ObjectMapper  = ObjectMapper().apply {
-    val module = SimpleModule()
+    /*val module = SimpleModule()
     module.addSerializer(java.lang.Double::class.java, DoubleSerializer() as JsonSerializer<java.lang.Double>)
     module.addSerializer(Double::class.javaPrimitiveType, DoubleSerializer())
-    registerModule(module)
+    registerModule(module)*/
 }
 
 val INTERNAL_MAPPER = mapper()

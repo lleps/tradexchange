@@ -148,6 +148,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
         priceChart.priceType = if (useCandles) CandleStickChart.PriceType.CANDLES else CandleStickChart.PriceType.LINE
         xAxis.tickLabelFormatter = TICK_LABEL_FORMATTER
         xAxis.tickUnitProperty().bind(Bindings.divide(Bindings.subtract(xAxis.upperBoundProperty(), xAxis.lowerBoundProperty()), 20.0))
+        yAxis.tickUnitProperty().bind(Bindings.divide(Bindings.subtract(yAxis.upperBoundProperty(), yAxis.lowerBoundProperty()), 10.0))
         priceChart.apply {
             setOnScroll {
                 val difference = (xAxis.upperBound - xAxis.lowerBound) / 20
@@ -260,9 +261,8 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
         val tickRR = calculateResolution()
         if (tickRR == 0) return
 
-        // Add empty price chart
-        createAndAddPriceChart()
         hackTooltipStartTiming()
+        createAndAddPriceChart()
 
         // Build all the series in parallel. Plot them when they're ready
         chartPlotExecutor.execute {
@@ -278,7 +278,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
             // make extra charts
             val extraCharts = makeExtraCharts(tickRR, minTimestamp, maxTimestamp) // ranges adjusted builtin
 
-            // Plot
+            // Plot main chart
             Platform.runLater {
                 priceChart.data = mainChartSeries
                 extraChartsContainer.children.setAll(extraCharts)
@@ -314,6 +314,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
                 )
             )
         }
+        println("done.\n")
         return candleSeries
     }
 
