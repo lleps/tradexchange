@@ -66,3 +66,7 @@ func (chartWriter *DefaultChartWriter) ExtraIndicator(chartName string, seriesNa
 	}
 	dataMap[epoch] = value
 }
+
+func addStrategyInput(state *InstanceState) {
+
+}

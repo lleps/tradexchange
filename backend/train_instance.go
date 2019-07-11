@@ -7,16 +7,21 @@ type TrainInstance struct {
 	chartData *InstanceChartData
 }
 
-func (instance *TrainInstance) Init() {
+func (ins *TrainInstance) init() {
 }
 
-func (instance *TrainInstance) Destroy() {
+func (ins *TrainInstance) destroy() {
 }
 
-func (instance *TrainInstance) GetRequiredInput() map[string]string {
-	return map[string]string{}
+func (ins *TrainInstance) ensureInput() {
+	ins.state.AddInputKey("pair", "USDT_ETH")
+	ins.state.AddInputKey("period", "300")
+	ins.state.AddInputKey("warmupTicks", "300")
+	ins.state.AddInputKey("cooldownTicks", "300")
+	ins.state.AddInputKey("initialMoney", "100")
+	addFetchTicksInput(ins.state)
 }
 
-func (instance *TrainInstance) Update(ButtonIdx int, input map[string]string) {
+func (ins *TrainInstance) update(ButtonIdx int, input map[string]string) {
 
 }

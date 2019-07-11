@@ -7,15 +7,22 @@ type BacktestInstance struct {
 	chartData *InstanceChartData
 }
 
-func (instance *BacktestInstance) Init() {
+func (ins *BacktestInstance) init() {
+	ins.state.Action1 = "Run"
 }
 
-func (instance *BacktestInstance) Destroy() {
+func (ins *BacktestInstance) destroy() {
 }
 
-func (instance *BacktestInstance) GetRequiredInput() map[string]string {
-	return map[string]string{}
+func (ins *BacktestInstance) ensureInput() {
+	ins.state.AddInputKey("pair", "USDT_ETH")
+	ins.state.AddInputKey("period", "300")
+	ins.state.AddInputKey("warmupTicks", "300")
+	ins.state.AddInputKey("cooldownTicks", "300")
+	ins.state.AddInputKey("initialMoney", "100")
+	addFetchTicksInput(ins.state)
+	addStrategyInput(ins.state)
 }
 
-func (instance *BacktestInstance) Update(ButtonIdx int, input map[string]string) {
+func (ins *BacktestInstance) update(ButtonIdx int, input map[string]string) {
 }

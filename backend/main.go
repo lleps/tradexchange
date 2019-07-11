@@ -17,10 +17,14 @@ import (
 
 // To delegate event handling to each instance type separately
 type InstanceController interface {
-	Init()
-	Destroy()
-	GetRequiredInput() map[string]string
-	Update(ButtonIdx int, input map[string]string)
+	// Called when an instance is loaded
+	init()
+	// Called when an instance is unloaded
+	destroy()
+	// Called on each state get. to update the instance required input
+	ensureInput()
+	// Called on each button click, with the given new input
+	update(ButtonIdx int, input map[string]string)
 }
 
 var instances []string
@@ -106,7 +110,7 @@ func resolveInstance(name string) (InstanceController, *InstanceState, *Instance
 		state = &state2
 		chartData = &chartData2
 		controller = newInstanceController(name, state, chartData)
-		controller.Init()
+		controller.init()
 		instanceController[name] = controller
 		instanceState[name] = state
 		instanceChartData[name] = chartData
@@ -145,7 +149,7 @@ func UpdateInput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Println(bodyMap)
-	controller.Update(int(button), bodyMap)
+	controller.update(int(button), bodyMap)
 	respond(w, "", "raw")
 }
 
@@ -209,7 +213,7 @@ func DeleteInstance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// destroy the controller and map keys
-	controller.Destroy()
+	controller.destroy()
 	delete(instanceController, instanceName)
 	delete(instanceState, instanceName)
 	delete(instanceChartData, instanceName)

@@ -27,6 +27,7 @@ type Operation struct {
 type InstanceState struct {
 	Kind               string            `json:"type"`
 	Input              map[string]string `json:"input"`
+	InputOrder         []string          `json:"inputOrder"` // order of the keys
 	Output             string            `json:"output"`
 	Trades             []TradeEntry      `json:"trades"`
 	StatusText         string            `json:"statusText"`
@@ -35,6 +36,14 @@ type InstanceState struct {
 	ChartVersion       int               `json:"chartVersion"`
 	Action1            string            `json:"action1"`
 	Action2            string            `json:"action2"`
+}
+
+func (state *InstanceState) AddInputKey(k string, v string) {
+	if _, ok := state.Input[k]; ok {
+		return // already registered
+	}
+	state.Input[k] = v
+	state.InputOrder = append(state.InputOrder, k)
 }
 
 // Content of a series. Timestamps to values

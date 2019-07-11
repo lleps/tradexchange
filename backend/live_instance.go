@@ -7,15 +7,21 @@ type LiveInstance struct {
 	chartData *InstanceChartData
 }
 
-func (instance *LiveInstance) Init() {
+func (ins *LiveInstance) init() {
 }
 
-func (instance *LiveInstance) Destroy() {
+func (ins *LiveInstance) destroy() {
 }
 
-func (instance *LiveInstance) GetRequiredInput() map[string]string {
-	return map[string]string{}
+func (ins *LiveInstance) ensureInput() {
+	ins.state.AddInputKey("pair", "USDT_ETH")
+	ins.state.AddInputKey("period", "300")
+	ins.state.AddInputKey("warmupTicks", "300")
+	ins.state.AddInputKey("cooldownTicks", "300")
+	ins.state.AddInputKey("initialMoney", "100")
+	addFetchTicksInput(ins.state)
+	addStrategyInput(ins.state)
 }
 
-func (instance *LiveInstance) Update(ButtonIdx int, input map[string]string) {
+func (ins *LiveInstance) update(ButtonIdx int, input map[string]string) {
 }
