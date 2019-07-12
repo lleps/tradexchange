@@ -134,7 +134,7 @@ fun parseCandlesFrom1MinCSV(
             if (candleAccumulator == 1) {
                 candleMax = high
                 candleMin = low
-                if (candleOpen == 0.0) candleOpen = open // the first candle. for the following candles the open is the latest candle close
+                candleOpen = open // the first candle. for the following candles the open is the latest candle close
                 candleVolumeAccumulator = 0.0
             }
             // update vol, min, max
@@ -156,7 +156,7 @@ fun parseCandlesFrom1MinCSV(
                     DoubleNum.valueOf(candleVolumeAccumulator), // volume
                     DoubleNum.valueOf(0)
                 )
-                candleOpen = close // for the next candle
+                //candleOpen = close // for the next candle
                 result.add(tick)
             }
         }

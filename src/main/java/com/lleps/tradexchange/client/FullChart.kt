@@ -223,7 +223,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
     // Update extra charts without rebuilding the whole thing
     fun updateExtraCharts() {
         chartPlotExecutor.execute {
-            val tickRR = calculateResolution()
+            val tickRR = calculateResolution(minTimestamp, maxTimestamp)
             if (tickRR == 0) return@execute
             val charts = makeExtraCharts(tickRR, minTimestamp, maxTimestamp)
             Platform.runLater {
@@ -233,7 +233,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
         }
     }
 
-    private fun calculateResolution(maxTicks: Int = 800): Int {
+    private fun calculateResolution(minTimestamp: Long, maxTimestamp: Long, maxTicks: Int = 2000): Int {
         val tickCount = priceData.count { it.timestamp in (minTimestamp)..(maxTimestamp) }
         if (tickCount == 0) return 0
         var tickRR = 1
@@ -258,7 +258,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
 
     private fun plotWholeChart(minTimestamp: Long, maxTimestamp: Long) {
         // Calculate resolution
-        val tickRR = calculateResolution()
+        val tickRR = calculateResolution(minTimestamp, maxTimestamp)
         if (tickRR == 0) return
 
         hackTooltipStartTiming()
