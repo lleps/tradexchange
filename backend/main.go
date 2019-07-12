@@ -124,11 +124,18 @@ func GetInstances(w http.ResponseWriter, r *http.Request) {
 
 func GetInstanceState(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	_, state, _, err := resolveInstance(vars["instance"])
+	controller, state, _, err := resolveInstance(vars["instance"])
 	if checkError(err, w) {
 		return
 	}
 
+	// fix input
+	if state.Input == nil {
+		state.Input = make(map[string]string)
+	}
+	controller.ensureInput()
+
+	// respond
 	respond(w, state, "json")
 }
 
