@@ -32,7 +32,7 @@ class ClientMain : Application() {
     private val views = mutableMapOf<String, MainView>()
     private lateinit var connection: RESTClient
     private val gotInput = mutableMapOf<String, Unit>() // to fetch input only once per instance
-    private var waitingToAcceptError = false // if true, the background thread shouldn't try to update
+    private var updaterLock = 0L // if greater than getMillis, the background thread shouldn't update from server
     class ClientData(val host: String = "http://localhost:8080")
 
     private var clientData = ClientData()
@@ -265,41 +265,8 @@ class ClientMain : Application() {
     }
 
     private fun showError(string: String, throwable: Throwable? = null) {
-        waitingToAcceptError = true
         Platform.runLater {
             Toast.show(string+"\n"+throwable.toString(), stage)
-            /*val dialog = Dialog<ButtonType>()
-            dialog.title = "Error"
-            val dialogPane = dialog.dialogPane
-            dialogPane.contentText = "Details of the problem:"
-            dialogPane.buttonTypes.addAll(ButtonType.OK)
-            dialogPane.contentText = string + "\n" + (throwable?.message ?: "")
-            dialog.initModality(Modality.APPLICATION_MODAL)
-
-            if (throwable != null) {
-                val label = Label("Exception stacktrace:")
-                val sw = StringWriter()
-                val pw = PrintWriter(sw)
-                throwable.printStackTrace(pw)
-                pw.close()
-
-                val textArea = TextArea(sw.toString())
-                textArea.isEditable = false
-                textArea.isWrapText = true
-                textArea.maxWidth = Double.MAX_VALUE
-                textArea.maxHeight = Double.MAX_VALUE
-                GridPane.setVgrow(textArea, Priority.ALWAYS)
-                GridPane.setHgrow(textArea, Priority.ALWAYS)
-
-                val root = GridPane()
-                root.isVisible = false
-                root.maxWidth = Double.MAX_VALUE
-                root.add(label, 0, 0)
-                root.add(textArea, 0, 1)
-                dialogPane.expandableContent = root
-            }
-            dialog.showAndWait()
-            waitingToAcceptError = false*/
         }
     }
 
@@ -308,8 +275,8 @@ class ClientMain : Application() {
         thread(start = true, name = "backendDataFetchThread", isDaemon = true) {
             var lastInstance = ""
             while (true) {
-                if (waitingToAcceptError) {
-                    Thread.sleep(15000)
+                if (updaterLock > System.currentTimeMillis()) {
+                    Thread.sleep(500)
                     continue
                 }
 
@@ -322,6 +289,8 @@ class ClientMain : Application() {
                     connection.getInstanceVersion(instance) { (newStateVersion,newChartVersion), throwable ->
                         if (throwable != null) {
                             showError("getInstanceVersion", throwable)
+                            // this error is because the server is off. so stop trying for a while
+                            updaterLock = System.currentTimeMillis() + 5000
                             return@getInstanceVersion
                         }
                         if (newStateVersion > stateVersion.getValue(instance)) {
