@@ -70,7 +70,7 @@ class MainView {
         tabPane.minHeight = paneWidth * 0.5
 
         outputPane.prefWidth = paneWidth
-        controlPane.children.add(ScrollPane(inputPane))
+        controlPane.children.add(ScrollPane(inputPane).apply { isFitToWidth = true })
         controlPane.children.add(HBox(statusLabel).apply { alignment = Pos.CENTER_RIGHT; prefWidth = paneWidth })
         controlPane.children.add(HBox(5.0, action2Button, action1Button).apply { alignment = Pos.CENTER_RIGHT; prefWidth = paneWidth })
         controlPane.children.add(tabPane)
@@ -126,6 +126,9 @@ class MainView {
                 label.isDisable = !shouldBeVisible
                 field.isDisable = !shouldBeVisible
             }
+            val opacity = if (field.text.startsWith("#")) .3 else 1.0
+            label.opacity = opacity
+            field.opacity = opacity
         }
     }
 
@@ -143,8 +146,13 @@ class MainView {
             val modelInput = VBox(-3.0) // to group this in an accordition
             inputUIElements.clear()
             for ((itemName, itemDefaultValue) in input) {
-                val label = Label(itemName)
-                val field = TextField(itemDefaultValue.toString())
+                val label = Label(itemName).apply {
+                    style = "-fx-font-size: 12px;"
+                }
+                val field = TextField(itemDefaultValue.toString()).apply {
+                    style = "-fx-font-size: 12px;"
+                    prefWidth = 100.0
+                }
                 field.setOnKeyTyped { Platform.runLater { updateInput() } }
                 inputUIElements += Pair(label, field)
                 val paneToAdd =
