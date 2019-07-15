@@ -170,18 +170,14 @@ class TrainInstanceController(
         var profitSum = 0.0
         val sellComparator: (Double, Double) -> Boolean = { a, b -> a > b }
         val buyComparator: (Double, Double) -> Boolean = { a, b -> a < b }
-        val predictionModel = if (type == OperationType.BUY) {
-            PredictionModel.createModel(timeSeries, input)
-        } else {
-            val model = PredictionModel.createFromFile(timeSeries, name = this.instance)
+        val predictionModel = PredictionModel.createModel(timeSeries, input)
+        if (type == OperationType.SELL) { // load buy model (necessary for buy predictions only)
             out.write("Loading buy model... (${this.instance})")
-            model.loadBuyModel(name = this.instance)
+            predictionModel.loadBuyModel(this.instance)
             out.write("Loaded.")
-            model
         }
         var i = warmupTicks
         var buyPrice = 0.0
-
 
         // Copy necessary shit to global state.
         // That's because some stuff need to be rebuilt
@@ -194,15 +190,24 @@ class TrainInstanceController(
 
         // Add operations
         out.write("Adding operations...")
+        var maxMlValue: Double? = null
         while (i < timeSeries.endIndex - autobuyPeriod - 1) {
-            if (buyPrice == 0.0) {
+            val enoughTimeToCompleteATrade = i < (timeSeries.endIndex - autosellPeriod - autobuyPeriod)
+            // in sell-mode: buy only of there's enough time to complete a trade.
+            // in buy-mode: that is not necessary.
+            val canBuy = if (type == OperationType.SELL) enoughTimeToCompleteATrade else true
+            if (buyPrice == 0.0 && canBuy) {
                 val idx = if (type == OperationType.BUY) {
                     // best bar for buy training. Only if some autobuyPeriod is specified. Otherwise break the loop
                     if (autobuyPeriod == 0) break
                     getBestBar(timeSeries, i, i + autobuyPeriod, buyComparator).first + autobuyOffset
                 } else {
                     // predicted bar for sell training
-                    if (predictionModel.predictBuy(i) > buyPrediction) {
+                    val mlValue = predictionModel.predictBuy(i)
+                    if (maxMlValue == null || mlValue > maxMlValue) {
+                        maxMlValue = mlValue
+                    }
+                    if (mlValue > buyPrediction) {
                         i
                     } else {
                         i++
@@ -222,6 +227,10 @@ class TrainInstanceController(
                 bar.markAs(1)
                 i = idx + 1
             } else {
+                // this will happen if enoughTimeToCompleteATrade and the trade has been closed.
+                // just break the loop
+                if (buyPrice == 0.0) break
+
                 // if autosellPeriod is 0 and buymode is sell, just go to the next buy.
                 // Will create a bunch of unmatched buys and its ok
                 if (autosellPeriod == 0 && type == OperationType.SELL) {
@@ -251,10 +260,6 @@ class TrainInstanceController(
         }
 
         if (operations.size > 0) {
-            // remove the last unmatched buy
-            if (operations.isNotEmpty() && operations.last().type == OperationType.BUY) {
-                operations.removeAt(operations.size - 1)
-            }
             // Print resume
             val tradeCount = code - 1
             val trainDays = (
@@ -262,6 +267,7 @@ class TrainInstanceController(
                     timeSeries.getBar(warmupTicks).endTime.toEpochSecond()) / 3600 / 24
             val tradesPerDay = tradeCount / trainDays.toDouble()
             out.write("$trainDays days")
+            if (maxMlValue != null) out.write("Max ml value: $maxMlValue")
             out.write("%d trades, avg %.1f%s (sum %.1f%s)"
                 .format(tradeCount, profitSum / tradeCount.toDouble(), "%", profitSum, "%"))
             out.write("trades/day %.1f, profit/day %.1f%s"
@@ -301,7 +307,8 @@ class TrainInstanceController(
     ): Pair<Int, Bar> {
         var bestIdx = fromInclusive
         var bestVal = series.getBar(fromInclusive).closePrice.doubleValue()
-        for (i in fromInclusive .. toInclusive) {
+        val max = series.endIndex
+        for (i in minOf(max, fromInclusive) .. minOf(max, toInclusive)) {
             val c = series.getBar(i).closePrice.doubleValue()
             if (comparator(c, bestVal)) {
                 bestVal = c

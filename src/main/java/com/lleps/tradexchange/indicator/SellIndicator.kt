@@ -29,6 +29,7 @@ abstract class SellIndicator(val series: TimeSeries) : Indicator<Num> {
         return if (buyTick == null) {
             var lastBuyTick = 0
             for (j in (i - 1) downTo (i - lookback)) {
+                if (j < 0) continue
                 val mark = timeSeries.getBar(j).getMark()
                 if (mark == 1/*buy*/) {
                     lastBuyTick = j
