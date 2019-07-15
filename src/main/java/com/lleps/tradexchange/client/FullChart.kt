@@ -233,7 +233,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
         }
     }
 
-    private fun calculateResolution(minTimestamp: Long, maxTimestamp: Long, maxTicks: Int = 2000): Int {
+    private fun calculateResolution(minTimestamp: Long, maxTimestamp: Long, maxTicks: Int = 1000): Int {
         val tickCount = priceData.count { it.timestamp in (minTimestamp)..(maxTimestamp) }
         if (tickCount == 0) return 0
         var tickRR = 1
@@ -301,20 +301,26 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
     ): XYChart.Series<Number, Number> {
         val candleSeries = XYChart.Series<Number, Number>()
         var candleIndex = 0
+        var lastClose = 0.0 // for RR, to sync last candle close with new candle open, so the candles are joined properly on low resolution
         for (candle in priceData) {
             if (candle.timestamp < minTimestamp) continue
             else if (candle.timestamp > maxTimestamp) break
             if (candleIndex++ % tickRR != 0) continue
 
+            val newCandle = if (tickRR > 1 && lastClose != 0.0) {
+                candle.copy(open = lastClose)
+            } else {
+                candle
+            }
             candleSeries.data.add(
                 XYChart.Data(
                     candle.timestamp,
-                    candle.open,
-                    candle
+                    newCandle.open,
+                    newCandle
                 )
             )
+            lastClose = candle.close
         }
-        println("done.\n")
         return candleSeries
     }
 
