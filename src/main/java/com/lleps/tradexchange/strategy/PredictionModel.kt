@@ -24,7 +24,8 @@ import org.ta4j.core.num.Num
 class PredictionModel private constructor(
     private val input: Map<String, String>,
     private val buyIndicators: List<Triple<String, String, Indicator<Num>>>,
-    private val sellIndicators: List<Triple<String, String, Indicator<Num>>>
+    private val sellIndicators: List<Triple<String, String, Indicator<Num>>>,
+    private val timesteps: Int
 ){
     private class IndicatorType(
         val group: String, // to group them in charts
@@ -200,10 +201,12 @@ class PredictionModel private constructor(
             val closeIndicator = ClosePriceIndicator(series)
             val buyIndicators = parseIndicators(input, OperationType.BUY, series, closeIndicator, "model.buy")
             val sellIndicators = parseIndicators(input, OperationType.SELL, series, closeIndicator, "model.sell")
+            val timesteps = input.getValue("trainTimesteps").toInt()
             return PredictionModel(
                 input.toMap(),
                 buyIndicators,
-                sellIndicators)
+                sellIndicators,
+                timesteps)
         }
     }
 
@@ -268,7 +271,6 @@ class PredictionModel private constructor(
         network: MultiLayerNetwork,
         indicators: List<Triple<String, String, Indicator<Num>>>
     ): Double {
-        val timesteps = 7
         val timestepsArray = Array(indicators.size) { indicatorIndex ->
             DoubleArray(timesteps) { index ->
                 indicators[indicatorIndex].third[i - (timesteps - index - 1)]
