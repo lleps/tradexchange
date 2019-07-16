@@ -32,9 +32,18 @@ class PredictionModel private constructor(
         val name: String,
         val defaultValue: String,
         val type: OperationType?,
-        val needsNormalization: Boolean,
+        val normalizationType: NormalizationType,
         val factory: (TimeSeries, Indicator<Num>, List<InputEntry>) -> Indicator<Num>
     )
+
+    private enum class NormalizationType {
+        /** Do not normalize at all (for those with built-in normalization) */
+        NONE,
+        /** Will use min,max to normalize based on the indicator being normalized. */
+        STANDALONE,
+        /** Will use min,max to normalize based on all the indicators that share this normalization type. */
+        GROUP
+    }
 
     /** Used to pass as parameters to indicator builders. Can be read as a series, or int (periods). */
     private class InputEntry(
@@ -66,67 +75,82 @@ class PredictionModel private constructor(
 
     companion object {
         private val FEATURE_TYPES = listOf(
-            // open-high-low-close and volume
-            IndicatorType("price", "close", "", null, true) { series, _, _ ->
+
+            // All the in-price indicators.
+            // Normalized in group.
+            // They all share the same "price" chart
+
+            IndicatorType("price", "close", "", null, NormalizationType.GROUP) { series, _, _ ->
                 ClosePriceIndicator(series)
             },
-            IndicatorType("price", "open", "", null, true) { series, _, _ ->
+            IndicatorType("price", "open", "", null, NormalizationType.GROUP) { series, _, _ ->
                 OpenPriceIndicator(series)
             },
-            IndicatorType("price", "high", "", null, true) { series, _, _ ->
+            IndicatorType("price", "high", "", null, NormalizationType.GROUP) { series, _, _ ->
                 MaxPriceIndicator(series)
             },
-            IndicatorType("price", "low", "", null, true) { series, _, _ ->
+            IndicatorType("price", "low", "", null, NormalizationType.GROUP) { series, _, _ ->
                 MinPriceIndicator(series)
             },
-            IndicatorType("price", "obv", "", null, true) { series, _, _ ->
-                OnBalanceVolumeIndicator(series)
+            IndicatorType("price", "ema", "12*1,4", null, NormalizationType.GROUP) { _, indicator, input ->
+                EMAIndicator(indicator, input[0].value())
             },
-            IndicatorType("color", "color", "", null, true) { series, _, _ ->
-                CandleColorIndicator(series)
-            },
-            // trade indicators. Those are the only specific to one op type. None normalized
-            IndicatorType("pressure", "buyPressure", "100,2,\$warmupTicks", OperationType.BUY, false) { series, _, input ->
+
+            // Past-trade indicators.
+            // Those are the only specific to one op type. None normalized
+            // Also those are non-deterministic, non-cacheable, since they all depends on the
+            // state of the bars (ie buy/sell/none), which is mutable.
+
+            IndicatorType("pressure", "buyPressure", "100,2,\$warmupTicks", OperationType.BUY, NormalizationType.NONE) { series, _, input ->
                 BuyPressureIndicator(series, input[0].value(), input[1].value(), input[2].value())
             },
-            IndicatorType("pressure", "sellPressure", "100", OperationType.SELL, false) { series, _, input ->
+            IndicatorType("pressure", "sellPressure", "100", OperationType.SELL, NormalizationType.NONE) { series, _, input ->
                 SellPressureIndicator(series, input[0].value())
             },
-            IndicatorType("pct", "pct", "5", OperationType.SELL, false) { series, _, input ->
+            IndicatorType("pct", "pct", "5", OperationType.SELL, NormalizationType.NONE) { series, _, input ->
                 NormalizedBuyPercentChangeIndicator(series, input[0].value().toDouble())
             },
+
+            // Standalone indicators. Drawn on their own charts.
+            // Those are all decoupled from each other, so can be normalized
+            // with the default (val-min)/(max-min).
+
+            // this one is to get the color and size of the bar as a separate feature. Might be useful for the model
+            IndicatorType("color", "color", "", null, NormalizationType.STANDALONE) { series, _, _ ->
+                CandleColorIndicator(series)
+            },
             // volatility indicators
-            IndicatorType("bb%", "bb%", "20,2", null, true) { _, indicator, input ->
+            IndicatorType("bb%", "bb%", "20,2", null, NormalizationType.STANDALONE) { _, indicator, input ->
                 PercentBIndicatorFixed(indicator, input[0].value(), input[1].value().toDouble())
             },
             // momentum indicators
-            IndicatorType("williamsR%", "williamsR%", "14", null, true) { s, _, input ->
+            IndicatorType("williamsR%", "williamsR%", "14", null, NormalizationType.STANDALONE) { s, _, input ->
                 WilliamsRIndicatorFixed(s, input[0].value())
             },
-            IndicatorType("cci", "cci", "20", null, true) { s, _, input ->
+            IndicatorType("cci", "cci", "20", null, NormalizationType.STANDALONE) { s, _, input ->
                 CCIIndicator(s, input[0].value())
             },
-            IndicatorType("roc", "roc", "9", null, true) { _, indicator, input ->
+            IndicatorType("roc", "roc", "9", null, NormalizationType.STANDALONE) { _, indicator, input ->
                 ROCIndicator(indicator, input[0].value())
             },
-            IndicatorType("rsi", "rsi", "14", null, true) { _, indicator, input ->
+            IndicatorType("rsi", "rsi", "14", null, NormalizationType.STANDALONE) { _, indicator, input ->
                 RSIIndicator(indicator, input[0].value())
             },
             // trending indicators
-            IndicatorType("price", "ema", "12*1,4", null, true) { _, indicator, input ->
-                EMAIndicator(indicator, input[0].value())
-            },
-            IndicatorType("macd", "macd", "12,26", null, true) { _, indicator, input ->
+            IndicatorType("macd", "macd", "12,26", null, NormalizationType.STANDALONE) { _, indicator, input ->
                 MACDIndicator(indicator, input[0].value(), input[1].value())
             },
-            IndicatorType("macd", "signal", "macd1,9", null, true) { _, _, input ->
+            IndicatorType("macd", "signal", "macd1,9", null, NormalizationType.STANDALONE) { _, _, input ->
                 EMAIndicator(input[0].indicator(), input[1].value())
             },
-            IndicatorType("macd", "histogram", "macd1,signal", null, true) { _, _, input ->
+            IndicatorType("macd", "histogram", "macd1,signal", null, NormalizationType.STANDALONE) { _, _, input ->
                 CompositeIndicator(input[0].indicator(), input[1].indicator()) { macd, signal -> macd - signal }
             },
             // volume indicators
-            IndicatorType("obvo", "obvo", "24", null, true) { series, _, input ->
+            IndicatorType("obv", "obv", "", null, NormalizationType.STANDALONE) { series, _, _ ->
+                OnBalanceVolumeIndicator(series)
+            },
+            IndicatorType("obvo", "obvo", "24", null, NormalizationType.STANDALONE) { series, _, input ->
                 OBVOscillatorIndicator(series, input[0].value())
             }
         )
@@ -161,6 +185,7 @@ class PredictionModel private constructor(
             val normalizationPeriod = input.getValue("$prefix.normalizationPeriod").toInt()
             val result = mutableListOf<Triple<String, String, Indicator<Num>>>()
             val indicators = mutableMapOf<String, Indicator<Num>>()
+            val groupNormalizerBuilder = GroupNormalizer.Builder()
             for (type in FEATURE_TYPES.filter { it.type == null || it.type == opType }) {
                 val key = "$prefix.${type.name}"
                 val wholeValue = input.getValue(key)
@@ -182,10 +207,15 @@ class PredictionModel private constructor(
                     val paramsArray = value.split(",").map { InputEntry(indicators, input, m, it) }
                     val indicator = type.factory(series, closeIndicator, paramsArray)
                     indicators[type.name] = indicator
-                    val finalIndicator = if (type.needsNormalization) {
-                        NormalizationIndicator(indicator, normalizationPeriod)
-                    } else {
-                        indicator
+
+                    // TODO maybe pass the period directly to the builder. may be cached and be faster.
+                    val finalIndicator = when (type.normalizationType) {
+                        NormalizationType.NONE -> indicator
+                        NormalizationType.STANDALONE -> NormalizationIndicator(indicator, normalizationPeriod)
+                        NormalizationType.GROUP -> {
+                            groupNormalizerBuilder.addIndicator(indicator)
+                            GroupNormalizer(indicator, groupNormalizerBuilder, normalizationPeriod)
+                        }
                     }
                     result.add(Triple(type.group, type.name + (idx + 1), finalIndicator))
                 }

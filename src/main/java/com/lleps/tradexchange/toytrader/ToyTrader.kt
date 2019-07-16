@@ -17,6 +17,7 @@ import javafx.scene.Scene
 import javafx.scene.control.Button
 import javafx.scene.control.Label
 import javafx.scene.control.TextField
+import javafx.scene.input.KeyCode
 import javafx.scene.layout.BorderPane
 import javafx.scene.layout.HBox
 import javafx.scene.layout.VBox
@@ -60,6 +61,7 @@ class ToyTrader : Application() {
     }
 
     // state
+    private var autoUpdateMarket = true
     private var currentEpoch = 0L
     private var currentPrice = 1.0
     private val openPositions = mutableListOf<Pair<Double, Double>>()
@@ -131,7 +133,12 @@ class ToyTrader : Application() {
 
     private fun createPanel(): VBox {
         profitLabel = Label("market $24    $24 5.1'c")
-        startStopButton = Button("Start")
+        startStopButton = Button("Stop").apply {
+            setOnAction {
+                autoUpdateMarket = !autoUpdateMarket
+                text = if (autoUpdateMarket) "Stop" else "Start"
+            }
+        }
         buyField = TextField()
         buyButton = Button("Buy").apply {
             setOnAction {
@@ -177,6 +184,23 @@ class ToyTrader : Application() {
         )
     }
 
+    // TODO normalize the price in the model using max-min
+
+    // como hacerlo.
+    // 1. periodo ie 300 (3d). buscar, de todos los elementos ahi, el max y el min
+    // 2. para cada valor, restarle min y dividirlo por max-min.
+    // ej, min 5 max 200.
+    // value 10. seria (10-5)/(200-5) = 0.02.
+    // value 110. (110-5)/(200-5) = 0.53
+
+    // entonces para crearlo, puedo...
+    // 1. no puede estar normalizado.
+    // SpecialNormalizer(indicatorToNormalize, vararg otherIndicatorsToCalculateMinMax)
+    // so... I could first of all, create all the indicators as-is
+    // then, assign the "normalizer" to "standalone" or "groupNormalizer" (NOT_NORMALIZED, OWN_NORMALIZER, GROUP_NORMALIZED)
+    // then, you will create a GroupNormalizer.Builder. And add indicators to it.
+    // then, you end up doing GroupNormalizer(indicator, GroupNormalizer.Builder)
+
     private fun initSeries() {
         println("loading csv...")
         val data = parseCandlesFrom1MinCSV("../Bitfinex-historical-data/ETHUSD/Candles_1m/2019/merged.csv", 900)
@@ -184,7 +208,8 @@ class ToyTrader : Application() {
         println("loaded.")
         closeIndicator = ClosePriceIndicator(series)
         priceIndicators.add(Pair("emaShort", EMAIndicator(closeIndicator, 26)))
-        priceIndicators.add(Pair("emaLong", EMAIndicator(closeIndicator, 48)))
+        priceIndicators.add(Pair("emaLong", EMAIndicator(closeIndicator, 80)))
+        priceIndicators.add(Pair("emaLongLong", EMAIndicator(closeIndicator, 300)))
         extraIndicators.add(Pair("stoch", StochasticRSIIndicator(closeIndicator, 14)))
         extraIndicators.add(Pair("macd", MACDIndicator(closeIndicator, 12, 26)))
         extraIndicators.add(Pair("obv", OnBalanceVolumeIndicator(series)))
@@ -193,7 +218,7 @@ class ToyTrader : Application() {
     override fun start(stage: Stage) {
         thread {
             while (true) {
-                if (::series.isInitialized) {
+                if (::series.isInitialized && autoUpdateMarket) {
                     Platform.runLater { updateMarket() }
                 }
                 Thread.sleep(1000)
@@ -202,6 +227,11 @@ class ToyTrader : Application() {
         chart = FullChart()
         initSeries()
         val root = HBox(chart, createPanel())
+        root.setOnKeyPressed {
+            if (it.code == KeyCode.RIGHT) {
+                updateMarket()
+            }
+        }
         stage.scene = Scene(root)
         this.stage = stage
         stage.show()
