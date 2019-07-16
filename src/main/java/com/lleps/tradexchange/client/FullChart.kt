@@ -229,6 +229,7 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
             Platform.runLater {
                 extraChartsContainer.children.setAll(charts)
                 resizeExtraCharts(charts)
+                bindExtraChartsToMainChart(charts)
             }
         }
     }
@@ -262,7 +263,6 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
         if (tickRR == 0) return
 
         hackTooltipStartTiming()
-        createAndAddPriceChart()
 
         // Build all the series in parallel. Plot them when they're ready
         chartPlotExecutor.execute {
@@ -272,14 +272,19 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
             operationSeries = makeOperationSeries(minTimestamp, maxTimestamp)
             mainChartSeries.add(operationSeries)
             mainChartSeries.addAll(makePriceChartSeries(tickRR, minTimestamp, maxTimestamp))
-            val xa = (priceChart.xAxis as NumberAxis)
-            xa.lowerBound = minTimestamp.toDouble()
-            xa.upperBound = maxTimestamp.toDouble()
+
             // make extra charts
             val extraCharts = makeExtraCharts(tickRR, minTimestamp, maxTimestamp) // ranges adjusted builtin
 
             // Plot main chart
             Platform.runLater {
+                // add price chart
+                createAndAddPriceChart()
+                val xa = (priceChart.xAxis as NumberAxis)
+                xa.lowerBound = minTimestamp.toDouble()
+                xa.upperBound = maxTimestamp.toDouble()
+                bindExtraChartsToMainChart(extraCharts)
+
                 priceChart.data = mainChartSeries
                 extraChartsContainer.children.setAll(extraCharts)
                 resizeExtraCharts(extraCharts)
@@ -287,6 +292,23 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
             }
         }
     }
+
+    private fun bindExtraChartsToMainChart(charts: List<XYChart<Number, Number>>) {
+        for (c in charts) {
+            val xAxis = c.xAxis as NumberAxis
+            xAxis.lowerBoundProperty().bind((priceChart.xAxis as NumberAxis).lowerBoundProperty())
+            xAxis.upperBoundProperty().bind((priceChart.xAxis as NumberAxis).upperBoundProperty())
+        }
+    }
+
+    // TODO: unsupervised learning basado en scores?
+    // O sea, no se como entrenar esto bien...
+    // podria bajarle la frecuencia para q haga como quiero, no se.
+    // o q haga asi:
+    // empieza comprando al rsi, macd y eso random.
+    // entrena el modelo.
+    // usa el modelo entrenado.
+    // basado en el performance, cambia lo que haga falta. repìte
 
     fun fill() {
         minTimestamp = priceData.firstOrNull()?.timestamp ?: 0L
@@ -369,10 +391,6 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
             xAxis.minorTickCount = 0
             xAxis.isTickLabelsVisible = false
             xAxis.isTickMarkVisible = false
-            Platform.runLater {
-                xAxis.lowerBoundProperty().bind((priceChart.xAxis as NumberAxis).lowerBoundProperty())
-                xAxis.upperBoundProperty().bind((priceChart.xAxis as NumberAxis).upperBoundProperty())
-            }
 
             val yAxis = NumberAxis(0.0, 1.0, 5.0)
             yAxis.side = Side.RIGHT
