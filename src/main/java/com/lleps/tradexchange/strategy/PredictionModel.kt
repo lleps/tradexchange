@@ -12,6 +12,8 @@ import org.ta4j.core.Indicator
 import org.ta4j.core.TimeSeries
 import org.ta4j.core.indicators.*
 import org.ta4j.core.indicators.helpers.*
+import org.ta4j.core.indicators.volume.ChaikinMoneyFlowIndicator
+import org.ta4j.core.indicators.volume.ChaikinOscillatorIndicator
 import org.ta4j.core.indicators.volume.OnBalanceVolumeIndicator
 import org.ta4j.core.num.Num
 
@@ -152,6 +154,12 @@ class PredictionModel private constructor(
             },
             IndicatorType("obvo", "obvo", "24", null, NormalizationType.STANDALONE) { series, _, input ->
                 OBVOscillatorIndicator(series, input[0].value())
+            },
+            IndicatorType("cmf", "cmf", "20", null, NormalizationType.STANDALONE) { series, _, input ->
+                ChaikinMoneyFlowIndicator(series, input[0].value())
+            },
+            IndicatorType("co", "co", "3,10", null, NormalizationType.STANDALONE) { series, _, input ->
+                ChaikinOscillatorIndicator(series, input[0].value(), input[1].value())
             }
         )
 

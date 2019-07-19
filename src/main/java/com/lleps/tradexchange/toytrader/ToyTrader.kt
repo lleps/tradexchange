@@ -5,6 +5,8 @@ import com.lleps.tradexchange.Operation
 import com.lleps.tradexchange.OperationType
 import com.lleps.tradexchange.client.FullChart
 import com.lleps.tradexchange.client.Toast
+import com.lleps.tradexchange.indicator.NormalizationIndicator
+import com.lleps.tradexchange.indicator.WilliamsRIndicatorFixed
 import com.lleps.tradexchange.server.fetchTicksRequiredInput
 import com.lleps.tradexchange.strategy.ChartWriterImpl
 import com.lleps.tradexchange.util.get
@@ -31,9 +33,12 @@ import org.ta4j.core.indicators.MACDIndicator
 import org.ta4j.core.indicators.RSIIndicator
 import org.ta4j.core.indicators.StochasticRSIIndicator
 import org.ta4j.core.indicators.helpers.ClosePriceIndicator
+import org.ta4j.core.indicators.volume.AccumulationDistributionIndicator
+import org.ta4j.core.indicators.volume.ChaikinMoneyFlowIndicator
 import org.ta4j.core.indicators.volume.OnBalanceVolumeIndicator
 import org.ta4j.core.num.Num
 import kotlin.concurrent.thread
+import kotlin.random.Random
 
 /** Program to play with the market and check how much money you can make,
  * as a human of course.
@@ -62,6 +67,7 @@ class ToyTrader : Application() {
 
     // state
     private var autoUpdateMarket = true
+    private var startEpoch = 0L
     private var currentEpoch = 0L
     private var currentPrice = 1.0
     private val openPositions = mutableListOf<Pair<Double, Double>>()
@@ -80,6 +86,7 @@ class ToyTrader : Application() {
 
     // chart data
     private lateinit var series: TimeSeries
+    private val subSeries = mutableListOf<TimeSeries>()
     private var currentTick = 100
     private var window = 50
     private lateinit var closeIndicator: ClosePriceIndicator
@@ -105,10 +112,12 @@ class ToyTrader : Application() {
                 bar.minPrice.doubleValue()
             ))
             for ((name, ind) in priceIndicators) chartWriter.priceIndicator(name, epoch, ind[i])
-            for ((name, ind) in extraIndicators) chartWriter.extraIndicator(name, name, epoch, ind[i])
+            for ((idx, pair) in extraIndicators.withIndex()) chartWriter.extraIndicator(pair.first, "$idx", epoch, pair.second[i])
         }
 
         currentEpoch = series.getBar(currentTick).endTime.toEpochSecond()
+        val daysPassed = (currentEpoch - startEpoch) / 3600 / 24
+        stage.title = "ToyTrader ($daysPassed days in)"
 
         // paint
         chart.priceData = candles
@@ -202,17 +211,33 @@ class ToyTrader : Application() {
     // then, you end up doing GroupNormalizer(indicator, GroupNormalizer.Builder)
 
     private fun initSeries() {
-        println("loading csv...")
+        print("loading csvs")
         val data = parseCandlesFrom1MinCSV("../Bitfinex-historical-data/ETHUSD/Candles_1m/2019/merged.csv", 900)
+        val subSeriesCoins = listOf("BTC")
+        print(".")
+        for (ss in subSeriesCoins) {
+            val subSerieTicks = parseCandlesFrom1MinCSV("../Bitfinex-historical-data/${ss}USD/Candles_1m/2019/merged.csv", 900)
+            subSeries.add(BaseTimeSeries(subSerieTicks))
+            print(".")
+        }
+        println()
         series = BaseTimeSeries(data)
         println("loaded.")
         closeIndicator = ClosePriceIndicator(series)
+        currentTick = Random.nextInt(0, series.barCount / 2)
+        startEpoch = series.getBar(currentTick).endTime.toEpochSecond()
+
         priceIndicators.add(Pair("emaShort", EMAIndicator(closeIndicator, 26)))
-        priceIndicators.add(Pair("emaLong", EMAIndicator(closeIndicator, 80)))
-        priceIndicators.add(Pair("emaLongLong", EMAIndicator(closeIndicator, 300)))
-        extraIndicators.add(Pair("stoch", StochasticRSIIndicator(closeIndicator, 14)))
-        extraIndicators.add(Pair("macd", MACDIndicator(closeIndicator, 12, 26)))
-        extraIndicators.add(Pair("obv", OnBalanceVolumeIndicator(series)))
+        priceIndicators.add(Pair("emaLong", EMAIndicator(closeIndicator, 40)))
+        priceIndicators.add(Pair("emaLongLong", EMAIndicator(closeIndicator, 80)))
+
+        for (s in listOf(series) + subSeries) {
+            val close = ClosePriceIndicator(s)
+            println("add indicators for $s...")
+            extraIndicators.add(Pair("rsi", RSIIndicator(close, 14)))
+            extraIndicators.add(Pair("macd", NormalizationIndicator(MACDIndicator(close, 12, 26), 300)))
+            extraIndicators.add(Pair("adi", ChaikinMoneyFlowIndicator(s, 20)))
+        }
     }
 
     override fun start(stage: Stage) {

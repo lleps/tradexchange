@@ -395,11 +395,13 @@ class FullChart(val useCandles: Boolean = true) : BorderPane() {
             val yAxis = NumberAxis(0.0, 1.0, 5.0)
             yAxis.side = Side.RIGHT
             yAxis.label = indicatorName
+            yAxis.isForceZeroInRange = false
 
             val chart = LineChart(xAxis, yAxis)
             chart.createSymbols = false
             chart.isLegendVisible = false
             chart.animated = false
+
 
             val chartData = FXCollections.observableArrayList<XYChart.Series<Number, Number>>()
             var minExtraVal = Double.MAX_VALUE
