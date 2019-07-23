@@ -238,7 +238,7 @@ class TrainInstanceController(
                     continue
                 }
 
-                val idx = getBestBar(timeSeries, i, i + autosellPeriod, sellComparator).first + autobuyOffset
+                val idx = getBestBar(timeSeries, i + 1, i + autosellPeriod, sellComparator).first + autobuyOffset
                 val bar = timeSeries.getBar(idx)
                 val profit = (bar.closePrice.doubleValue() - buyPrice) / buyPrice * 100.0
                 // only effective add sells in sellmode, the first mode is only for buy points?

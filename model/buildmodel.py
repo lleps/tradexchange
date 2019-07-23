@@ -62,11 +62,23 @@ y = y[num_timesteps - 1:] # remove first num_timesteps entries to sync size with
 print("len(X):", X.shape[0], "len(y):", len(y))
 print("Shape of X:", X.shape)
 
+#config
+rnn_type = 'gru' # or gru
+
+# build layers
 model = tf.keras.models.Sequential()
-model.add(tf.keras.layers.LSTM(64, input_shape=(X.shape[1], X.shape[2])))
-model.add(tf.keras.layers.Dense(128, activation='relu'))
+if rnn_type == 'lstm':
+    model.add(tf.keras.layers.LSTM(32, input_shape=(X.shape[1], X.shape[2])))
+elif rnn_type == 'gru':
+    model.add(tf.keras.layers.GRU(32, input_shape=(X.shape[1], X.shape[2])))
+else:
+    print("invalid rnn_type:", rnn_type)
+    exit(1)
+model.add(tf.keras.layers.Dropout(0.2))
+model.add(tf.keras.layers.Dense(32, activation='relu'))
 model.add(tf.keras.layers.Dense(1, activation='sigmoid'))
 
+# compile model
 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 model.fit(X, y, epochs=epochs, batch_size=batch_size, verbose=2)
 model.save(output_model)
