@@ -70,6 +70,18 @@ func (chartWriter *DefaultChartWriter) ExtraIndicator(chartName string, seriesNa
 type Strategy struct {
 }
 
-func addStrategyInput(state *InstanceState) {
+type strategyInput struct {
+	buyMlValue float32
+	sellMlValue float32
+}
+
+func parseStrategyInput(input map[string]string) (*strategyInput, error) {
 
 }
+
+func addStrategyInput(state *InstanceState) {
+	state.AddInputKey("strategy.buyMlValue", "0.1")
+	state.AddInputKey("strategy.sellMlValue", "0.1")
+}
+
+

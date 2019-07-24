@@ -37,6 +37,34 @@ func (ins *BacktestInstance) update(ButtonIdx int, input map[string]string) {
 	}()
 }
 
+type backtestInput struct {
+	pair string
+	period int
+	warmupTicks int
+}
+
+func parseInt(s string, dst *int) error {
+	result, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return err
+	}
+	*dst = int(result)
+	return nil
+}
+
+func parseBacktestInput(input map[string]string) (*backtestInput, error) {
+	var result backtestInput
+	var err error
+	result.pair = input["pair"]
+	if err = parseInt(input["period"], &result.period); err != nil {
+		return nil, err
+	}
+	if err = parseInt(input["warmupTicks"], &result.warmupTicks); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 func doBacktest(state *InstanceState, out OutputWriter, input map[string]string) error {
 	period, err := strconv.ParseInt(input["period"], 10, 64)
 	if err != nil {
