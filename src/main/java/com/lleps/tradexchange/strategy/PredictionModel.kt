@@ -5,9 +5,6 @@ import com.lleps.tradexchange.indicator.*
 import com.lleps.tradexchange.util.get
 import com.lleps.tradexchange.util.loadFrom
 import com.lleps.tradexchange.util.saveTo
-import org.deeplearning4j.nn.modelimport.keras.KerasModelImport
-import org.deeplearning4j.nn.multilayer.MultiLayerNetwork
-import org.nd4j.linalg.factory.Nd4j
 import org.ta4j.core.Indicator
 import org.ta4j.core.TimeSeries
 import org.ta4j.core.indicators.*
@@ -271,49 +268,50 @@ class PredictionModel private constructor(
 
     // Predictions
 
-    private var buyModel: MultiLayerNetwork? = null
-    private var sellModel: MultiLayerNetwork? = null
+    private val mlClient = WsPredictionClient.getOrCreate()
 
     /** Set the model used in [predictBuy]. */
     fun loadBuyModel(name: String) {
-        val buyPath = "data/models/$name-open.h5"
-        buyModel = KerasModelImport.importKerasSequentialModelAndWeights(buyPath)
+        val buyPath = "./data/models/$name-open.h5"
+        mlClient.requestLoadBuyModel(buyPath)
     }
 
     /** Set the model used in [predictSell]. */
     fun loadSellModel(name: String) {
-        val sellPath = "data/models/$name-close.h5"
-        sellModel = KerasModelImport.importKerasSequentialModelAndWeights(sellPath)
+        val sellPath = "./data/models/$name-close.h5"
+        mlClient.requestLoadSellModel(sellPath)
     }
 
     /** Calculate sell prediction for the tick [i] and a buy at tick [buyTick] */
     fun predictSell(buyTick: Int, i: Int): Double {
-        if (sellModel == null) error("sell model not loaded")
-
         // set on the sell indicators the buy tick
         for (indicator in sellIndicators) {
             if (indicator is SellIndicator) indicator.buyTick = buyTick
         }
 
-        return predict(i, sellModel!!, sellIndicators)
+        return predict(i, buy = false, indicators = sellIndicators)
     }
 
     /** Calculate global buy prediction for the tick [i]. */
     fun predictBuy(i: Int): Double {
-        if (buyModel == null) error("buy model not loaded")
-        return predict(i, buyModel!!, buyIndicators)
+        return predict(i, buy = true, indicators = buyIndicators)
     }
 
     private fun predict(
         i: Int,
-        network: MultiLayerNetwork,
+        buy: Boolean = false,
         indicators: List<Triple<String, String, Indicator<Num>>>
     ): Double {
-        val timestepsArray = Array(indicators.size) { indicatorIndex ->
-            DoubleArray(timesteps) { index ->
+        val timestepsArray = Array(timesteps) { index ->
+            DoubleArray(indicators.size) { indicatorIndex ->
                 indicators[indicatorIndex].third[i - (timesteps - index - 1)]
             }
         }
-        return network.output(Nd4j.create(arrayOf(timestepsArray))).getDouble(0)
+
+        return if (buy) {
+            mlClient.requestBuyPrediction(timestepsArray)
+        } else {
+            mlClient.requestSellPrediction(timestepsArray)
+        }
     }
 }

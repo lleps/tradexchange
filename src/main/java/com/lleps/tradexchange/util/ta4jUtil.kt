@@ -2,7 +2,6 @@ package com.lleps.tradexchange.util
 
 import com.cf.client.poloniex.PoloniexExchangeService
 import com.cf.data.model.poloniex.PoloniexChartData
-import com.github.os72.protobuf351.DoubleValue
 import org.ta4j.core.Bar
 import org.ta4j.core.BaseBar
 import org.ta4j.core.Indicator
