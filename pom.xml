@@ -59,6 +59,11 @@
             <artifactId>unirest-java</artifactId>
             <version>1.4.9</version>
         </dependency>
+        <dependency>
+            <groupId>org.java-websocket</groupId>
+            <artifactId>Java-WebSocket</artifactId>
+            <version>1.4.0</version>
+        </dependency>
         <!-- For the server. Technical analysis stuff. -->
         <dependency>
             <groupId>org.ta4j</groupId>
