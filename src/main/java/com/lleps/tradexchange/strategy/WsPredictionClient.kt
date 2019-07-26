@@ -15,17 +15,21 @@ class WsPredictionClient(serverURI: URI) : WebSocketClient(serverURI) {
     private val reqQueue = LinkedBlockingQueue<String>() // messages to send
     private val resQueue = LinkedBlockingQueue<String>() // messages received
 
-    fun loadModel(path: String): Boolean {
-        return sendRecv("load:$path") == "ok"
-    }
+    fun requestLoadBuyModel(path: String): Boolean = sendRecv("buy_load:$path") == "ok"
 
-    fun predict(data: Array<DoubleArray>): Double {
+    fun requestLoadSellModel(path: String): Boolean = sendRecv("sell_load:$path") == "ok"
+
+    fun requestBuyPrediction(data: Array<DoubleArray>) = requestPrediction("buy_predict:", data)
+
+    fun requestSellPrediction(data: Array<DoubleArray>) = requestPrediction("sell_predict:", data)
+
+    private fun requestPrediction(prefix: String, data: Array<DoubleArray>): Double {
         sb.clear()
-        sb.append("predict:")
+        sb.append(prefix)
         val timestampCount = data.size
-        repeat(data.size) { i ->
+        repeat(timestampCount) { i ->
             val featureCount = data[i].size
-            repeat(data[i].size) { j ->
+            repeat(featureCount) { j ->
                 sb.append(data[i][j])
                 if (j < (featureCount - 1)) sb.append(",")
             }
@@ -41,8 +45,7 @@ class WsPredictionClient(serverURI: URI) : WebSocketClient(serverURI) {
 
     override fun onOpen(handshakedata: ServerHandshake) {
         // wait for the first msg in the queue to be available
-        val msg = reqQueue.take()
-        send(msg)
+        send(reqQueue.take())
     }
 
     override fun onMessage(message: String) {
@@ -120,9 +123,12 @@ class WsPredictionClient(serverURI: URI) : WebSocketClient(serverURI) {
                 doubleArrayOf(0.4, 0.2),
                 doubleArrayOf(0.01, 0.19)
             )
-            println(c.loadModel("/media/lleps/Compartido/Dev/tradexchange/data/models/[train]fafafa-open.h5"))
+            println(c.requestLoadSellModel("/media/lleps/Compartido/Dev/tradexchange/data/models/[train]fafafa-open.h5"))
+            println(c.requestLoadBuyModel("/media/lleps/Compartido/Dev/tradexchange/data/models/[train]fafafa-open.h5"))
+            var counter = 0
             while (true) {
-                totalPrediction += c.predict(features)
+                val prediction1 = c.requestBuyPrediction(features)
+                //val prediction2 = c.requestSellPrediction(features)
                 absMsgCounter++
                 secMsgCounter++
                 if (System.currentTimeMillis() >= lock) {
@@ -130,6 +136,11 @@ class WsPredictionClient(serverURI: URI) : WebSocketClient(serverURI) {
                     secMsgCounter = 0
                     lock = System.currentTimeMillis() + 1000
                     totalPrediction = 0.0
+                    if (++counter % 100 == 0) {
+                        println("reload...")
+                        println(c.requestLoadSellModel("/media/lleps/Compartido/Dev/tradexchange/data/models/[train]fafafa-open.h5"))
+                        println(c.requestLoadBuyModel("/media/lleps/Compartido/Dev/tradexchange/data/models/[train]fafafa-open.h5"))
+                    }
                 }
             }
         }
