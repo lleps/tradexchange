@@ -12,7 +12,6 @@ import kotlin.concurrent.thread
 /** Used to connect to a python server.  */
 class WsPredictionClient(serverURI: URI) : WebSocketClient(serverURI) {
     private val sb = StringBuilder()
-    private val reqQueue = LinkedBlockingQueue<String>() // messages to send
     private val resQueue = LinkedBlockingQueue<String>() // messages received
 
     fun requestLoadBuyModel(path: String): Boolean = sendRecv("buy_load:$path") == "ok"
@@ -39,18 +38,15 @@ class WsPredictionClient(serverURI: URI) : WebSocketClient(serverURI) {
     }
 
     private fun sendRecv(msg: String): String {
-        reqQueue.put(msg)
+        send(msg)
         return resQueue.take()
     }
 
     override fun onOpen(handshakedata: ServerHandshake) {
-        // wait for the first msg in the queue to be available
-        send(reqQueue.take())
     }
 
     override fun onMessage(message: String) {
-        resQueue.offer(message)
-        send(reqQueue.take())
+        resQueue.put(message)
     }
 
     override fun onClose(code: Int, reason: String, remote: Boolean) {
