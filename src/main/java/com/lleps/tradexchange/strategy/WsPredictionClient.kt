@@ -119,8 +119,8 @@ class WsPredictionClient(serverURI: URI) : WebSocketClient(serverURI) {
                 doubleArrayOf(0.4, 0.2),
                 doubleArrayOf(0.01, 0.19)
             )
-            println(c.requestLoadSellModel("/media/lleps/Compartido/Dev/tradexchange/data/models/[train]fafafa-open.h5"))
-            println(c.requestLoadBuyModel("/media/lleps/Compartido/Dev/tradexchange/data/models/[train]fafafa-open.h5"))
+            println(c.requestLoadSellModel("/media/lleps/Compartido/Dev/tradexchange/data/models/[train]fafafa-open.pb"))
+            println(c.requestLoadBuyModel("/media/lleps/Compartido/Dev/tradexchange/data/models/[train]fafafa-open.pb"))
             var counter = 0
             while (true) {
                 val prediction1 = c.requestBuyPrediction(features)
@@ -134,8 +134,8 @@ class WsPredictionClient(serverURI: URI) : WebSocketClient(serverURI) {
                     totalPrediction = 0.0
                     if (++counter % 100 == 0) {
                         println("reload...")
-                        println(c.requestLoadSellModel("/media/lleps/Compartido/Dev/tradexchange/data/models/[train]fafafa-open.h5"))
-                        println(c.requestLoadBuyModel("/media/lleps/Compartido/Dev/tradexchange/data/models/[train]fafafa-open.h5"))
+                        println(c.requestLoadSellModel("/media/lleps/Compartido/Dev/tradexchange/data/models/[train]fafafa-open.pb"))
+                        println(c.requestLoadBuyModel("/media/lleps/Compartido/Dev/tradexchange/data/models/[train]fafafa-open.pb"))
                     }
                 }
             }

@@ -2,11 +2,26 @@ import numpy
 import tensorflow as tf
 import pandas as pd
 import sys
-from pandas import read_csv
+import json
 from pandas import DataFrame
 from pandas import concat
 
-from sklearn import preprocessing
+
+def freeze_session(session, keep_var_names=None, output_names=None, clear_devices=True):
+    from tf_graph_util import convert_variables_to_constants
+    graph = session.graph
+    with graph.as_default():
+        freeze_var_names = list(set(v.op.name for v in tf.global_variables()).difference(keep_var_names or []))
+        output_names = output_names or []
+        output_names += [v.op.name for v in tf.global_variables()]
+        # Graph -> GraphDef ProtoBuf
+        input_graph_def = graph.as_graph_def()
+        if clear_devices:
+            for node in input_graph_def.node:
+                node.device = ""
+        frozen_graph = convert_variables_to_constants(session, input_graph_def,
+                                                      output_names, freeze_var_names)
+        return frozen_graph
 
 
 # For each row, join the features since past_rows up to future_rows, so
@@ -48,25 +63,28 @@ timesteps = int(sys.argv[3])
 input_csv = sys.argv[4]
 output_model = sys.argv[5]
 
+print("loading txt...")
 dataset = numpy.loadtxt(input_csv, delimiter=",")
 feature_count = dataset[0].size - 1
 num_timesteps = timesteps
 
-X = dataset[:, 1:-1] # ignore price
+print("joining by time...")
+X = dataset[:, 1:-1]  # ignore price
 y = dataset[:, -1:]
 X_joined = join_rows_by_time(X, past_rows=num_timesteps - 1).values  # from t(timesteps-1) to t(0)
 X_joined = X_joined.reshape((X_joined.shape[0], num_timesteps, int(X_joined.shape[1] / num_timesteps)))
 
 # back to X and Y
 X = X_joined
-y = y[num_timesteps - 1:] # remove first num_timesteps entries to sync size with X_joined
+y = y[num_timesteps - 1:]  # remove first num_timesteps entries to sync size with X_joined
 print("len(X):", X.shape[0], "len(y):", len(y))
 print("Shape of X:", X.shape)
 
-#config
-rnn_type = 'gru' # or gru
+# config
+rnn_type = 'gru'  # or gru
 
 # build layers
+print("building layers...")
 model = tf.keras.models.Sequential()
 if rnn_type == 'lstm':
     model.add(tf.keras.layers.LSTM(32, input_shape=(X.shape[1], X.shape[2])))
@@ -80,10 +98,25 @@ model.add(tf.keras.layers.Dense(32, activation='relu'))
 model.add(tf.keras.layers.Dense(1, activation='sigmoid'))
 
 # compile model
+print("compiling and training...")
 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 model.fit(X, y, epochs=epochs, batch_size=batch_size, verbose=2)
-model.save(output_model)
 
 scores = model.evaluate(X, y)
-print("\n%s: %.2f%%" % (model.metrics_names[0], scores[0]*100))
-print("%s: %.2f%%" % (model.metrics_names[1], scores[1]*100))
+print("done!")
+print("\n%s: %.2f%%" % (model.metrics_names[0], scores[0] * 100))
+print("%s: %.2f%%" % (model.metrics_names[1], scores[1] * 100))
+
+# save model meta
+tensor_in_name = model.input.name
+tensor_out_name = model.output.name
+print("save meta file...")
+with open(output_model + "_meta.json", 'w') as f:
+    json.dump({'input_name': tensor_in_name, 'output_name': tensor_out_name}, f)
+
+# save model pb
+print("save pb file...")
+frozen_graph = freeze_session(tf.keras.backend.get_session(),
+                              output_names=[out.op.name for out in model.outputs])
+tf.train.write_graph(frozen_graph, ".", output_model, as_text=False)
+print("all ok!")

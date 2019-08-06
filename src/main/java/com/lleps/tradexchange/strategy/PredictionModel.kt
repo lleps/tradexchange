@@ -272,14 +272,18 @@ class PredictionModel private constructor(
 
     /** Set the model used in [predictBuy]. */
     fun loadBuyModel(name: String) {
-        val buyPath = "./data/models/$name-open.h5"
-        mlClient.requestLoadBuyModel(buyPath)
+        val buyPath = "./data/models/$name-open.pb"
+        if (!mlClient.requestLoadBuyModel(buyPath)) {
+            error("can't load buy model at '$buyPath'.")
+        }
     }
 
     /** Set the model used in [predictSell]. */
     fun loadSellModel(name: String) {
-        val sellPath = "./data/models/$name-close.h5"
-        mlClient.requestLoadSellModel(sellPath)
+        val sellPath = "./data/models/$name-close.pb"
+        if (!mlClient.requestLoadSellModel(sellPath)) {
+            error("can't load sell model at '$sellPath'.")
+        }
     }
 
     /** Calculate sell prediction for the tick [i] and a buy at tick [buyTick] */

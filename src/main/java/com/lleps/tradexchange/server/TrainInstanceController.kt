@@ -133,7 +133,7 @@ class TrainInstanceController(
         File("data/models").mkdir()
         val typeStr = if (type == OperationType.BUY) "open" else "close"
         val csvPath = "data/trainings/$instance-$typeStr.csv"
-        val modelPath = "data/models/$instance-$typeStr.h5"
+        val modelPath = "data/models/$instance-$typeStr.pb"
         predictionModel!!.saveMetadata(instance)
         exportAndBuildModelType(type, epochs, batchSize, timesteps, csvPath, modelPath)
     }
@@ -378,6 +378,9 @@ class TrainInstanceController(
         state.chartVersion++
     }
 
+    // TODO: to make things faster, training could also be done on the python server.
+    // this avoids the 5-sec warmup time.
+
     private fun runCommand(command: List<String>, onStdOut: (String) -> Unit): Int {
         val pb = ProcessBuilder()
             .command(*command.toTypedArray())
@@ -388,8 +391,7 @@ class TrainInstanceController(
             val out = reader.readLine() ?: break
             onStdOut(out)
         }
-        val exitValue = p.exitValue()
         p.destroy()
-        return exitValue
+        return p.waitFor()
     }
 }

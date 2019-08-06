@@ -2,6 +2,7 @@ import asyncio
 import sys
 import numpy
 import tensorflow as tf
+import json
 import websockets
 
 # global state, for both buy and sell models
@@ -10,16 +11,37 @@ in_tensor_buy, in_tensor_sell = None, None
 out_tensor_buy, out_tensor_sell = None, None
 
 
-def load_model(path):
-    """Load keras .h5 model from path, return it as a tf model (session, in_tensor, out_tensor)"""
+## problema: al leer el grafo, no tiene operaciones.
+## se puede isolar.
+## capaz que no tiene el formato correcto.. o no se.
+## 1. verificar que se exporte el .pb, chequear que no este vacio y que sea ese.
+## 2. isolar el cargado, para descartar problema del grafo.
+## 3. una vez arreglado, unir al codigo principal
 
-    sess = tf.Session()
-    tf.keras.backend.set_learning_phase(0)
-    tf.keras.backend.set_session(sess)
-    keras_model = tf.keras.models.load_model(path)
-    in_tensor = keras_model.input
-    out_tensor = keras_model.output
-    return sess, in_tensor, out_tensor
+
+def load_model(path):
+    """Load tensorflow .pb model from path, return it as a tf (session, in_tensor, out_tensor) ready to predict."""
+
+    graph = tf.Graph()
+    sess = tf.Session(graph=graph)
+    with graph.as_default():
+        # load model
+        from tensorflow.python.platform import gfile
+        with gfile.FastGFile(path, 'rb') as f:
+            graph_def = tf.GraphDef()
+            graph_def.ParseFromString(f.read())
+            tf.import_graph_def(graph_def)
+
+        # load .json meta file, which contains the tensor names for input/output
+        with open(path + "_meta.json") as f:
+            meta = json.load(f)
+
+        asd = [n.name for n in sess.graph.as_graph_def().node]
+        print(asd)
+
+        in_tensor = graph.get_tensor_by_name("import/" + meta["input_name"])
+        out_tensor = graph.get_tensor_by_name("import/" + meta["output_name"])
+        return sess, in_tensor, out_tensor
 
 
 def do_prediction(query, session, tensor_in, tensor_out):
@@ -84,8 +106,8 @@ async def handle_request(socket, _):
 
 
 if __name__ == '__main__':
-    # print(process("buy_load", "/media/lleps/Compartido/Dev/tradexchange/data/models/[train]fafafa-open.h5"))
-    # print(process("sell_load", "/media/lleps/Compartido/Dev/tradexchange/data/models/[train]fafafa-open.h5"))
+    # print(process("buy_load", "/media/lleps/Compartido/Dev/tradexchange/data/models/[train]fafafa-open.pb"))
+    # print(process("sell_load", "/media/lleps/Compartido/Dev/tradexchange/data/models/[train]fafafa-open.pb"))
     # print(process("buy_predict", "0.9,0.2|0.4,0.2|0.01,0.19"))
     # print(process("sell_predict", "0.9,0.2|0.4,0.2|0.01,0.19"))
     # #print(result)
