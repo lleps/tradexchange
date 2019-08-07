@@ -9,10 +9,32 @@ import java.io.InputStreamReader
 import java.util.concurrent.LinkedBlockingQueue
 import kotlin.concurrent.thread
 
-/** Used to connect to a python server.  */
-class WsPredictionClient(serverURI: URI) : WebSocketClient(serverURI) {
+/** Used to connect to a python tensorflow server through websockets to train and predict with models.  */
+class TensorflowClient(serverURI: URI) : WebSocketClient(serverURI) {
     private val sb = StringBuilder()
     private val resQueue = LinkedBlockingQueue<String>() // messages received
+
+    fun requestInitTrain(trainCsvPath: String, timesteps: Int) {
+        val result = sendRecv("train_init:$trainCsvPath,$timesteps")
+        if (result.startsWith("error:")) {
+            error("tf server error: ${result.split(":", limit = 1)[1]}")
+        }
+    }
+
+    fun requestDoTrain(epochs: Int, batchSize: Int): String {
+        val result = sendRecv("train_fit:$epochs,$batchSize")
+        if (result.startsWith("error:")) {
+            error("tf server error: ${result.split(":", limit = 1)[1]}")
+        }
+        return result
+    }
+
+    fun requestSaveTrain(path: String) {
+        val result = sendRecv("train_save:$path")
+        if (result.startsWith("error:")) {
+            error("tf server error: ${result.split(":", limit = 1)[1]}")
+        }
+    }
 
     fun requestLoadBuyModel(path: String): Boolean = sendRecv("buy_load:$path") == "ok"
 
@@ -57,13 +79,18 @@ class WsPredictionClient(serverURI: URI) : WebSocketClient(serverURI) {
     }
 
     companion object {
-        private val LOGGER = LoggerFactory.getLogger(WsPredictionClient::class.java)
-        private var instance: WsPredictionClient? = null
+        private val LOGGER = LoggerFactory.getLogger(TensorflowClient::class.java)
+        private var instance: TensorflowClient? = null
         private var serverStarted = false
+        private var outputCallback: (String) -> Unit = { }
+
+        fun setServerOutputCallback(callback: (String) -> Unit) {
+            outputCallback = callback
+        }
 
         /** Get the client connection or start the server and make a new one. */
         @Synchronized
-        fun getOrCreate(): WsPredictionClient {
+        fun getOrCreate(): TensorflowClient {
             if (instance == null) {
                 val host = "localhost"
                 val port = "8081"
@@ -84,6 +111,7 @@ class WsPredictionClient(serverURI: URI) : WebSocketClient(serverURI) {
                         while (true) {
                             val line = reader.readLine() ?: break
                             LOGGER.info("predictionserver.py: $line")
+                            outputCallback(line)
                             if (!serverStarted) {
                                 serverStarted = true
                                 LOGGER.info("now proceed.")
@@ -99,7 +127,7 @@ class WsPredictionClient(serverURI: URI) : WebSocketClient(serverURI) {
 
                 // connect
                 LOGGER.info("Connect to $host:$port...")
-                instance = WsPredictionClient(URI("ws://$host:$port"))
+                instance = TensorflowClient(URI("ws://$host:$port"))
                 instance!!.connect()
                 LOGGER.info("connected. all ok")
             }

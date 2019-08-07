@@ -4,6 +4,7 @@ import com.lleps.tradexchange.*
 import com.lleps.tradexchange.strategy.ChartWriterImpl
 import com.lleps.tradexchange.strategy.PredictionModel
 import com.lleps.tradexchange.strategy.Strategy
+import com.lleps.tradexchange.strategy.TensorflowClient
 import com.lleps.tradexchange.util.markAs
 import org.ta4j.core.Bar
 import org.ta4j.core.BaseBar
@@ -107,18 +108,17 @@ class TrainInstanceController(
             sb.append(",$action\n")
         }
         Files.write(Paths.get(csvPath), sb.toString().toByteArray(Charset.defaultCharset()))
-        val cmd = listOf(
-            "model/venv/bin/python",
-            "model/buildmodel.py",
-            epochs.toString(),
-            batchSize.toString(),
-            timesteps.toString(),
-            csvPath,
-            modelPath)
-        out.write("$type: Invoke '$cmd'...")
-        val exit = runCommand(cmd, onStdOut = { outStr -> out.write(outStr)})
-        out.write("$type: Exit code: $exit.")
-        if (exit != 0) out.write("$type: Something went wrong. Check the output.")
+
+        val tf = TensorflowClient.getOrCreate()
+        out.write("$type: Init training...")
+        tf.requestInitTrain(csvPath, timesteps)
+        out.write("$type: Train for $epochs epochs (bs $batchSize)...")
+        TensorflowClient.setServerOutputCallback { out.write(it) }
+        out.write(tf.requestDoTrain(epochs, batchSize))
+        TensorflowClient.setServerOutputCallback { }
+        out.write("$type: Save...")
+        tf.requestSaveTrain(modelPath)
+        out.write("$type: All done!")
     }
 
     private fun exportAndBuildModel(type: OperationType, input: Map<String, String>) {
@@ -191,7 +191,12 @@ class TrainInstanceController(
         // Add operations
         out.write("Adding operations...")
         var maxMlValue: Double? = null
+        var percentDisplayLock = System.currentTimeMillis() + 3000
         while (i < timeSeries.endIndex - autobuyPeriod - 1) {
+            if (System.currentTimeMillis() > percentDisplayLock) {
+                out.write("${(i.toFloat() / timeSeries.endIndex.toFloat() * 100f).toInt()}%")
+                percentDisplayLock = System.currentTimeMillis() + 2000
+            }
             val enoughTimeToCompleteATrade = i < (timeSeries.endIndex - autosellPeriod - autobuyPeriod)
             // in sell-mode: buy only of there's enough time to complete a trade.
             // in buy-mode: that is not necessary.
@@ -275,6 +280,7 @@ class TrainInstanceController(
 
         }
 
+        out.write("Calculate features...")
         // Draw features
         for (tickNumber in warmupTicks..timeSeries.endIndex) {
             val tick = timeSeries.getBar(tickNumber)
@@ -376,22 +382,5 @@ class TrainInstanceController(
 
         rebuildIndicators()
         state.chartVersion++
-    }
-
-    // TODO: to make things faster, training could also be done on the python server.
-    // this avoids the 5-sec warmup time.
-
-    private fun runCommand(command: List<String>, onStdOut: (String) -> Unit): Int {
-        val pb = ProcessBuilder()
-            .command(*command.toTypedArray())
-            .redirectErrorStream(true)
-        val p = pb.start()
-        val reader = BufferedReader(InputStreamReader(p.inputStream))
-        while (true) {
-            val out = reader.readLine() ?: break
-            onStdOut(out)
-        }
-        p.destroy()
-        return p.waitFor()
     }
 }

@@ -159,7 +159,7 @@ def process(msg, content):
         train_model.fit(train_X, train_y, epochs=epochs, batch_size=batch_size, verbose=2)
         scores = train_model.evaluate(train_X, train_y)
         time = timer() - start
-        return "ok: loss: %f, acc: %f, time: %f)" % (scores[0], scores[1], time)
+        return "ok: loss %.3f, acc %.3f, %.1f sec)" % (scores[0], scores[1], time)
 
     elif msg == "train_save": # :path
         if train_model is None:
@@ -211,8 +211,13 @@ async def handle_request(socket, _):
         if msg == "bye":
             break
 
-        msg_type, content = msg.split(':', 1)
-        await socket.send(process(msg_type, content))
+        try:
+            msg_type, content = msg.split(':', 1)
+            result = process(msg_type, content)
+            await socket.send(result)
+        except:
+            err = "error: %s", (sys.exc_info()[0])
+            await socket.send(err)
 
 
 if __name__ == '__main__':

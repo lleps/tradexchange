@@ -268,7 +268,7 @@ class PredictionModel private constructor(
 
     // Predictions
 
-    private val mlClient = WsPredictionClient.getOrCreate()
+    private val mlClient = TensorflowClient.getOrCreate()
 
     /** Set the model used in [predictBuy]. */
     fun loadBuyModel(name: String) {
